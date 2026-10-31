@@ -65,6 +65,9 @@ public static class CiAiTestResultReportConsumer
             notice.ExpiresAt <= now)
             throw new InvalidOperationException("CiAi report notice or dispatch intent is cancelled, expired, or outside its validity window.");
         run.ValidateAgainst(mapping);
+        if (notice.ProviderRunId is not null &&
+            !string.Equals(notice.ProviderRunId, run.RunId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("CiAi notice provider run identity does not match the persisted GitHub run binding.");
 
         if (task.Request.TaskId != mapping.TaskId ||
             task.Request.CorrelationId != mapping.CorrelationId ||
