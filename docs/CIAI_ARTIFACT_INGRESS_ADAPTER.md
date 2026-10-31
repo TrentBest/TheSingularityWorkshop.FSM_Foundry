@@ -23,6 +23,19 @@ The authenticator is a trust boundary, not a JWT implementation. A fake authenti
 
 The ingress coordinator accepts the exact request body as bytes. It rejects empty/oversized bodies and invalid UTF-8 before notice validation. The receipt ledger retains the normalized payload string and its SHA-256; strict UTF-8 decoding ensures a valid body can be re-encoded without changing its byte sequence. The sender identity is obtained only from the host authenticator.
 
+## Bounded artifact retrieval
+
+After ingress accepts a notice, `CiAiArtifactRetrievalCoordinator` can retrieve its `CiAiValidatedArtifactNotice` through a host-owned `ICiAiArtifactTransport`. The coordinator:
+
+- passes the validated retrieval URI to the transport unchanged;
+- rejects a response marked as redirected or whose final URI differs from the validated URI;
+- accepts only HTTP 200 and `application/json`;
+- streams no more than the manifest's declared byte count plus one detection byte, with a 16 MiB ceiling;
+- applies a bounded cancellation timeout (30 seconds by default; host-configurable up to five minutes); and
+- passes the exact bytes to `CiAiArtifactContentVerifier` for expiry, exact length, and fixed-time SHA-256 verification.
+
+The transport remains a security-critical host boundary. It must disable automatic redirects and enforce DNS/IP restrictions against the actual connected address, including loopback, private, link-local, multicast, reserved, IPv4-mapped IPv6, and DNS-rebinding cases. It must not treat a prior DNS lookup as sufficient; address policy must be enforced at connection time. The coordinator cannot prove that a transport implementation obeys these rules. The current implementation defines the boundary and deterministic fake-transport tests; it does not provide a production HTTP client, DNS resolver, socket pinning, or live network access.
+
 ## Guarantees and limits
 
 - Authentication is invoked before body parsing or receipt mutation.
@@ -30,6 +43,9 @@ The ingress coordinator accepts the exact request body as bytes. It rejects empt
 - Cancellation before persistence does not append a receipt.
 - An exact retry while its dispatch mapping remains active returns the original receipt.
 - The durable receipt confirms notice acceptance only. It is not proof that the artifact was retrieved, that its digest matches, or that the CI evidence is authoritative.
-- The receipt and mapping journals remain local-filesystem, single-process stores. This coordinator does not provide distributed locking, HTTPS hosting, JWT validation, artifact retrieval, redirect/DNS/IP protections, acknowledgement delivery, or cross-process recovery.
+- A retrieved artifact is not yet an evaluated evidence packet. Schema validation and exact-run/policy evaluation must happen before it can influence Foundry lifecycle decisions.
+- The receipt and mapping journals remain local-filesystem, single-process stores. This work does not provide distributed locking, HTTPS hosting, JWT validation, a production artifact transport, remote acknowledgement delivery, or cross-process recovery.
 
-Next implementation boundary: a host-controlled retriever must fetch only the already-validated URI, enforce redirect and DNS/IP policy at connection time, cap the streamed response to the declared size, and pass the bytes to `CiAiArtifactContentVerifier`. A verified artifact still requires evidence-packet schema and exact-run evaluation before it can influence Foundry lifecycle decisions.
+---
+
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="320" /></p>
