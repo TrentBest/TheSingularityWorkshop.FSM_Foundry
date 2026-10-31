@@ -141,6 +141,8 @@ public static class CiAiTestResultReportConsumer
         if (ReadText(properties, "JobStatus", 64) != "completed")
             throw new InvalidDataException("CiAi report job is not complete.");
         var jobConclusion = OptionalText(properties, "JobConclusion", 64);
+        if (string.IsNullOrWhiteSpace(jobConclusion))
+            jobConclusion = null;
         var requiredCheckStatus = ReadText(properties, "RequiredCheckStatus", 64);
         var verdict = ReadText(properties, "Verdict", 64);
         ValidateVerdictShape(verdict, requiredCheckStatus, jobConclusion);
