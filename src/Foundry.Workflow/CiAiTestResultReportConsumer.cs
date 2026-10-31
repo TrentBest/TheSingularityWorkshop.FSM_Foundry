@@ -93,7 +93,7 @@ public static class CiAiTestResultReportConsumer
             throw new InvalidDataException("CiAi report is empty, oversized, or does not match the verified notice length.");
         var reportDigest = Convert.ToHexString(SHA256.HashData(bytes.Span)).ToLowerInvariant();
         if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(reportDigest), Convert.FromHexString(notice.PayloadSha256)))
+                Convert.FromHexString(reportDigest), Convert.FromHexString(notice.Digest)))
             throw new InvalidDataException("CiAi report bytes do not match the verified notice digest.");
 
         using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions
