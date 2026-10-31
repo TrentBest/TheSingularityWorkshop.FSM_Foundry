@@ -140,7 +140,7 @@ public static class CiAiTestResultReportConsumer
 
         if (ReadText(properties, "JobStatus", 64) != "completed")
             throw new InvalidDataException("CiAi report job is not complete.");
-        var jobConclusion = ReadText(properties, "JobConclusion", 64);
+        var jobConclusion = OptionalText(properties, "JobConclusion", 64);
         var requiredCheckStatus = ReadText(properties, "RequiredCheckStatus", 64);
         var verdict = ReadText(properties, "Verdict", 64);
         ValidateVerdictShape(verdict, requiredCheckStatus, jobConclusion);
@@ -192,7 +192,7 @@ public static class CiAiTestResultReportConsumer
             Attempt = run.RunAttempt,
             WorkflowName = mapping.WorkflowPath,
             JobName = mapping.JobName,
-            Conclusion = jobConclusion,
+            Conclusion = jobConclusion ?? "unknown",
             SourceUrl = runUrl.AbsoluteUri,
             ObservedAt = observedAt,
             BoundedSummary = summary
@@ -222,7 +222,7 @@ public static class CiAiTestResultReportConsumer
         }
     }
 
-    private static void ValidateVerdictShape(string verdict, string requiredCheckStatus, string conclusion)
+    private static void ValidateVerdictShape(string verdict, string requiredCheckStatus, string? conclusion)
     {
         var valid = verdict switch
         {
