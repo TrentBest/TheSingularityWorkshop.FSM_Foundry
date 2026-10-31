@@ -60,6 +60,7 @@ public sealed class CiAiArtifactNoticeIngress
         if (exactRequestBody.IsEmpty || exactRequestBody.Length > MaximumPayloadBytes)
             throw new ArgumentException("The exact request body must be non-empty and no larger than 64 KiB.", nameof(exactRequestBody));
 
+        var rawPayloadBytes = exactRequestBody.ToArray();
         var senderIdentity = await _authenticator.AuthenticateSenderAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(senderIdentity) || senderIdentity.Length > 128 ||
@@ -69,7 +70,7 @@ public sealed class CiAiArtifactNoticeIngress
         string payload;
         try
         {
-            payload = StrictUtf8.GetString(exactRequestBody.Span);
+            payload = StrictUtf8.GetString(rawPayloadBytes);
         }
         catch (DecoderFallbackException exception)
         {
