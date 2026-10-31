@@ -68,8 +68,7 @@ public static class CiAiTestResultReportConsumer
 
         if (task.Request.TaskId != mapping.TaskId ||
             task.Request.CorrelationId != mapping.CorrelationId ||
-            !string.Equals(task.Request.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(task.Request.BaseSha, task.Request.BaseSha, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(task.Request.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("CiAi report dispatch mapping does not identify the supplied Foundry task.");
         if (task.Status is not (WorkTaskStatus.Validating or WorkTaskStatus.CodeRed))
             throw new InvalidOperationException("CiAi evidence can be consumed only while the task is validating or under CODE RED review.");
@@ -227,7 +226,7 @@ public static class CiAiTestResultReportConsumer
             "CompletePass" => requiredCheckStatus == "Passed" && conclusion == "success",
             "ActionableFailure" or "NonActionableFailure" =>
                 requiredCheckStatus == "Failed" && conclusion == "failure",
-            "IncompleteOrUntrusted" => requiredCheckStatus is "Failed" or "Incomplete" or "NotRequired",
+            "IncompleteOrUntrusted" => requiredCheckStatus is "Passed" or "Failed" or "Incomplete" or "NotRequired",
             _ => false
         };
         if (!valid)
