@@ -324,7 +324,9 @@ public static class CiAiTestResultReportConsumer
             var name = OptionalText(values, "TestName", 512);
             var message = OptionalText(values, "Message", 4_000);
             var stack = OptionalText(values, "StackTrace", 8_000);
-            summaries.Add($"{name ?? "Failed test"}: {message ?? stack ?? "No diagnostic text supplied"}");
+            if (string.IsNullOrWhiteSpace(message) && string.IsNullOrWhiteSpace(stack))
+                throw new FormatException("CiAi failed test record is missing actionable diagnostic text.");
+            summaries.Add($"{name ?? "Failed test"}: {message ?? stack}");
         }
 
         if (digests.Distinct(StringComparer.Ordinal).Count() != digests.Count)
