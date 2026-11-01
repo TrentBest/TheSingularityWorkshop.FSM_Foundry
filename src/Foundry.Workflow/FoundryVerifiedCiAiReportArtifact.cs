@@ -42,29 +42,6 @@ public sealed class FoundryVerifiedCiAiReportArtifact
     /// Expected digest, size, expiry, and optional provider run ID must come from the
     /// already-validated notice, never from the downloaded JSON body.
     /// </summary>
-    /// <summary>
-    /// Adapts the exact bytes accepted by the authenticated-notice retrieval pipeline
-    /// into the report-consumer content type. All metadata is taken from the validated
-    /// notice retained with the verified content; none is read from the JSON payload.
-    /// The content digest and size are checked again at this boundary.
-    /// </summary>
-    public static FoundryVerifiedCiAiReportArtifact FromVerifiedArtifactContent(
-        CiAiVerifiedArtifactContent content,
-        DateTimeOffset now)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-        var notice = content.Notice;
-        return Verify(
-            notice.Request,
-            content.Bytes,
-            notice.MediaType,
-            notice.Digest,
-            notice.SizeBytes,
-            notice.ExpiresAt,
-            notice.ProviderRunId,
-            now);
-    }
-
     public static FoundryVerifiedCiAiReportArtifact Verify(
         CiAiRequestTaskMappingSnapshot request,
         ReadOnlyMemory<byte> bytes,
