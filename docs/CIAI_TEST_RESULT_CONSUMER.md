@@ -7,12 +7,12 @@
 
 Foundry consumes the ciai.test-results.v1 report only after the host has authenticated the registered CiAi sender, validated the artifact-ready notice against the persisted dispatch mapping, retrieved the artifact, and verified its declared size and SHA-256 digest.
 
-CiAiTestResultReportConsumer is the provider-neutral Foundry boundary for that verified JSON artifact. It checks the report's schema and exact binding to the task's persisted dispatch/run identity, then creates:
+FoundryVerifiedCiAiReportArtifact is the provider-neutral, immutable Foundry content value; the host adapts the verified bytes from the ingress/retrieval layer into it. CiAiTestResultReportConsumer is the provider-neutral report consumer. It checks the report's schema and exact binding to the task's persisted dispatch/run identity, then creates:
 
 - a WorkTaskRepairAttempt whose evidence flags are derived exclusively from CiAi's named verdict; and
 - a bounded FoundryHeadlessAiEvidence context item for the next HeadlessAi turn.
 
-The consumer does not reference the CiAi assembly. It consumes the versioned JSON contract, keeping Foundry independent of CiAi's implementation package.
+The consumer does not reference the CiAi assembly or the separate ingress implementation project. It consumes the versioned JSON contract and Foundry's persisted dispatch-mapping contract, keeping this slice independently buildable on development.
 
 ## 02 — Why
 
@@ -27,7 +27,7 @@ At the same time, a valid CiAi report must not be allowed to attach itself to an
 - exact GitHub run ID and attempt; and
 - registered producing job name.
 
-The report artifact's bytes are hashed again at the consumer boundary. This is a consistency check after CiAiArtifactContentVerifier; it does not replace sender authentication or artifact transport security.
+The Foundry content factory verifies the report artifact's bytes against the digest and size supplied by the already-validated notice. The report consumer hashes the bytes again when recording the attempt. These checks do not replace sender authentication, notice validation, or artifact transport security.
 
 ## 03 — How
 
@@ -37,7 +37,7 @@ The host sequence is:
 2. Validate the notice against the trusted provider registration and exact persisted request/run mapping.
 3. Retrieve the artifact through a transport that enforces connection-time network policy, redirect restrictions, timeout, and byte limits.
 4. Verify the retrieved bytes against the notice's declared digest and size.
-5. Restore the Foundry task snapshot and call CiAiTestResultReportConsumer.Consume(verifiedContent, taskSnapshot, now).
+5. Restore the Foundry task snapshot and adapt the already-verified artifact bytes into FoundryVerifiedCiAiReportArtifact, then call CiAiTestResultReportConsumer.Consume(verifiedContent, taskSnapshot, now).
 6. Append the returned WorkTaskRepairAttempt to the durable attempt journal and pass it through Foundry's bounded lifecycle policy.
 7. If the verdict is actionable and budgets permit, supply the returned FoundryHeadlessAiEvidence to the same correlated task's next HeadlessAi turn. The model response remains a proposal and requires independent host authorization before any repository mutation.
 
