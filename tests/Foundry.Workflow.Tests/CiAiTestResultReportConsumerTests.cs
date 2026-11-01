@@ -25,7 +25,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void ConsumesActionableReportIntoBoundAttemptAndHeadlessEvidence()
     {
-        var bytes = CreateReport("ActionableFailure", "Failed", "failure", CandidateSha);
+        var bytes = CreateReport("ActionableFailure", "Failed", "failure", WorkflowSha);
         var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
 
         Assert.Equal("ActionableFailure", consumed.Verdict);
@@ -50,7 +50,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void CompletePassIsDerivedOnlyFromCiAiVerdict()
     {
-        var bytes = CreateReport("CompletePass", "Passed", "success", CandidateSha);
+        var bytes = CreateReport("CompletePass", "Passed", "success", WorkflowSha);
         var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
 
         Assert.True(consumed.Attempt.EvidenceComplete);
@@ -62,8 +62,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void RejectsReportWhoseCandidateOrRunProvenanceDiffersFromPersistedDispatch()
     {
-        var bytes = CreateReport("ActionableFailure", "Failed", "failure",
-            "cccccccccccccccccccccccccccccccccccccccc");
+        var bytes = CreateReport("ActionableFailure", "Failed", "failure", CandidateSha);
 
         Assert.Throws<UnauthorizedAccessException>(() =>
             CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
@@ -72,7 +71,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void RejectsIncompleteReportWithUnknownOrDuplicateRootProperties()
     {
-        var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", CandidateSha);
+        var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", WorkflowSha);
         var json = Encoding.UTF8.GetString(bytes);
         var duplicate = Encoding.UTF8.GetBytes(json[..^1] + ",\"Schema\":\"ciai.test-results.v1\"}");
         Assert.Throws<FormatException>(() =>
@@ -154,7 +153,7 @@ public sealed class CiAiTestResultReportConsumerTests
             WorkflowDefinitionSha = WorkflowSha,
             EventName = "workflow_dispatch",
             EventRef = "refs/heads/development",
-            EventSha = eventSha == CandidateSha ? WorkflowSha : eventSha,
+            EventSha = eventSha,
             RunId,
             RunAttempt,
             JobId,
