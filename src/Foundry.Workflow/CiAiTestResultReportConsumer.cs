@@ -323,7 +323,7 @@ public static class CiAiTestResultReportConsumer
     {
         var value = ReadText(properties, name, 64);
         if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out var timestamp) || timestamp == default)
+                DateTimeStyles.None, out var timestamp) || timestamp == default)
             throw new FormatException($"CiAi report timestamp '{name}' is invalid.");
         return timestamp;
     }
