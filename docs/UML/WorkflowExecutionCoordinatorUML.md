@@ -10,7 +10,17 @@
 ```mermaid
 classDiagram
     direction TB
-    class IWorkflowExecutionCoordinator {\n        <<interface>>\n        +Submit(WorkflowDefinition) WorkflowRunSnapshot\n        +Submit(WorkflowDefinition, WorkflowExecutionContext) WorkflowRunSnapshot\n        +StartAsync(Guid) Task~WorkflowResult~\n        +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~\n        +Cancel(Guid) bool\n        +GetSnapshot(Guid) WorkflowRunSnapshot\n        +DisposeAsync() ValueTask\n    }\n    class WorkflowExecutionCoordinator {
+    class IWorkflowExecutionCoordinator {
+        <<interface>>
+        +Submit(WorkflowDefinition) WorkflowRunSnapshot
+        +Submit(WorkflowDefinition, WorkflowExecutionContext) WorkflowRunSnapshot
+        +StartAsync(Guid) Task~WorkflowResult~
+        +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~
+        +Cancel(Guid) bool
+        +GetSnapshot(Guid) WorkflowRunSnapshot
+        +DisposeAsync() ValueTask
+    }
+    class WorkflowExecutionCoordinator {
         +Submit(WorkflowDefinition) WorkflowRunSnapshot
         +StartAsync(Guid) Task~WorkflowResult~
         +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~
@@ -50,7 +60,8 @@ classDiagram
         TimedOut
         Invalid
     }
-    IWorkflowExecutionCoordinator <|.. WorkflowExecutionCoordinator : implemented by\n    WorkflowExecutionCoordinator --> WorkflowRunner : delegates execution
+    IWorkflowExecutionCoordinator <|.. WorkflowExecutionCoordinator : implemented by
+    WorkflowExecutionCoordinator --> WorkflowRunner : delegates execution
     WorkflowExecutionCoordinator --> WorkflowHandlerRegistry : through runner
     WorkflowExecutionCoordinator --> WorkflowDefinition : retains accepted definition
     WorkflowExecutionCoordinator --> WorkflowRunSnapshot : returns immutable observation
@@ -99,7 +110,8 @@ sequenceDiagram
 
 ## Source and tests
 
-- [Coordinator interface](../../src/Foundry.Workflow/IWorkflowExecutionCoordinator.cs)\n- [Coordinator source](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [Coordinator interface](../../src/Foundry.Workflow/IWorkflowExecutionCoordinator.cs)
+- [Coordinator source](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
 - [Source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md)
 - [Lifecycle tests](../../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 - [Workflow semantics](../WORKFLOW_SEMANTICS.md)
