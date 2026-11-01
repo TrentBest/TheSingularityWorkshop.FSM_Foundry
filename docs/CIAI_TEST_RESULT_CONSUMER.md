@@ -21,9 +21,9 @@ Foundry must not create a second CI verdict engine. Raw job status, caller-provi
 At the same time, a valid CiAi report must not be allowed to attach itself to an unrelated task, candidate, workflow, or run. The consumer binds the report to the exact CiAiRequestTaskMappingSnapshot retained by the verified artifact notice:
 
 - task and correlation identity;
-- repository and candidate ref/SHA;
-- trusted workflow path/ref/SHA;
-- workflow-dispatch event identity;
+- repository and candidate ref/SHA (the code being tested);
+- trusted workflow path/ref/SHA (the control-plane workflow);
+- workflow-dispatch event ref/SHA, which must identify that trusted workflow ref/SHA rather than the candidate checkout;
 - exact GitHub run ID and attempt; and
 - registered producing job name.
 
