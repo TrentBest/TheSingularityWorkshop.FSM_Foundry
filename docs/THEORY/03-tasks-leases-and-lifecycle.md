@@ -92,7 +92,7 @@ This gives restart recovery on the same host when the journal is intact. It does
 
 The current development implementation includes a signed, single-use CODE RED recovery receipt verified by the Foundry task lifecycle. The recorded architecture decision for this workstream was different: **human-approval enforcement remains in the host adapter**, rather than becoming a verifiable host-issued receipt inside Foundry's recovery path.
 
-Those are not interchangeable designs. The current source and tests describe what is implemented; the recorded decision describes the intended ownership boundary. This chapter does not silently resolve the discrepancy or claim that the current receipt mechanism is the approved target. The runtime and contract should be reconciled in a dedicated, reviewed change before the domain is described as aligned.
+Those are not interchangeable designs. The current source and tests on `development` still describe receipt verification; the recorded decision describes the intended ownership boundary. Dedicated draft PR [#18](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/18) now proposes the host-owned `ICodeRedRecoveryApprovalGate`, exact incident/task rechecks, and legacy receipt fields retained only for v1 journal replay. Its exact-head CI passed (140 tests, builds, probes, scenarios, and artifact publication), but it remains unmerged. Until that PR is reviewed and merged, `development` still has the receipt implementation and the discrepancy remains open.
 
 In either design, the host is responsible for authenticating the human and applying its approval policy. A model response, issue comment, or task transition reason is not human authorization.
 
