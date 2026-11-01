@@ -65,7 +65,7 @@ The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepd
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — versioned HTTPS ready-notice receiver, authenticated sender, immutable artifact pull, durable receipts, and retry semantics.
 - [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — lease-gated model invocation, durable duplicate suppression, host adapter mapping, and current integration limits.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — source-pinned in-process adapter, immutable request mapping, normalized result mapping, credential boundaries, and a manual real-provider smoke runner.
-- [Foundry theory learning path](docs/THEORY/README.md) — modular textbook chapters explaining the domain, implementation, evidence, and limits.
+- [Foundry theory learning path](docs/THEORY/README.md) — ten modular textbook chapters with domain models, source maps, worked examples, exercises, and explicit implementation/evidence limits.
 - [Domain and ownership](docs/DOMAIN.md) — what Foundry owns and what it does not.
 - [Architecture](docs/ARCHITECTURE.md) — subsystem boundaries and integration decisions.
 - [Contract inspection ledger](docs/CONTRACT_INSPECTION.md) — source-backed findings and unresolved questions.
