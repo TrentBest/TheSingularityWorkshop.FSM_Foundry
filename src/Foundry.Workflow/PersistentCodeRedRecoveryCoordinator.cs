@@ -28,6 +28,14 @@ public sealed class PersistentCodeRedRecoveryCoordinator
         if (incident.Status != CodeRedIncidentStatus.Active)
             throw new InvalidOperationException("Only the latest active incident can authorize CODE RED recovery.");
         var task = _tasks.GetSnapshot(taskId);
+        if (task.Status != WorkTaskStatus.CodeRed || task.Lease is not { } lease ||
+            lease.LeaseId != leaseId || lease.ExpiresAt <= now ||
+            task.Events.Count == 0 ||
+            incident.TaskId != task.Request.TaskId ||
+            !string.Equals(incident.Repository, task.Request.Repository, StringComparison.OrdinalIgnoreCase) ||
+            incident.CorrelationId != task.Request.CorrelationId ||
+            incident.AgentId != lease.AgentId)
+            throw new InvalidOperationException("The active incident, CODE RED task, or lease no longer matches the requested recovery.");
 
         // The host callback may consult a user approval service. Never hold Foundry locks
         // while invoking host code or waiting for a human decision.
