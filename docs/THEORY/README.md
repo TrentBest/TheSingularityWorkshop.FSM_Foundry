@@ -25,7 +25,7 @@ The chapters follow a common teaching sequence: familiar problem, vocabulary, re
 | 06 | [Persistence, replay, and recovery](06-persistence-and-recovery.md) | How can state survive process restart without pretending a local journal is a distributed system? | **Available** |
 | 07 | [Hosts, adapters, and external systems](07-hosts-and-adapters.md) | How do desktop, web, CI, and headless hosts participate without owning Foundry semantics? | **Available**; live GitHub/CiAi integration remains unimplemented |
 | 08 | [Scheduling, dependencies, and concurrency](08-scheduling-and-concurrency.md) | When can work run concurrently, and what must remain sequential? | **Available**; no general dependency-graph scheduler is claimed |
-| 09 | [Observability, audit, and reproducibility](09-observability-and-evidence.md) | How can an operator reconstruct what happened and distinguish proof from presentation? | Planned |
+| 09 | [Observability, audit, and reproducibility](09-observability-and-reproducibility.md) | How can an operator reconstruct what happened and distinguish proof from presentation? | **Available**; centralized telemetry and tamper-resistant audit remain unimplemented |
 | 10 | [Security model and failure containment](10-security-and-failure-containment.md) | How does the system fail safely when identity, evidence, persistence, or external services are uncertain? | Planned |
 
 ## Domain map
