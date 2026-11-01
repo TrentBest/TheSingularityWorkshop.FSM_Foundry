@@ -55,7 +55,7 @@
 - [x] Add Chapter 07 on host/domain ownership, ports and adapters, the HeadlessAi composition root, external-system trust gates, and integration limits.
 - [x] Add Chapter 08 on sequential execution, explicit dependencies, safe parallelism criteria, and current scheduler limitations.
 - [x] Add Chapter 09 on state observation, sequenced audit, evidence lineage, CODE RED notices, and reproducible demonstrations.
-- [ ] Complete the remaining theory chapter for security and failure containment.
+- [x] Add Chapter 10 on trust boundaries, capability enforcement, untrusted model output, authenticated evidence requirements, fail-closed persistence, and unresolved production security gates.
 - [ ] Generate diagrams from real source/runtime evidence.
 - [ ] Include stable type identity, source spans, and provenance.
 - [ ] Add stale-output verification and a focused change test.
