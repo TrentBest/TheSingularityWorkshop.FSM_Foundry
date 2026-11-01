@@ -11,7 +11,9 @@
 
 The runner is a single awaited invocation. A Hub presentation or headless host needs a run identity and snapshots while a handler is still running. The coordinator owns that lifecycle state; the runner continues to own workflow validation, ordered step invocation, and step/workflow outcomes.
 
-## Public contract\n\nHosts should depend on [`IWorkflowExecutionCoordinator`](IWorkflowExecutionCoordinator.cs), implemented by `WorkflowExecutionCoordinator`. The interface deliberately mirrors the tested lifecycle methods; it does not introduce transport, persistence, scheduling, retries, or authorization.
+## Public contract
+
+Hosts should depend on [`IWorkflowExecutionCoordinator`](IWorkflowExecutionCoordinator.cs), implemented by `WorkflowExecutionCoordinator`. The interface deliberately mirrors the tested lifecycle methods; it does not introduce transport, persistence, scheduling, retries, or authorization.
 
 - `Submit(WorkflowDefinition)` accepts work and returns an `Accepted` snapshot without invoking handlers.
 - `StartAsync(runId)` starts an accepted run once without a workflow-level timeout.
