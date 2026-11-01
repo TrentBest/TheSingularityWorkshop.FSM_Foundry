@@ -149,7 +149,7 @@ public static class CiAiTestResultReportConsumer
         ValidateVerdictShape(verdict, requiredCheckStatus, jobConclusion);
 
         var observedAt = ReadTimestamp(properties, "ObservedAt");
-        if (observedAt < run.BoundAt || observedAt > now || observedAt > notice.ExpiresAt)
+        if (observedAt < run.BoundAt || observedAt > now || observedAt > artifact.ExpiresAt)
             throw new InvalidDataException("CiAi report observation time is outside the bound run and artifact validity window.");
 
         var reasonCodes = ReadReasonCodes(properties);
