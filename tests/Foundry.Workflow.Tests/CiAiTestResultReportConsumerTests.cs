@@ -70,6 +70,24 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void RejectsDispatchBindingWhoseEventShaDiffersFromPersistedIntent()
+    {
+        var createdAt = DateTimeOffset.Parse("2026-10-31T10:00:00Z");
+        var expiresAt = DateTimeOffset.Parse("2026-10-31T12:00:00Z");
+        var mapping = new CiAiRequestTaskMapping(
+            1, "request-1", "operation-1", "idempotency-1", "task-1", "correlation-1",
+            Repository, BranchRef, CandidateSha, WorkflowPath, "refs/heads/development", WorkflowSha,
+            "test-minesweeper", "resolve", "verify", "ciai-provider",
+            "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
+            createdAt, expiresAt, TrustedEventSha: EventSha).Validate();
+        var mismatchedRun = new CiAiDispatchRunBinding(
+            RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
+            BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: CandidateSha);
+
+        Assert.Throws<UnauthorizedAccessException>(() => mismatchedRun.ValidateAgainst(mapping));
+    }
+
+    [Fact]
     public void RejectsIncompleteReportWithUnknownOrDuplicateRootProperties()
     {
         var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", EventSha);
