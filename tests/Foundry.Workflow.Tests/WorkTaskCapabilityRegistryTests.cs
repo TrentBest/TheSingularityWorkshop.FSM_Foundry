@@ -71,57 +71,70 @@ public sealed class WorkTaskCapabilityRegistryTests
     }
 
     [Fact]
-    public void CodeRedSuspendsMutationAndRequiresFreshCapabilityAfterRecovery()
+    public void CodeRedSuspendsMutationAndRequiresFreshCapabilityAfterHostApproval()
     {
-        var coordinator = new WorkTaskCoordinator(new RecoveryReceiptVerifier());
-        coordinator.Submit(Request());
-        var claimed = coordinator.Claim("task-8", "agent-a", TimeSpan.FromMinutes(20), Now);
-        var registry = new WorkTaskCapabilityRegistry();
-        var beforeCodeRed = Grant(registry, claimed);
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-capability-task-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-capability-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            tasks.Submit(Request());
+            var claimed = tasks.Claim("task-8", "agent-a", TimeSpan.FromMinutes(20), Now);
+            var registry = new WorkTaskCapabilityRegistry();
+            var beforeCodeRed = Grant(registry, claimed);
 
-        var codeRed = coordinator.Transition("task-8", claimed.Lease!.LeaseId,
-            WorkTaskStatus.CodeRed, Now.AddMinutes(1), "Escalated for human review.");
+            var codeRed = tasks.Transition("task-8", claimed.Lease!.LeaseId,
+                WorkTaskStatus.CodeRed, Now.AddMinutes(1), "Escalated for human review.");
 
-        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
-            codeRed, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs"));
-        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
-            codeRed, WorkTaskAction.CreateCommit));
+            Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
+                codeRed, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs"));
+            Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
+                codeRed, WorkTaskAction.CreateCommit));
 
-        Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(codeRed, "work/task-8",
-            CandidateSha, new[] { "src/Foundry.Workflow" },
-            new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
-            Now.AddMinutes(1), TimeSpan.FromMinutes(5)));
+            Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(codeRed, "work/task-8",
+                CandidateSha, new[] { "src/Foundry.Workflow" },
+                new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
+                Now.AddMinutes(1), TimeSpan.FromMinutes(5)));
 
-        var readOnly = registry.Grant(codeRed, "work/task-8", CandidateSha,
-            new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.ReadRepository },
-            Now.AddMinutes(1), TimeSpan.FromMinutes(5));
-        Demand(registry, readOnly, codeRed, WorkTaskAction.ReadRepository,
-            "src/Foundry.Workflow/WorkTaskCoordinator.cs", Now.AddMinutes(2));
+            var readOnly = registry.Grant(codeRed, "work/task-8", CandidateSha,
+                new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.ReadRepository },
+                Now.AddMinutes(1), TimeSpan.FromMinutes(5));
+            Demand(registry, readOnly, codeRed, WorkTaskAction.ReadRepository,
+                "src/Foundry.Workflow/WorkTaskCoordinator.cs", Now.AddMinutes(2));
 
-        var incidentTime = Now.AddMinutes(1);
-        var incident = new CodeRedIncident(1, "incident-8",
-            "TrentBest/TheSingularityWorkshop.Foundry", "task-8", 8, "correlation-8",
-            "agent-a", "implementation", "Investigating blocker", "work/task-8", CandidateSha,
-            null, null, CodeRedSeverity.Critical, "Human review required", 3,
-            incidentTime, incidentTime, null, true);
-        var receipt = new CodeRedRecoveryApprovalReceipt(1, "receipt-8", "test-host",
-            "human-reviewer", "task-8", incident.IncidentId, codeRed.Events.Count,
-            incident.Sequence, CodeRedRecoveryAction.ResumeInvestigation,
-            Now.AddMinutes(2), Now.AddMinutes(7), "signed-test-receipt");
-        var recovered = coordinator.RecoverFromCodeRed("task-8", claimed.Lease.LeaseId,
-            incident, receipt, Now.AddMinutes(3), "Host-approved CODE RED recovery.");
+            var incidentTime = Now.AddMinutes(1);
+            var incident = new CodeRedIncident(1, "incident-8",
+                "TrentBest/TheSingularityWorkshop.Foundry", "task-8", 8, "correlation-8",
+                "agent-a", "implementation", "Investigating blocker", "work/task-8", CandidateSha,
+                null, null, CodeRedSeverity.Critical, "Human review required", 3,
+                incidentTime, incidentTime, null, true);
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            incidents.Create(incident);
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks,
+                new RecoveryApprovalGate());
+            var recovered = recovery.RecoverFromCodeRed("task-8", claimed.Lease.LeaseId,
+                incident.IncidentId, Now.AddMinutes(3), "Host-approved CODE RED recovery.");
 
-        // The pre-CODE RED mutation grant stays invalid even after the task resumes.
-        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
-            recovered, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs",
-            Now.AddMinutes(4)));
+            Assert.Equal(incident.IncidentId, recovered.Events[^1].RecoveryIncidentId);
+            Assert.Equal(incident.Sequence, recovered.Events[^1].RecoveryIncidentSequence);
 
-        var fresh = registry.Grant(recovered, "work/task-8", CandidateSha,
-            new[] { "src/Foundry.Workflow" },
-            new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles, WorkTaskAction.CreateCommit },
-            Now.AddMinutes(3), TimeSpan.FromMinutes(10));
-        Demand(registry, fresh, recovered, WorkTaskAction.WriteFiles,
-            "src/Foundry.Workflow/WorkTaskCoordinator.cs", Now.AddMinutes(4));
+            // The pre-CODE RED mutation grant stays invalid even after the task resumes.
+            Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, beforeCodeRed,
+                recovered, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs",
+                Now.AddMinutes(4)));
+
+            var fresh = registry.Grant(recovered, "work/task-8", CandidateSha,
+                new[] { "src/Foundry.Workflow" },
+                new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles, WorkTaskAction.CreateCommit },
+                Now.AddMinutes(3), TimeSpan.FromMinutes(10));
+            Demand(registry, fresh, recovered, WorkTaskAction.WriteFiles,
+                "src/Foundry.Workflow/WorkTaskCoordinator.cs", Now.AddMinutes(4));
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
     }
 
     [Fact]
@@ -200,11 +213,14 @@ public sealed class WorkTaskCapabilityRegistryTests
             Now, TimeSpan.FromMinutes(5)));
         Assert.Throws<ArgumentOutOfRangeException>(() => Grant(registry, task, TimeSpan.FromHours(2)));
     }
-    private sealed class RecoveryReceiptVerifier : ICodeRedRecoveryReceiptVerifier
+    private sealed class RecoveryApprovalGate : ICodeRedRecoveryApprovalGate
     {
-        public bool IsTrustedIssuer(string issuer) => issuer == "test-host";
-        public bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature) =>
-            issuer == "test-host" && signature == "signed-test-receipt" && !signingPayload.IsEmpty;
+        public void DemandApproval(CodeRedIncident incident, WorkTaskSnapshot task, DateTimeOffset requestedAt)
+        {
+            Assert.Equal(CodeRedIncidentStatus.Active, incident.Status);
+            Assert.Equal(WorkTaskStatus.CodeRed, task.Status);
+            Assert.Equal("agent-a", task.Lease!.AgentId);
+        }
     }
 
 }
