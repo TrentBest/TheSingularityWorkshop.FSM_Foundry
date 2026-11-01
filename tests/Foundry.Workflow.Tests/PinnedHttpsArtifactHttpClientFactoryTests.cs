@@ -1,4 +1,5 @@
 using System.Net;
+using Xunit;
 using TheSingularityWorkshop.Foundry;
 
 namespace Foundry.Workflow.Tests;
