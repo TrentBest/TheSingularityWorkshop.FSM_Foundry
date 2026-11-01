@@ -1,14 +1,15 @@
-public sealed record CiAiRepairFeedbackResult(
-    WorkTaskSnapshot Snapshot,
-    CiAiConsumedTestResult? Consumed,
-    bool IsDuplicateDelivery);
-
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
 namespace TheSingularityWorkshop.Foundry;
+
+public sealed record CiAiRepairFeedbackResult(
+    WorkTaskSnapshot Snapshot,
+    CiAiConsumedTestResult? Consumed,
+    bool IsDuplicateDelivery);
+
 
 /// <summary>
 /// Result of consuming a verified CiAi test-result artifact. The attempt is constructed
