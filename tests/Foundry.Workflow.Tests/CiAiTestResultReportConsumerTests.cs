@@ -87,6 +87,18 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void RejectsActionableFailureWithoutActualDiagnosticText()
+    {
+        var node = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+        node["Results"]![0]!["Message"] = null;
+        node["Results"]![0]!["StackTrace"] = null;
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
+
+        Assert.Throws<FormatException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+    }
+
+    [Fact]
     public void RejectsReportWhoseCandidateOrRunProvenanceDiffersFromPersistedDispatch()
     {
         var bytes = CreateReport("ActionableFailure", "Failed", "failure", CandidateSha);
