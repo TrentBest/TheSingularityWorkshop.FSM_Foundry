@@ -272,11 +272,22 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         var expectedStatus = task.Status;
         if (expectedStatus is not (WorkTaskStatus.Investigating or WorkTaskStatus.RepairRequired))
             throw new InvalidOperationException("HeadlessAi may be invoked only during investigation or for a CiAi-authorized repair-required turn.");
-        if (expectedStatus == WorkTaskStatus.RepairRequired &&
-            (string.IsNullOrWhiteSpace(priorTurnId) ||
-             string.IsNullOrWhiteSpace(priorCandidateCommitSha) ||
-             evidence is null || evidence.Count == 0))
-            throw new InvalidOperationException("A repair turn requires prior-turn provenance and the accepted CiAi evidence context.");
+        if (expectedStatus == WorkTaskStatus.RepairRequired)
+        {
+            if (string.IsNullOrWhiteSpace(priorTurnId) ||
+                string.IsNullOrWhiteSpace(priorCandidateCommitSha) ||
+                evidence is null || evidence.Count == 0)
+                throw new InvalidOperationException("A repair turn requires prior-turn provenance and the accepted CiAi evidence context.");
+            var priorTurn = _journal.GetCompletedTurn(taskId, priorTurnId)
+                ?? throw new UnauthorizedAccessException("A repair turn must resume a completed prior turn from the same task journal.");
+            if (priorTurn.CorrelationId != task.Request.CorrelationId ||
+                !string.Equals(priorTurn.Repository, task.Request.Repository, StringComparison.OrdinalIgnoreCase) ||
+                priorTurn.AuthorizedBranch != authorizedBranch ||
+                !string.Equals(priorTurn.BaseCommitSha, task.Request.BaseSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(priorTurn.CandidateCommitSha, priorCandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+                priorTurn.CompletedAt > now)
+                throw new UnauthorizedAccessException("The prior HeadlessAi turn does not match this task, branch, base, or prior candidate provenance.");
+        }
         var lifetime = turnLifetime ?? TimeSpan.FromMinutes(15);
         if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromHours(2))
             throw new ArgumentOutOfRangeException(nameof(turnLifetime));
