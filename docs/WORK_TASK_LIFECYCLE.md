@@ -83,6 +83,8 @@ The notifier propagates delivery failures and does not mark an incident cleared 
 
 ## Verification
 
+The host approval seam is defined by [ICodeRedRecoveryApprovalGate](../src/Foundry.Workflow/ICodeRedRecoveryApprovalGate.cs) and enforced by [PersistentCodeRedRecoveryCoordinator](../src/Foundry.Workflow/PersistentCodeRedRecoveryCoordinator.cs). The gate runs outside Foundry locks; the coordinator rechecks the exact incident/task state before persisting recovery. Tests cover host rejection, stale incident/task state, and callback lock boundaries.
+
 See [WorkTaskCoordinatorTests](../tests/Foundry.Workflow.Tests/WorkTaskCoordinatorTests.cs), [JsonlWorkTaskStoreTests](../tests/Foundry.Workflow.Tests/JsonlWorkTaskStoreTests.cs) (including persistent-adapter restart and fail-closed tests), [CodeRedIncidentTests](../tests/Foundry.Workflow.Tests/CodeRedIncidentTests.cs), and [JsonlCodeRedIncidentStoreTests](../tests/Foundry.Workflow.Tests/JsonlCodeRedIncidentStoreTests.cs), [WorkTaskCapabilityRegistryTests](../tests/Foundry.Workflow.Tests/WorkTaskCapabilityRegistryTests.cs), [CodeRedStatusNoticeTests](../tests/Foundry.Workflow.Tests/CodeRedStatusNoticeTests.cs), [CodeRedStatusNotifierTests](../tests/Foundry.Workflow.Tests/CodeRedStatusNotifierTests.cs), [JsonlWorkTaskRepairAttemptJournalTests](../tests/Foundry.Workflow.Tests/JsonlWorkTaskRepairAttemptJournalTests.cs), and [WorkTaskRepairDecisionPolicyTests](../tests/Foundry.Workflow.Tests/WorkTaskRepairDecisionPolicyTests.cs) for lifecycle, fencing, retry, incident provenance, CI identity, timestamp, clear behavior, and capability scope/lease/expiry/revocation. CI status is linked from the pull request implementing these slices.
 
 ---
