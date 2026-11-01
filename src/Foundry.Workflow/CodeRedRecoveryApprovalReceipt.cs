@@ -14,7 +14,6 @@ public enum CodeRedRecoveryAction
 /// deserialization and structural history validation. Current CODE RED recovery does not
 /// accept or verify this receipt; human approval is enforced by the host approval gate.
 /// </summary>
-[Obsolete("Legacy persisted audit data only. Use ICodeRedRecoveryApprovalGate for current recovery.")]
 public sealed record CodeRedRecoveryApprovalReceipt(
     int SchemaVersion,
     string ReceiptId,
