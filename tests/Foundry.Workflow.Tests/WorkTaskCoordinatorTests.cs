@@ -231,7 +231,7 @@ public sealed class WorkTaskCoordinatorTests
         {
             Assert.Equal(CodeRedIncidentStatus.Active, incident.Status);
             Assert.Equal(WorkTaskStatus.CodeRed, task.Status);
-            Assert.Equal("human-reviewer", "human-reviewer");
+            Assert.Equal("agent-a", task.Lease!.AgentId);
         }
     }
 
