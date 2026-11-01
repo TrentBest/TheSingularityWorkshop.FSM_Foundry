@@ -62,9 +62,28 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.Equal(1, attempts.GetAttempts("task-1").Count);
 
             var client = new RecordingHeadlessAiClient();
+            var turnJournal = new JsonlHeadlessAiTurnJournal(Path.Combine(root, "turns.jsonl"));
+            const string priorFingerprint = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+            Assert.Null(turnJournal.BeginOrGet("task-1", "turn-initial-key", priorFingerprint));
+            turnJournal.Complete("task-1", "turn-initial-key", priorFingerprint,
+                new FoundryHeadlessAiTurnResult
+                {
+                    TurnId = "turn-initial-1",
+                    TaskId = "task-1",
+                    CorrelationId = "correlation-1",
+                    Repository = Repository,
+                    AuthorizedBranch = "work/task-1",
+                    BaseCommitSha = BaseSha,
+                    CandidateCommitSha = BaseSha,
+                    RequestFingerprint = priorFingerprint,
+                    ProviderId = "fake-provider",
+                    ModelId = "fake-model",
+                    StartedAt = TaskStart.AddMinutes(1),
+                    CompletedAt = TaskStart.AddMinutes(2),
+                    IdempotencyKey = "turn-initial-key"
+                });
             var turnCoordinator = new FoundryHeadlessAiTurnCoordinator(
-                tasks, client, new JsonlHeadlessAiTurnJournal(Path.Combine(root, "turns.jsonl")),
-                new FixedTimeProvider(Now.AddMinutes(1)));
+                tasks, client, turnJournal, new FixedTimeProvider(Now.AddMinutes(1)));
             var turn = await turnCoordinator.InvokeAsync(
                 "task-1", leaseId, "work/task-1", CandidateSha,
                 "experiences-developer", "Repair the exact failing candidate using the supplied CiAi evidence.",
@@ -72,14 +91,14 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 """{"type":"object","required":["diagnosis","patchIntent"]}""",
                 new[] { feedback.Consumed!.HeadlessAiEvidence },
                 priorTurnId: "turn-initial-1",
-                priorCandidateCommitSha: CandidateSha);
+                priorCandidateCommitSha: BaseSha);
 
             Assert.Equal("task-1", turn.TaskId);
             Assert.Equal("correlation-1", turn.CorrelationId);
             Assert.Equal("turn-repair-1", turn.TurnId);
             Assert.Equal(WorkTaskStatus.RepairRequired, tasks.GetSnapshot("task-1").Status);
             Assert.Equal("turn-initial-1", client.Request!.PriorTurnId);
-            Assert.Equal(CandidateSha, client.Request.PriorCandidateCommitSha);
+            Assert.Equal(BaseSha, client.Request.PriorCandidateCommitSha);
             Assert.Single(client.Request.Evidence);
             Assert.Equal(CandidateSha, client.Request.Evidence[0].CommitSha);
         }
