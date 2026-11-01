@@ -101,7 +101,7 @@ public sealed class CiAiTestResultReportConsumerTests
             new WorkTaskLease("agent", leaseId, Now.AddMinutes(10)), 1, events);
     }
 
-    private static CiAiVerifiedArtifactContent CreateVerifiedArtifact(byte[] bytes)
+    private static FoundryVerifiedCiAiReportArtifact CreateVerifiedArtifact(byte[] bytes)
     {
         var createdAt = DateTimeOffset.Parse("2026-10-31T10:00:00Z");
         var expiresAt = DateTimeOffset.Parse("2026-10-31T12:00:00Z");
