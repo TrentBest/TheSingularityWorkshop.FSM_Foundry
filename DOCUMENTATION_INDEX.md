@@ -12,7 +12,7 @@
 - [Agent onboarding](AGENTS.md) — repository-specific contribution, safety, branch, release, and documentation rules.
 - [Gallery](Gallery.md) — demonstrations and recipes.
 - [Domain and ownership](docs/DOMAIN.md) — proposed Foundry domain, ownership boundaries, safety invariants, and first release slice.
-- [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
+- [Hub execution ownership and host contract](docs/HUB_EXECUTION_OWNERSHIP.md) — source-backed separation of Foundry workflow lifecycle, FSM_COS composition, WebPage Hub/process-group behavior, and host responsibilities.\n- [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
