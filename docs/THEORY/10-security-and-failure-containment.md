@@ -99,7 +99,7 @@ If any answer is missing, the operation should not inherit broad ambient authori
 6. [CiAi transport security proposal](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/feature/foundry-pinned-artifact-transport/docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — feature-branch DNS-pinned transport design; not merged to development.
 7. [CiAi callback contract](../CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — host-owned authenticated ingress contract; production endpoint remains unimplemented.
 
-Important remaining work includes production host authentication and authorization, secure credential provisioning and rotation, mandatory capability enforcement in a real GitHub adapter, authenticated CiAi callback deployment, hardened artifact retrieval integration, cross-process task coordination, journal backup/retention/reconciliation, production incident transport, and architecture reconciliation for CODE RED approval ownership.
+Important remaining work includes production host authentication and authorization, secure credential provisioning and rotation, mandatory capability enforcement in a real GitHub adapter, authenticated CiAi callback deployment, hardened artifact retrieval integration, cross-process task coordination, journal backup/retention/reconciliation, production incident transport, and review/merge of the tested host-owned CODE RED approval proposal in draft PR #18.
 
 ## Questions for the reader
 
