@@ -46,7 +46,7 @@
 
 ## Theory and learning path
 
-The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapters 01–04 are available: work coordination, workflow execution, task/lease lifecycle, and capabilities/authority. Chapter 04 documents the implemented host-issued capability registry and preserves the CODE RED approval-ownership discrepancy for dedicated reconciliation.
+The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapters 01–05 are available: work coordination, workflow execution, task/lease lifecycle, capabilities/authority, and evidence/repair decisions. Chapter 04 documents the implemented host-issued capability registry; Chapter 05 documents exact CI attempt provenance and bounded repair policy. Both preserve the CODE RED approval-ownership discrepancy for dedicated reconciliation. CiAi ingress/report/transport proposals remain on draft branches.
 
 ## Update rule
 
