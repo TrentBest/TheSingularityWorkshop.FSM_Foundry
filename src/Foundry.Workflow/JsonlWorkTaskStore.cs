@@ -181,15 +181,11 @@ public sealed class JsonlWorkTaskStore
                 !(item.Current == WorkTaskStatus.Claimed &&
                     item.Previous is not (WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)) &&
                 (!WorkTaskCoordinator.IsAllowedTransition(item.Previous, item.Current) &&
-                    !WorkTaskCoordinator.IsValidApprovedRecoveryEvent(item)) ||
-                (WorkTaskCoordinator.HasApprovalMetadata(item) &&
-                    !WorkTaskCoordinator.IsValidApprovedRecoveryEvent(item)) ||
-                (item.ApprovalReceipt is { } approvalReceipt &&
-                    approvalReceipt.TaskId != snapshot.Request.TaskId) ||
+                    !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item)) ||
+                (WorkTaskCoordinator.HasRecoveryMetadata(item) &&
+                    !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item)) ||
                 (item.Current == WorkTaskStatus.Investigating && item.Previous == WorkTaskStatus.CodeRed &&
-                    !WorkTaskCoordinator.IsValidApprovedRecoveryEvent(item)) ||
-                (item.ApprovalReceiptId is not null && snapshot.Events.Take(index)
-                    .Any(previous => previous.ApprovalReceiptId == item.ApprovalReceiptId)) ||
+                    !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item)) ||
                 string.IsNullOrWhiteSpace(item.AgentId) || item.AgentId.Length > 128 ||
                 item.AgentId.Any(char.IsControl) || item.LeaseId == Guid.Empty ||
                 string.IsNullOrWhiteSpace(item.Reason) || item.Reason.Length > 2048 ||
