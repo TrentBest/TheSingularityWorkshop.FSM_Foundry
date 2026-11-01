@@ -44,7 +44,18 @@
 - [ ] Publish workflow logs and a concise evidence summary.
 
 ### M4 — Living documentation and optional article production
-- [ ] Align README and existing docs with the FSM_COS reader journey, moniker, badge, visual, and footer standards.
+- [x] Add a modular Foundry theory index and first textbook-style chapter; link the learning path from README and documentation index.
+- [x] Correct the development-vs-feature-branch evidence ledger in README and DOCUMENTATION_INDEX so draft PR #14/#15/#16 work is not represented as shipped development behavior.
+- [ ] Align README and existing docs with the full FSM_COS reader journey, including a real money-shot visual and consistent What/Why/How/See/Next-step flow.
+- [x] Add Chapter 02 on workflow definitions and execution semantics, grounded in the development runner, validator, registry, coordinator, and execution-context contracts.
+- [x] Add Chapter 03 on task identity, leases, fencing, audit history, local persistence, and exact-evidence repair decisions; explicitly record the CODE RED approval-ownership discrepancy.
+- [x] Add Chapter 04 on capabilities, authority, host-issued scoped grants, CODE RED mutation suspension, and the human-approval ownership discrepancy.
+- [x] Add Chapter 05 on evidence provenance, append-only CI attempt history, deterministic bounded repair decisions, and the separation between development behavior and draft CiAi integration branches.
+- [x] Add Chapter 06 on local journal design, replay validation, persistent coordinator failure behavior, and the limits of cross-journal consistency.
+- [x] Add Chapter 07 on host/domain ownership, ports and adapters, the HeadlessAi composition root, external-system trust gates, and integration limits.
+- [x] Add Chapter 08 on sequential execution, explicit dependencies, safe parallelism criteria, and current scheduler limitations.
+- [x] Add Chapter 09 on state observation, sequenced audit, evidence lineage, CODE RED notices, and reproducible demonstrations.
+- [x] Add Chapter 10 on trust boundaries, capability enforcement, untrusted model output, authenticated evidence requirements, fail-closed persistence, and unresolved production security gates.
 - [ ] Generate diagrams from real source/runtime evidence.
 - [ ] Include stable type identity, source spans, and provenance.
 - [ ] Add stale-output verification and a focused change test.
@@ -60,7 +71,7 @@
 - [ ] Add additional languages only when the first cross-boundary proof is testable.
 
 ### M6 — Governed repository-work lifecycle
-The completed items below are implemented on PR #10's feature branch and are not yet part of `development` until the owner reviews and merges that PR.
+The completed items below are present on `development`. The signed CODE RED recovery receipt implementation remains subject to the separately recorded architecture reconciliation: the owner selected host-adapter enforcement for human approval, while current Foundry code verifies a signed receipt in the lifecycle core.
 - [x] Add a versioned, repository/issue/SHA-bound work-task envelope with bounded identifiers, path scope, and attempt budget.
 - [x] Add validated lifecycle transitions, expiring agent leases, fencing tokens, and sequenced audit history.
 - [x] Add append-only local task, CODE RED incident, and CI repair-attempt journals with restart replay and fail-closed corruption handling.
