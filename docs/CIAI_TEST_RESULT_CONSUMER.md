@@ -37,9 +37,9 @@ The host sequence is:
 2. Validate the notice against the trusted provider registration and exact persisted request/run mapping.
 3. Retrieve the artifact through a transport that enforces connection-time network policy, redirect restrictions, timeout, and byte limits.
 4. Verify the retrieved bytes against the notice's declared digest and size.
-5. Restore the Foundry task snapshot and adapt the already-verified artifact bytes into FoundryVerifiedCiAiReportArtifact, then call CiAiTestResultReportConsumer.Consume(verifiedContent, taskSnapshot, now).
-6. Append the returned WorkTaskRepairAttempt to the durable attempt journal and pass it through Foundry's bounded lifecycle policy.
-7. If the verdict is actionable and budgets permit, supply the returned FoundryHeadlessAiEvidence to the same correlated task's next HeadlessAi turn. The model response remains a proposal and requires independent host authorization before any repository mutation.
+5. Restore the Foundry task snapshot and adapt the already-verified artifact bytes into FoundryVerifiedCiAiReportArtifact.
+6. Call PersistentWorkTaskCoordinator.ApplyCiAiReport. Foundry consumes the report only for the active validation attempt, appends the exact attempt idempotently, and applies the existing bounded lifecycle policy; a repeated delivery already reflected in task history is acknowledged without a second transition. A CODE RED task must first pass the host approval/recovery path.
+7. When the result is RepairRequired, supply the returned FoundryHeadlessAiEvidence to FoundryHeadlessAiTurnCoordinator.InvokeAsync with the prior turn ID and prior candidate SHA. The repair turn remains attached to the same task/lease, and Foundry verifies that the prior turn ID resolves to a completed turn for that same task, correlation, repository, branch, base SHA, and prior candidate SHA. The model response remains a proposal and requires independent host authorization before any repository mutation.
 
 ### Verdict mapping
 
@@ -71,7 +71,6 @@ The tests use a deterministic verified-artifact fixture. They do not claim a liv
 
 ## 05 — Choose your next step
 
-- Complete the lifecycle handoff by appending the consumed attempt idempotently, applying the bounded Foundry policy, and resuming the same correlated HeadlessAi task.
 - Integrate a production host adapter with authenticated callback ingress and a connection-time-safe artifact transport.
 - Prove the full loop against the Experiences Minesweeper red artifact and a new exact-candidate green validation.
 
