@@ -25,6 +25,11 @@ public sealed class PinnedHttpsArtifactHttpClientFactoryTests
     [InlineData("fe80::1", false)]
     [InlineData("ff02::1", false)]
     [InlineData("2001:db8::1", false)]
+    [InlineData("2001:20::1", false)]
+    [InlineData("2002:0808:0808::1", false)]
+    [InlineData("3fff::1", false)]
+    [InlineData("::ffff:10.0.0.1", false)]
+    [InlineData("::ffff:8.8.8.8", true)]
     [InlineData("2001:4860:4860::8888", true)]
     public void PublicAddressClassifierRejectsSpecialPurposeRanges(string value, bool expected)
     {
