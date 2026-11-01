@@ -50,7 +50,8 @@
 - [x] Add Chapter 02 on workflow definitions and execution semantics, grounded in the development runner, validator, registry, coordinator, and execution-context contracts.
 - [x] Add Chapter 03 on task identity, leases, fencing, audit history, local persistence, and exact-evidence repair decisions; explicitly record the CODE RED approval-ownership discrepancy.
 - [x] Add Chapter 04 on capabilities, authority, host-issued scoped grants, CODE RED mutation suspension, and the human-approval ownership discrepancy.
-- [ ] Complete the remaining theory chapters for evidence/repair, persistence/recovery, hosts/adapters, scheduling/concurrency, observability, and security.
+- [x] Add Chapter 05 on evidence provenance, append-only CI attempt history, deterministic bounded repair decisions, and the separation between development behavior and draft CiAi integration branches.
+- [ ] Complete the remaining theory chapters for persistence/recovery, hosts/adapters, scheduling/concurrency, observability, and security.
 - [ ] Generate diagrams from real source/runtime evidence.
 - [ ] Include stable type identity, source spans, and provenance.
 - [ ] Add stale-output verification and a focused change test.
