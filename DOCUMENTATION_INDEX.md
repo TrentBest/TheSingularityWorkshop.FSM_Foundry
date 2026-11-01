@@ -11,7 +11,8 @@
 - [README](README.md) — product intent and five-section overview.
 - [Agent onboarding](AGENTS.md) — repository-specific contribution, safety, branch, release, and documentation rules.
 - [Gallery](Gallery.md) — demonstrations and recipes.
-- [Foundry theory learning path](docs/THEORY/README.md) — modular textbook chapters, domain vocabulary, implementation mapping, and evidence limits.\n- [Domain and ownership](docs/DOMAIN.md) — proposed Foundry domain, ownership boundaries, safety invariants, and first release slice.
+- [Foundry theory learning path](docs/THEORY/README.md) — modular textbook chapters, domain vocabulary, implementation mapping, and evidence limits.
+- [Domain and ownership](docs/DOMAIN.md) — proposed Foundry domain, ownership boundaries, safety invariants, and first release slice.
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
@@ -43,7 +44,11 @@
 | Tests and abuse cases | Workflow and governed-task tests cover ordering, invalid input, failure, cancellation, bounded task/lease/audit metadata, strict journal replay, lease fencing, and repair-policy provenance | CI run #337 passed the current PR #11 head; add real provider and trusted cross-service integration tests next |
 | Release/publication | Not in scope | Requires explicit approval |
 
-## Theory and learning path\n\nThe domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapter 01 introduces explicit work coordination; subsequent chapters are individually tracked as planned until their content is written and source-checked.\n\n## Update rule
+## Theory and learning path
+
+The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapter 01 introduces explicit work coordination; subsequent chapters are individually tracked as planned until their content is written and source-checked.
+
+## Update rule
 
 Every claimed capability must point to implementation, tests, a workflow run, or a reproducible artifact. Keep proposed architecture separate from implemented behavior. Update this ledger when evidence changes.
 
