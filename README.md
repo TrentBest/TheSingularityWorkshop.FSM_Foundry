@@ -6,15 +6,33 @@
 [![CI](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/workflows/foundry-fsm-api-probe.yml/badge.svg?branch=development)](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/workflows/foundry-fsm-api-probe.yml)
 [![License: MIT](https://img.shields.io/github/license/TrentBest/TheSingularityWorkshop.Foundry)](LICENSE)
 
-**Foundry is the host-neutral execution pipeline for The Singularity Workshop Hub.** It accepts explicit work, validates it before side effects, coordinates execution, and reports authoritative lifecycle state and structured outcomes. GUI may present that state when the Hub chooses to appear; GUI is not the executor.
+**Foundry is the host-neutral work coordination domain for The Singularity Workshop Hub.** It defines and validates explicit work, coordinates workflow runs and governed task lifecycles, records outcomes, and exposes authoritative state to its host. Hosts supply environmental capabilities and credentials; GUI may present state but is not the executor.
+
+## 00 — Identity and the domain at a glance
+
+The core path is request → validation → coordinated lifecycle → host-authorized operation → evidence-backed outcome. The diagram is a conceptual overview of the domain, not a claim that every integration is wired into one live service.
+
+```mermaid
+flowchart LR
+    A[Work request] --> B[Foundry validation]
+    B --> C[Workflow or task lifecycle]
+    C --> D[Host capability]
+    D --> E[External operation]
+    E --> F[Evidence and outcome]
+    F --> G[Status, audit, handoff]
+```
 
 > **Implementation status:** `development` contains the version-1 sequential workflow runner and retained in-process run lifecycle; governed work tasks with fenced leases and validated transitions; append-only local task/incident/repair journals; host-scoped capabilities; CODE RED incident and recovery controls; and the lease-gated HeadlessAi turn bridge with its concrete host adapter and manual console composition root. These components are not one distributed service: task journals are single-process local persistence, workflow-run snapshots remain in memory, provider credentials belong to the host, and a live provider invocation has not been verified. The integration proposals in [PR #14](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/14), [PR #15](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/15), and [PR #16](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/16) remain separate draft branches; their callback ingress, report-consumer, and DNS-pinned transport changes are not represented as part of `development`. See the [theory learning path](docs/THEORY/README.md), [roadmap](docs/ROADMAP.md), and [documentation index](DOCUMENTATION_INDEX.md) for the domain map and evidence boundaries. No package publication or deployment is part of this work.
 
-## 01 — Why Foundry exists
+## 01 — What Foundry is
 
-Workflow meaning should not be buried in a desktop window, browser component, or CI YAML. Foundry provides a small, inspectable execution boundary that hosts can use without depending on GUI or a particular platform. Workflow definitions are data; hosts explicitly register the capabilities that definitions may invoke.
+Foundry is the coordinating authority for explicit work. It owns the semantics of workflow definitions, validation, execution lifecycle, task coordination, bounded recovery, and structured outcomes. It does not own the host's credentials, external systems, or presentation layer. Workflow definitions are data; hosts explicitly register the capabilities that definitions may invoke.
 
-## 02 — Ownership boundaries
+## 02 — Why explicit coordination matters
+
+Workflow meaning should not be buried in a desktop window, browser component, or CI YAML. A host-neutral execution boundary lets work be inspected and tested independently of GUI or a particular platform. Separating intent, lifecycle, capability, and evidence makes malformed requests, stale workers, untrusted model proposals, and mismatched CI results rejectable rather than implicit.
+
+## 03 — How ownership boundaries work
 
 - **Foundry executes:** validates workflows; accepts and starts runs; coordinates lifecycle and cancellation; exposes status snapshots and structured outcomes.
 - **The / Architect owns the Hub experience:** decides what work to request and when the Hub should present itself.
@@ -25,7 +43,7 @@ Workflow meaning should not be buried in a desktop window, browser component, or
 
 Foundry deliberately does not force workflow steps, WebPage process-group ticks, and FSM_COS `RuntimeAssembly` into one abstraction. They remain distinct until a source-backed, tested integration demonstrates the correct seam.
 
-## 03 — See it in a minute
+## 04 — See it in a minute
 
 Start with the [version-1 workflow definition](src/Foundry.Workflow/WorkflowDefinition.cs), [sequential runner](src/Foundry.Workflow/WorkflowRunner.cs), and [retained execution coordinator](src/Foundry.Workflow/WorkflowExecutionCoordinator.cs).
 
@@ -40,7 +58,7 @@ The first version executes named handlers sequentially. It validates the complet
 
 The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs) remain deterministic state-execution demonstrations. They exercise real FSM_API behavior and generate reproducible evidence; they are not automatically treated as Hub workflows.
 
-## 04 — Contracts, tests, and boundaries
+## 05 — Choose your next step
 
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — validation, execution, lifecycle, cancellation, and outcome rules.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — versioned task envelope, fenced leases, validated transitions, audit events, and current limitations.
@@ -57,7 +75,7 @@ The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepd
 
 The focused xUnit suite covers ordering, invalid definitions, failure, cancellation, finite/infinite timeouts, cancellation precedence, non-cooperative handlers, CODE RED capability suspension/recovery, and retained run lifecycle. The [Foundry CI workflow](.github/workflows/foundry-fsm-api-probe.yml) runs those tests alongside the FSM_API and fox/sheepdog evidence checks, and builds the concrete HeadlessAi adapter against a pinned source commit.
 
-## 05 — Limits and next steps
+### Current limits and next steps
 
 Foundry now has two deliberately separate lifecycle boundaries:
 
