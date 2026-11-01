@@ -47,7 +47,7 @@ public static class CiAiTestResultReportConsumer
     /// artifact notice, then derives the durable attempt and bounded HeadlessAi evidence.
     /// </summary>
     public static CiAiConsumedTestResult Consume(
-        CiAiVerifiedArtifactContent artifact,
+        FoundryVerifiedCiAiReportArtifact artifact,
         WorkTaskSnapshot task,
         DateTimeOffset now)
     {
@@ -56,17 +56,18 @@ public static class CiAiTestResultReportConsumer
         if (now == default)
             throw new ArgumentException("A current consumption time is required.", nameof(now));
 
-        var notice = artifact.Notice;
-        var request = notice.Request;
+        var request = artifact.Request;
         var mapping = request.Mapping.Validate();
         var run = request.RunBinding
             ?? throw new InvalidOperationException("CiAi report cannot be consumed before the dispatch is bound to an exact GitHub run.");
         if (request.Cancelled || now < mapping.CreatedAt || now > mapping.ExpiresAt ||
-            notice.ExpiresAt <= now)
-            throw new InvalidOperationException("CiAi report notice or dispatch intent is cancelled, expired, or outside its validity window.");
+            artifact.ExpiresAt <= now)
+            throw new InvalidOperationException("CiAi report artifact or dispatch intent is cancelled, expired, or outside its validity window.");
+        if (!string.Equals(artifact.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+            throw new FormatException("CiAi report artifact media type must be application/json.");
         run.ValidateAgainst(mapping);
-        if (notice.ProviderRunId is not null &&
-            !string.Equals(notice.ProviderRunId, run.RunId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+        if (artifact.ProviderRunId is not null &&
+            !string.Equals(artifact.ProviderRunId, run.RunId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             throw new UnauthorizedAccessException("CiAi notice provider run identity does not match the persisted GitHub run binding.");
 
         if (task.Request.TaskId != mapping.TaskId ||
@@ -92,12 +93,12 @@ public static class CiAiTestResultReportConsumer
             throw new InvalidOperationException("The exact GitHub run does not match the task's persisted validation transition.");
 
         var bytes = artifact.Bytes;
-        if (bytes.IsEmpty || bytes.Length > MaximumReportBytes || bytes.Length != notice.SizeBytes)
-            throw new InvalidDataException("CiAi report is empty, oversized, or does not match the verified notice length.");
+        if (bytes.IsEmpty || bytes.Length > MaximumReportBytes || bytes.Length != artifact.SizeBytes)
+            throw new InvalidDataException("CiAi report is empty, oversized, or does not match the verified artifact length.");
         var reportDigest = Convert.ToHexString(SHA256.HashData(bytes.Span)).ToLowerInvariant();
         if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(reportDigest), Convert.FromHexString(notice.Digest)))
-            throw new InvalidDataException("CiAi report bytes do not match the verified notice digest.");
+                Convert.FromHexString(reportDigest), Convert.FromHexString(artifact.Digest)))
+            throw new InvalidDataException("CiAi report bytes do not match the verified artifact digest.");
 
         using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions
         {
