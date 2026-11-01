@@ -148,6 +148,7 @@ public sealed class CiAiTestResultReportConsumerTests
             PullRequestHeadRef = (string?)null,
             PullRequestHeadSha = (string?)null,
             PullRequestBaseRef = (string?)null,
+            PullRequestBaseSha = (string?)null,
             RunEvidenceUrl = $"https://github.com/{Repository}/actions/runs/{RunId}",
             JobEvidenceUrl = $"https://github.com/{Repository}/actions/runs/{RunId}/job/{JobId}",
             WorkflowDefinitionSha = WorkflowSha,
