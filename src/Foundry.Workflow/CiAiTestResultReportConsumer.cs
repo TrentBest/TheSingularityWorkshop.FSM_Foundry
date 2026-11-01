@@ -131,8 +131,8 @@ public static class CiAiTestResultReportConsumer
         RequireEqual(ReadText(properties, "WorkflowDefinitionRef", 255), mapping.TrustedWorkflowRef, "trusted workflow ref");
         RequireEqualSha(ReadText(properties, "WorkflowDefinitionSha", 40), mapping.TrustedWorkflowSha, "trusted workflow SHA");
         RequireEqual(ReadText(properties, "EventName", 64), run.Event, "event name");
-        RequireEqual(ReadText(properties, "EventRef", 255), mapping.CandidateRef, "event ref");
-        RequireEqualSha(ReadText(properties, "EventSha", 40), mapping.CandidateSha, "event SHA");
+        RequireEqual(ReadText(properties, "EventRef", 255), mapping.TrustedWorkflowRef, "event ref");
+        RequireEqualSha(ReadText(properties, "EventSha", 40), mapping.TrustedWorkflowSha, "event SHA");
         if (ReadInt64(properties, "RunId") != run.RunId ||
             ReadInt32(properties, "RunAttempt") != run.RunAttempt)
             throw new UnauthorizedAccessException("CiAi report run identity does not match the exact persisted GitHub run binding.");
