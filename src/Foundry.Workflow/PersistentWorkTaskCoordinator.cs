@@ -119,6 +119,9 @@ public sealed class PersistentWorkTaskCoordinator
             var journal = _repairAttemptJournal ?? throw new InvalidOperationException(
                 "A durable repair-attempt journal is required before consuming CiAi repair evidence.");
             var task = _coordinator.GetSnapshot(taskId);
+            if (now == default || task.Lease is not { } lease ||
+                lease.LeaseId != leaseId || lease.ExpiresAt <= now)
+                throw new UnauthorizedAccessException("A current, unexpired task lease is required to apply CiAi evidence.");
             var mapping = artifact.Request.Mapping.Validate();
             var run = artifact.Request.RunBinding
                 ?? throw new InvalidOperationException("CiAi report is not bound to an exact GitHub run.");
