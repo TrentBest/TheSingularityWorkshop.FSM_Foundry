@@ -37,8 +37,8 @@ public sealed class PersistentCodeRedRecoveryCoordinator
             incident.AgentId != lease.AgentId)
             throw new InvalidOperationException("The active incident, CODE RED task, or lease no longer matches the requested recovery.");
 
-        // The host callback may consult a user approval service. Never hold Foundry locks
-        // while invoking host code or waiting for a human decision.
+        // The host obtains the human decision before calling this method. The gate checks
+        // that approval against the supplied snapshots; never invoke host code under locks.
         _approvalGate.DemandApproval(incident, task, now);
 
         return _incidents.ExecuteWithActiveIncident(incidentId, currentIncident =>
