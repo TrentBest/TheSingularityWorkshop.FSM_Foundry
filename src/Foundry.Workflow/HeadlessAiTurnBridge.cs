@@ -239,7 +239,7 @@ public interface IHeadlessAiAgentTurnClient
 }
 
 /// <summary>
-/// Builds and invokes one HeadlessAi turn for an already claimed and investigated Foundry task.
+/// Builds and invokes one HeadlessAi turn for an already claimed Foundry task in Investigating or RepairRequired.
 /// It deliberately performs no repository writes, CI dispatch, retries, or workflow transitions.
 /// </summary>
 public sealed class FoundryHeadlessAiTurnCoordinator
@@ -269,8 +269,14 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         var task = _tasks.GetSnapshot(taskId);
         if (task.Lease is not { } lease || lease.LeaseId != leaseId || lease.ExpiresAt <= now)
             throw new UnauthorizedAccessException("A current, unexpired Foundry task lease is required.");
-        if (task.Status != WorkTaskStatus.Investigating)
-            throw new InvalidOperationException("HeadlessAi may be invoked only after the task enters Investigating.");
+        var expectedStatus = task.Status;
+        if (expectedStatus is not (WorkTaskStatus.Investigating or WorkTaskStatus.RepairRequired))
+            throw new InvalidOperationException("HeadlessAi may be invoked only during investigation or for a CiAi-authorized repair-required turn.");
+        if (expectedStatus == WorkTaskStatus.RepairRequired &&
+            (string.IsNullOrWhiteSpace(priorTurnId) ||
+             string.IsNullOrWhiteSpace(priorCandidateCommitSha) ||
+             evidence is null || evidence.Count == 0))
+            throw new InvalidOperationException("A repair turn requires prior-turn provenance and the accepted CiAi evidence context.");
         var lifetime = turnLifetime ?? TimeSpan.FromMinutes(15);
         if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromHours(2))
             throw new ArgumentOutOfRangeException(nameof(turnLifetime));
@@ -330,7 +336,7 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         // for host reconciliation, but this stale invocation must not hand it to its caller.
         var current = _tasks.GetSnapshot(taskId);
         var completedAt = _timeProvider.GetUtcNow();
-        if (current.Status != WorkTaskStatus.Investigating ||
+        if (current.Status != expectedStatus ||
             current.Lease is not { } currentLease || currentLease.LeaseId != leaseId ||
             currentLease.ExpiresAt <= completedAt)
             throw new UnauthorizedAccessException(
