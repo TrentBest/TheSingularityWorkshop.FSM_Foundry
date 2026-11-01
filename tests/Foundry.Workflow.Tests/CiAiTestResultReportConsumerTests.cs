@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TheSingularityWorkshop.Foundry;
 using Xunit;
 
@@ -58,6 +59,31 @@ public sealed class CiAiTestResultReportConsumerTests
         Assert.True(consumed.Attempt.IsSuccessful);
         Assert.False(consumed.Attempt.HasActionableDiagnostics);
         Assert.Null(consumed.Attempt.DiagnosticsFingerprint);
+    }
+
+    [Fact]
+    public void RejectsAggregateCountersThatDifferFromIndividualResults()
+    {
+        var node = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+        node["Failed"] = 2;
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
+
+        Assert.Throws<InvalidDataException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+    }
+
+    [Fact]
+    public void RejectsCompletePassContainingFailedTestRecords()
+    {
+        var node = JsonNode.Parse(CreateReport("CompletePass", "Passed", "success", EventSha))!;
+        node["Results"]![0]!["Outcome"] = "Failed";
+        node["Results"]![0]!["RawOutcome"] = "Failed";
+        node["Passed"] = 0;
+        node["Failed"] = 1;
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
+
+        Assert.Throws<InvalidDataException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
     }
 
     [Fact]
@@ -145,10 +171,10 @@ public sealed class CiAiTestResultReportConsumerTests
         {
             TestId = "test-1",
             TestName = "ExampleFailure",
-            Outcome = "Failed",
-            RawOutcome = "Failed",
-            Message = "Expected value did not match.",
-            StackTrace = "at Tests.ExampleFailure()",
+            Outcome = verdict == "CompletePass" ? "Passed" : "Failed",
+            RawOutcome = verdict == "CompletePass" ? "Passed" : "Failed",
+            Message = verdict == "CompletePass" ? null : "Expected value did not match.",
+            StackTrace = verdict == "CompletePass" ? null : "at Tests.ExampleFailure()",
             SensitiveContentRedacted = false,
             DiagnosticTruncated = false,
             RecordSha256 = new string('e', 64)
@@ -198,7 +224,7 @@ public sealed class CiAiTestResultReportConsumerTests
             Failed = verdict == "CompletePass" ? 0 : 1,
             Skipped = 0,
             Other = 0,
-            Results = verdict == "CompletePass" ? Array.Empty<object>() : new object[] { result },
+            Results = new object[] { result },
             ObservedAt
         };
         return JsonSerializer.SerializeToUtf8Bytes(report);
