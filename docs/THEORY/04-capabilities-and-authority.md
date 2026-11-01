@@ -91,7 +91,7 @@ There is an implementation/decision discrepancy that must remain visible:
 - **Current development implementation:** CODE RED recovery verifies a short-lived, signed, single-use host-issued receipt inside the Foundry task lifecycle. The receipt is bound to the task, active incident sequence, task-event sequence, recovery action, issuer, principal, and validity window.
 - **Recorded architecture decision:** human-approval enforcement remains in the host adapter; the design should not require a verifiable host-issued receipt inside Foundry's CODE RED recovery path.
 
-These designs differ in where the approval proof is enforced. The current code and tests establish the first behavior; the recorded decision calls for the second ownership boundary. This chapter does not choose between them or change runtime behavior. Reconcile the contract, implementation, and tests in a dedicated reviewed architecture change before describing the boundary as aligned.
+These designs differ in where the approval proof is enforced. The current `development` code and tests establish the first behavior; the recorded decision calls for the second ownership boundary. Draft PR [#18](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/18) implements the host-owned approval gate and exact snapshot rechecks, with 140 tests and the full proof workflow passing on its exact head. It remains unmerged, so the current development behavior is not yet aligned. The PR retains old receipt data only to replay existing v1 task journals; new recovery does not accept or verify a receipt.
 
 Regardless of the eventual seam, the host must authenticate the human and own the approval experience. The model must never be treated as the approver.
 
