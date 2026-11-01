@@ -73,6 +73,7 @@ public static class PinnedHttpsArtifactHttpClientFactory
                 (a == 172 && b is >= 16 and <= 31) ||
                 (a == 192 && (b == 0 || b == 168)) ||
                 (a == 192 && b == 88 && c == 99) ||
+                (a == 192 && ((b == 31 && c == 196) || (b == 52 && c == 193) || (b == 175 && c == 48))) ||
                 (a == 198 && (b == 18 || b == 19 || b == 51)) ||
                 (a == 203 && b == 0 && c == 113))
                 return false;
