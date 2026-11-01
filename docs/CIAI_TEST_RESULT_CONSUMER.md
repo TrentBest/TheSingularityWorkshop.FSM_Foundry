@@ -23,7 +23,7 @@ At the same time, a valid CiAi report must not be allowed to attach itself to an
 - task and correlation identity;
 - repository and candidate ref/SHA (the code being tested);
 - trusted workflow path/ref/SHA (the control-plane workflow);
-- workflow-dispatch event ref/SHA, which must identify that trusted workflow ref/SHA rather than the candidate checkout;
+- workflow-dispatch event ref (the trusted development branch) and its separately persisted event SHA; this is not assumed to equal the workflow-file SHA or the candidate SHA;
 - exact GitHub run ID and attempt; and
 - registered producing job name.
 
