@@ -52,7 +52,8 @@
 - [x] Add Chapter 04 on capabilities, authority, host-issued scoped grants, CODE RED mutation suspension, and the human-approval ownership discrepancy.
 - [x] Add Chapter 05 on evidence provenance, append-only CI attempt history, deterministic bounded repair decisions, and the separation between development behavior and draft CiAi integration branches.
 - [x] Add Chapter 06 on local journal design, replay validation, persistent coordinator failure behavior, and the limits of cross-journal consistency.
-- [ ] Complete the remaining theory chapters for hosts/adapters, scheduling/concurrency, observability, and security.
+- [x] Add Chapter 07 on host/domain ownership, ports and adapters, the HeadlessAi composition root, external-system trust gates, and integration limits.
+- [ ] Complete the remaining theory chapters for scheduling/concurrency, observability, and security.
 - [ ] Generate diagrams from real source/runtime evidence.
 - [ ] Include stable type identity, source spans, and provenance.
 - [ ] Add stale-output verification and a focused change test.
