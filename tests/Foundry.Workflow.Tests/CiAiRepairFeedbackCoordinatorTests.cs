@@ -51,7 +51,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.Equal(WorkTaskStatus.RepairRequired, feedback.Snapshot.Status);
             Assert.NotNull(feedback.Consumed);
             Assert.False(feedback.IsDuplicateDelivery);
-            Assert.Equal(1, attempts.GetAttempts("task-1").Count);
+            Assert.Single(attempts.GetAttempts("task-1"));
             Assert.Equal(RunId, feedback.Snapshot.Events[^1].CiRunId);
             Assert.Equal(RunAttempt, feedback.Snapshot.Events[^1].CiRunAttempt);
 
@@ -60,7 +60,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.True(duplicate.IsDuplicateDelivery);
             Assert.Null(duplicate.Consumed);
             Assert.Equal(feedback.Snapshot.Events.Count, duplicate.Snapshot.Events.Count);
-            Assert.Equal(1, attempts.GetAttempts("task-1").Count);
+            Assert.Single(attempts.GetAttempts("task-1"));
 
             var client = new RecordingHeadlessAiClient();
             var turnJournal = new JsonlHeadlessAiTurnJournal(Path.Combine(root, "turns.jsonl"));
