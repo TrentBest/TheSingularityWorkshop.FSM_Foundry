@@ -206,7 +206,7 @@ public sealed class CodeRedRecoveryAuthorizationTests
         public int Calls { get; private set; }
         public CodeRedIncident? LastIncident { get; private set; }
         public WorkTaskSnapshot? LastTask { get; private set; }
-        public Action<CodeRedIncident, WorkTaskSnapshot, DateTimeOffset>? OnDemand { get; init; }
+        public Action<CodeRedIncident, WorkTaskSnapshot, DateTimeOffset>? OnDemand { get; set; }
 
         public void DemandApproval(CodeRedIncident incident, WorkTaskSnapshot task, DateTimeOffset requestedAt)
         {
