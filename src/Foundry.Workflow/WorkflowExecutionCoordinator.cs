@@ -4,7 +4,7 @@ namespace TheSingularityWorkshop.Foundry;
 /// Owns accepted workflow runs and their observable lifecycle while delegating step execution
 /// to the existing <see cref="WorkflowRunner"/>.
 /// </summary>
-public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
+public sealed class WorkflowExecutionCoordinator : IWorkflowExecutionCoordinator
 {
     private readonly object _gate = new();
     private readonly Dictionary<Guid, RunState> _runs = new();
