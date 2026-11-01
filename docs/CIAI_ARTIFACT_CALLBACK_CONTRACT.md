@@ -11,7 +11,7 @@
 
 Foundry consumes **a metadata-only artifact-ready notice and then pulls the immutable artifact**. It does not accept the full CI evidence packet as the callback body.
 
-This reuses CiAi's existing [Capability Artifact Handoff Contract](https://github.com/TrentBest/TheSingularityWorkshop.CiAi/blob/development/docs/ARTIFACT_HANDOFF_CONTRACT.md): a notice is not the artifact, retrieval is read-only, the consumer verifies the bytes, and a receipt acknowledges exact artifact identity. The artifact payload for this integration is the UTF-8 JSON serialization of `ciai.workflow-evidence.v2`. Packet v1 is not accepted as authoritative candidate evidence for trusted-ref dispatch and must never be reinterpreted as v2.
+This reuses CiAi's existing [Capability Artifact Handoff Contract](https://github.com/TrentBest/TheSingularityWorkshop.CiAi/blob/development/docs/ARTIFACT_HANDOFF_CONTRACT.md): a notice is not the artifact, retrieval is read-only, the consumer verifies the bytes, and a receipt acknowledges exact artifact identity. For the current Foundry report-consumer path, the immutable artifact payload is the UTF-8 JSON serialization of `ciai.test-results.v1`, produced by CiAi's bounded TRX diagnostic normalizer. This payload schema is distinct from the outer `ArtifactReadyNotice` v1 envelope and from the capability's version metadata; neither may be substituted for the report schema.
 
 A receipt confirms durable notice acceptance or artifact retrieval/integrity, depending on which receipt is being discussed. Neither receipt authorizes code changes, repository writes, retries, review handoff, merge, release, or publication.
 
