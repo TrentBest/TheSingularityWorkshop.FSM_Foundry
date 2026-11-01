@@ -11,7 +11,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
     private static readonly DateTimeOffset ValidationStart = DateTimeOffset.Parse("2026-10-31T10:10:00Z");
     private static readonly DateTimeOffset RunBoundAt = DateTimeOffset.Parse("2026-10-31T10:15:00Z");
     private static readonly DateTimeOffset ObservedAt = DateTimeOffset.Parse("2026-10-31T10:45:00Z");
-    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-31T11:00:00Z");
+    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-31T10:46:00Z");
     private const string Repository = "owner/repo";
     private const string CandidateSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private const string BaseSha = "cccccccccccccccccccccccccccccccccccccccc";
