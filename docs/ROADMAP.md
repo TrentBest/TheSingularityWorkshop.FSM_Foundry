@@ -47,7 +47,8 @@
 - [x] Add a modular Foundry theory index and first textbook-style chapter; link the learning path from README and documentation index.
 - [x] Correct the development-vs-feature-branch evidence ledger in README and DOCUMENTATION_INDEX so draft PR #14/#15/#16 work is not represented as shipped development behavior.
 - [ ] Align README and existing docs with the full FSM_COS reader journey, including a real money-shot visual and consistent What/Why/How/See/Next-step flow.
-- [ ] Complete the modular theory chapters for workflow semantics, task/lease lifecycle, capabilities/authority, evidence/repair, persistence/recovery, hosts/adapters, scheduling/concurrency, observability, and security.
+- [x] Add Chapter 02 on workflow definitions and execution semantics, grounded in the development runner, validator, registry, coordinator, and execution-context contracts.
+- [ ] Complete the remaining theory chapters for task/lease lifecycle, capabilities/authority, evidence/repair, persistence/recovery, hosts/adapters, scheduling/concurrency, observability, and security.
 - [ ] Generate diagrams from real source/runtime evidence.
 - [ ] Include stable type identity, source spans, and provenance.
 - [ ] Add stale-output verification and a focused change test.
