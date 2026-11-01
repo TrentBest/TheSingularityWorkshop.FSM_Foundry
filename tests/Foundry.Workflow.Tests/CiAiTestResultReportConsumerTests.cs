@@ -84,7 +84,7 @@ public sealed class CiAiTestResultReportConsumerTests
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: CandidateSha);
 
-        Assert.Throws<UnauthorizedAccessException>(() => mismatchedRun.ValidateAgainst(mapping));
+        Assert.Throws<InvalidOperationException>(() => mismatchedRun.ValidateAgainst(mapping));
     }
 
     [Fact]
