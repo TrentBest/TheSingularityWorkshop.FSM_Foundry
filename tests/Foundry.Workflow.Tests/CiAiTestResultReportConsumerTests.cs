@@ -78,6 +78,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var node = JsonNode.Parse(CreateReport("CompletePass", "Passed", "success", EventSha))!;
         node["Results"]![0]!["Outcome"] = "Failed";
         node["Results"]![0]!["RawOutcome"] = "Failed";
+        node["Results"]![0]!["Message"] = "Unexpected failure in a report claiming CompletePass.";
         node["Passed"] = 0;
         node["Failed"] = 1;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
