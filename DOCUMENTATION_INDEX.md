@@ -46,7 +46,7 @@
 
 ## Theory and learning path
 
-The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapters 01–08 are available: work coordination, workflow execution, task/lease lifecycle, capabilities/authority, evidence/repair decisions, persistence/recovery, hosts/adapters, and scheduling/concurrency. The scheduler chapter distinguishes sequential per-run execution from general dependency-graph scheduling, which remains unimplemented. The HeadlessAi adapter is the concrete integration example; live GitHub/CiAi host integration remains unimplemented. Chapter 04 documents the implemented host-issued capability registry; Chapter 05 documents exact CI attempt provenance and bounded repair policy. Both preserve the CODE RED approval-ownership discrepancy for dedicated reconciliation. CiAi ingress/report/transport proposals remain on draft branches.
+The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapters 01–09 are available: work coordination, workflow execution, task/lease lifecycle, capabilities/authority, evidence/repair decisions, persistence/recovery, hosts/adapters, scheduling/concurrency, and observability/audit/reproducibility. The scheduler chapter distinguishes sequential per-run execution from general dependency-graph scheduling, which remains unimplemented. The HeadlessAi adapter is the concrete integration example; live GitHub/CiAi host integration remains unimplemented. Chapter 04 documents the implemented host-issued capability registry; Chapter 05 documents exact CI attempt provenance and bounded repair policy. Both preserve the CODE RED approval-ownership discrepancy for dedicated reconciliation. CiAi ingress/report/transport proposals remain on draft branches.
 
 ## Update rule
 
