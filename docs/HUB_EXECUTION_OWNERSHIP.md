@@ -66,17 +66,31 @@ On WebPage `development`, `SingularityHub/SingularityHub.cs`:
 
 The declared `IExecutionProvider.Execute(WorkDescriptor)` is not wired into this `SingularityHub` update path. The process-group update callback is not equivalent to Foundry's named workflow handler invocation. These legacy responsibilities must be classified and migrated only where a concrete semantic adapter is tested.
 
-## 04 — Current limitations and integration gates
+## 04 — Manifest loading is FSM_COS composition, not Foundry execution
+
+FSM_COS owns the manifest-to-assembly path. On its current `development` source, `FsmCos.Execute(RuntimeManifest, configurationSource)` validates the manifest and configured bounds, resolves requested roots through `IMicroBundleCatalog`, resolves the dependency closure, validates any supplied dependency schedule against that closure, loads the bundles in dependency order, performs bounded arbitration, and returns a `RuntimeAssembly` containing the composed MicroBundle instances.
+
+Important distinctions in that path:
+
+- `RuntimeManifestSchedule` is a validated **bundle dependency graph** used to check composition/load readiness. Its source documentation explicitly says it is not a process scheduler.
+- `ManifestLoadStage` labels entries as Bootstrap, Resident, or Deferred, but its source comments state the ordinary composition pass does not implement bootstrap-only loading or automatic stage-based deferral/promotion.
+- `RuntimeManifestLoadPlan` tracks Published/Localized/Loaded states and dependency readiness. It does not localize artifacts itself; the host or repository/cache adapter performs localization and reports successful transitions.
+- `RuntimeAssembly` is the immutable result of composition: runtime identity, loaded MicroBundle instances, arbitration rounds, intent, and (in the repository-source build) optional resolved configurations. It does not expose a generic work execution or tick method.
+- MicroBundleDomain's current `IMicroBundle` exposes `Load` and `Arbitrate`; `MicroBundleDescriptor` exposes provider identifiers, but there is not yet a domain-owned per-work-unit execution/scheduling contract.
+
+Therefore Foundry must not claim to load or recompose the manifest. The next boundary is: FSM_COS composes and hands off an assembly plus preserved declarations; Foundry interprets a domain-owned execution-intent contract and coordinates registered providers. That contract is being discovered in [MicroBundleDomain issue #20](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain/issues/20) before the narrower scheduling-intent design in [issue #19](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain/issues/19) is frozen. FSM_COS preservation is tracked in [issue #48](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/issues/48), and Foundry scheduling is tracked in [issue #2](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/2).
+
+## 05 — Current limitations and integration gates
 
 - Foundry's coordinator is in-process and in-memory; it is not a durable queue or remote transport.
 - A host must supply the `WorkflowHandlerRegistry`; the coordinator does not discover providers or execute arbitrary manifest code.
 - Workflow steps execute sequentially in declaration order. There is no general dependency-graph scheduler or RuntimeAssembly scheduler.
 - Cancellation and timeout are cooperative; a handler that ignores its token can delay completion and disposal.
-- FSM_COS RuntimeAssembly handoff has no implemented Foundry adapter.
+- FSM_COS RuntimeAssembly handoff has no implemented Foundry adapter or generic work-unit execution contract.
 - GUI has no authority to mutate run state; its host adapter must map user intents to the command/query contract.
 - WebPage process-group semantics remain a separate legacy/domain contract until the scheduling-intent and composition contracts are understood.
 
-## 05 — Implementation map
+## 06 — Implementation map
 
 - [Workflow coordinator interface](../src/Foundry.Workflow/IWorkflowExecutionCoordinator.cs)
 - [Workflow coordinator implementation](../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
@@ -88,7 +102,7 @@ The declared `IExecutionProvider.Execute(WorkDescriptor)` is not wired into this
 - [Foundry Hub ownership issue](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/1)
 - [Scheduling-intent dependency](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/2)
 
-## 06 — Next integration sequence
+## 07 — Next integration sequence
 
 1. GUI consumes the interface through a host-owned adapter and tests presentation/intent mapping.
 2. Foundry and FSM_COS/MicroBundleDomain define the exact scheduling declaration and RuntimeAssembly handoff, including provenance and same-frame dependency semantics.
