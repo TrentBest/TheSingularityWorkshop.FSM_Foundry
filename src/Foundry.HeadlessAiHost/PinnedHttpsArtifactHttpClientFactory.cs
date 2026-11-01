@@ -57,7 +57,7 @@ public static class PinnedHttpsArtifactHttpClientFactory
 
         if (IPAddress.IsLoopback(address) || address.Equals(IPAddress.Any) ||
             address.Equals(IPAddress.IPv6Any) || address.Equals(IPAddress.IPv6Loopback) ||
-            address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.IsIPv6SiteLocal)
+            address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.IsIPv6UniqueLocal)
             return false;
 
         var bytes = address.GetAddressBytes();
