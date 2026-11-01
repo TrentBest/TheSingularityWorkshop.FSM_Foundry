@@ -46,7 +46,7 @@
 
 ## Theory and learning path
 
-The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapter 01 introduces explicit work coordination; subsequent chapters are individually tracked as planned until their content is written and source-checked.
+The domain textbook begins at [docs/THEORY/README.md](docs/THEORY/README.md). Chapters 01–04 are available: work coordination, workflow execution, task/lease lifecycle, and capabilities/authority. Chapter 04 documents the implemented host-issued capability registry and preserves the CODE RED approval-ownership discrepancy for dedicated reconciliation.
 
 ## Update rule
 
