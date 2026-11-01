@@ -176,6 +176,70 @@ public sealed class CodeRedRecoveryAuthorizationTests
         }
     }
 
+    [Fact]
+    public void ExistingV1SignedReceiptHistoryRemainsReadableAsLegacyAuditOnly()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-legacy-recovery-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var request = Request();
+            var leaseId = Guid.NewGuid();
+            var lease = new WorkTaskLease("agent-recovery", leaseId, Now.AddMinutes(30));
+            var store = new JsonlWorkTaskStore(path);
+            var snapshot = store.Create(new WorkTaskSnapshot(request, WorkTaskStatus.Queued,
+                null, 0, Array.Empty<WorkTaskEvent>()));
+            var events = new List<WorkTaskEvent>();
+            var status = WorkTaskStatus.Queued;
+            var attempt = 0;
+
+            void Append(WorkTaskStatus next, DateTimeOffset occurredAt, string reason,
+                CodeRedRecoveryApprovalReceipt? legacyReceipt = null)
+            {
+                var previous = status;
+                var item = legacyReceipt is null
+                    ? new WorkTaskEvent(events.Count + 1, previous, next, lease.AgentId,
+                        lease.LeaseId, occurredAt, reason)
+                    : new WorkTaskEvent(events.Count + 1, previous, next, lease.AgentId,
+                        lease.LeaseId, occurredAt, reason,
+                        ApprovalReceiptId: legacyReceipt.ReceiptId,
+                        ApprovalIssuer: legacyReceipt.Issuer,
+                        ApprovalPrincipal: legacyReceipt.Principal,
+                        ApprovalIncidentId: legacyReceipt.IncidentId,
+                        ApprovalIncidentSequence: legacyReceipt.IncidentSequence,
+                        ApprovalTaskEventSequence: legacyReceipt.TaskEventSequence,
+                        ApprovalReceipt: legacyReceipt);
+                events.Add(item);
+                status = next;
+                if (next == WorkTaskStatus.Validating)
+                    attempt++;
+                snapshot = store.Append(new WorkTaskSnapshot(request, status, lease, attempt,
+                    Array.AsReadOnly(events.ToArray())));
+            }
+
+            Append(WorkTaskStatus.Claimed, Now, "Task claimed.");
+            Append(WorkTaskStatus.Investigating, Now, "Investigate.");
+            Append(WorkTaskStatus.Implementing, Now, "Implement.");
+            Append(WorkTaskStatus.Validating, Now, "Validate.");
+            Append(WorkTaskStatus.CodeRed, Now, "Required check failed.");
+            var legacyReceipt = new CodeRedRecoveryApprovalReceipt(1, "legacy-receipt",
+                "legacy-host", "legacy-human", "task-recovery", "incident-recovery-1",
+                5, 1, CodeRedRecoveryAction.ResumeInvestigation,
+                Now, Now.AddMinutes(5), "legacy-signature");
+            Append(WorkTaskStatus.Investigating, Now.AddMinutes(1),
+                "Historical receipt-authorized recovery.", legacyReceipt);
+
+            var reopened = new JsonlWorkTaskStore(path);
+            var restored = reopened.Get("task-recovery");
+            Assert.Equal(WorkTaskStatus.Investigating, restored.Status);
+            Assert.Equal(legacyReceipt, restored.Events[^1].ApprovalReceipt);
+            Assert.Null(restored.Events[^1].RecoveryIncidentId);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     private static (Guid Lease, CodeRedIncident Incident) CreateCodeRedTask(
         PersistentWorkTaskCoordinator coordinator)
     {
