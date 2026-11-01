@@ -51,7 +51,10 @@ public sealed record WorkTaskLease(string AgentId, Guid LeaseId, DateTimeOffset 
 public sealed record WorkTaskEvent(long Sequence, WorkTaskStatus Previous, WorkTaskStatus Current,
     string AgentId, Guid LeaseId, DateTimeOffset OccurredAt, string Reason,
     long? CiRunId = null, int? CiRunAttempt = null, string? EvidencePayloadSha256 = null,
-    string? RecoveryIncidentId = null, long? RecoveryIncidentSequence = null);
+    string? RecoveryIncidentId = null, long? RecoveryIncidentSequence = null,
+    string? ApprovalReceiptId = null, string? ApprovalIssuer = null, string? ApprovalPrincipal = null,
+    string? ApprovalIncidentId = null, long? ApprovalIncidentSequence = null,
+    long? ApprovalTaskEventSequence = null, CodeRedRecoveryApprovalReceipt? ApprovalReceipt = null);
 public sealed record WorkTaskSnapshot(WorkTaskRequest Request, WorkTaskStatus Status,
     WorkTaskLease? Lease, int Attempt, IReadOnlyList<WorkTaskEvent> Events);
 
@@ -267,6 +270,33 @@ public sealed class WorkTaskCoordinator
         item.RecoveryIncidentId.Length <= 128 &&
         !item.RecoveryIncidentId.Any(char.IsControl) &&
         item.RecoveryIncidentSequence is > 0;
+
+    // Kept only so pre-host-gate v1 task journals remain readable. New recovery never
+    // accepts a receipt and this legacy audit payload is not an authorization mechanism.
+    internal static bool HasApprovalMetadata(WorkTaskEvent item) =>
+        item.ApprovalReceiptId is not null || item.ApprovalIssuer is not null ||
+        item.ApprovalPrincipal is not null || item.ApprovalIncidentId is not null ||
+        item.ApprovalIncidentSequence.HasValue || item.ApprovalTaskEventSequence.HasValue ||
+        item.ApprovalReceipt is not null;
+
+    internal static bool IsValidLegacyReceiptRecoveryEvent(WorkTaskEvent item) =>
+        item.Previous == WorkTaskStatus.CodeRed &&
+        item.Current == WorkTaskStatus.Investigating &&
+        !string.IsNullOrWhiteSpace(item.ApprovalReceiptId) && item.ApprovalReceiptId.Length <= 128 &&
+        !item.ApprovalReceiptId.Any(char.IsControl) &&
+        !string.IsNullOrWhiteSpace(item.ApprovalIssuer) && item.ApprovalIssuer.Length <= 128 &&
+        !item.ApprovalIssuer.Any(char.IsControl) &&
+        !string.IsNullOrWhiteSpace(item.ApprovalPrincipal) && item.ApprovalPrincipal.Length <= 128 &&
+        !string.IsNullOrWhiteSpace(item.ApprovalIncidentId) && item.ApprovalIncidentId.Length <= 128 &&
+        !item.ApprovalIncidentId.Any(char.IsControl) &&
+        item.ApprovalIncidentSequence is > 0 &&
+        item.ApprovalTaskEventSequence == item.Sequence - 1 &&
+        item.ApprovalReceipt is { } receipt && receipt.Validate() == receipt &&
+        receipt.ReceiptId == item.ApprovalReceiptId && receipt.Issuer == item.ApprovalIssuer &&
+        receipt.Principal == item.ApprovalPrincipal && receipt.IncidentId == item.ApprovalIncidentId &&
+        receipt.IncidentSequence == item.ApprovalIncidentSequence &&
+        receipt.TaskEventSequence == item.ApprovalTaskEventSequence &&
+        receipt.TaskId.Length > 0 && receipt.Action == CodeRedRecoveryAction.ResumeInvestigation;
 
     private static bool Allowed(WorkTaskStatus current, WorkTaskStatus next) => (current, next) switch
     {
