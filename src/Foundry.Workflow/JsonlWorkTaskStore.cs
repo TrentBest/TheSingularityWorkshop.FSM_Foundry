@@ -184,7 +184,8 @@ public sealed class JsonlWorkTaskStore
                     !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item) &&
                     !WorkTaskCoordinator.IsValidLegacyReceiptRecoveryEvent(item)) ||
                 (WorkTaskCoordinator.HasRecoveryMetadata(item) &&
-                    !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item)) ||
+                    (WorkTaskCoordinator.HasApprovalMetadata(item) ||
+                     !WorkTaskCoordinator.IsValidCodeRedRecoveryEvent(item))) ||
                 (WorkTaskCoordinator.HasApprovalMetadata(item) &&
                     !WorkTaskCoordinator.IsValidLegacyReceiptRecoveryEvent(item)) ||
                 (item.ApprovalReceipt is { } legacyReceipt &&
