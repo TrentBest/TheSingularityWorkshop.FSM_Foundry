@@ -129,7 +129,7 @@ public sealed class CodeRedRecoveryAuthorizationTests
             gate.OnDemand = (_, _, _) => tasks.Transition("task-recovery", lease,
                 WorkTaskStatus.Blocked, Now.AddSeconds(30), "new blocker arrived");
 
-            Assert.Throws<UnauthorizedAccessException>(() => recovery.RecoverFromCodeRed(
+            Assert.Throws<InvalidOperationException>(() => recovery.RecoverFromCodeRed(
                 "task-recovery", lease, incident.IncidentId, Now.AddMinutes(1), "stale task approval"));
 
             Assert.Equal(WorkTaskStatus.Blocked, tasks.GetSnapshot("task-recovery").Status);
