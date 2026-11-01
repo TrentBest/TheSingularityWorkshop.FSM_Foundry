@@ -3,14 +3,14 @@
 
 # WorkflowExecutionCoordinator — UML Neighborhood
 
-**Status:** source-grounded view of the PR #10 feature-branch implementation; the timeout extension is not yet part of `development`. The combined lifecycle and timeout tests passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768).
+**Status:** source-grounded view of the current `development` implementation. The timeout and retained lifecycle behavior are part of `development`; the host-facing interface is introduced on this feature branch. Existing lifecycle/timeout tests passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768).
 
 ## Neighborhood
 
 ```mermaid
 classDiagram
     direction TB
-    class WorkflowExecutionCoordinator {
+    class IWorkflowExecutionCoordinator {\n        <<interface>>\n        +Submit(WorkflowDefinition) WorkflowRunSnapshot\n        +Submit(WorkflowDefinition, WorkflowExecutionContext) WorkflowRunSnapshot\n        +StartAsync(Guid) Task~WorkflowResult~\n        +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~\n        +Cancel(Guid) bool\n        +GetSnapshot(Guid) WorkflowRunSnapshot\n        +DisposeAsync() ValueTask\n    }\n    class WorkflowExecutionCoordinator {
         +Submit(WorkflowDefinition) WorkflowRunSnapshot
         +StartAsync(Guid) Task~WorkflowResult~
         +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~
@@ -50,7 +50,7 @@ classDiagram
         TimedOut
         Invalid
     }
-    WorkflowExecutionCoordinator --> WorkflowRunner : delegates execution
+    IWorkflowExecutionCoordinator <|.. WorkflowExecutionCoordinator : implemented by\n    WorkflowExecutionCoordinator --> WorkflowRunner : delegates execution
     WorkflowExecutionCoordinator --> WorkflowHandlerRegistry : through runner
     WorkflowExecutionCoordinator --> WorkflowDefinition : retains accepted definition
     WorkflowExecutionCoordinator --> WorkflowRunSnapshot : returns immutable observation
@@ -99,7 +99,7 @@ sequenceDiagram
 
 ## Source and tests
 
-- [Coordinator source](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [Coordinator interface](../../src/Foundry.Workflow/IWorkflowExecutionCoordinator.cs)\n- [Coordinator source](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
 - [Source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md)
 - [Lifecycle tests](../../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 - [Workflow semantics](../WORKFLOW_SEMANTICS.md)
