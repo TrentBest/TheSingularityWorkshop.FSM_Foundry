@@ -16,6 +16,7 @@ public sealed class CiAiTestResultReportConsumerTests
     private const string Repository = "owner/repo";
     private const string CandidateSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private const string WorkflowSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string EventSha = "dddddddddddddddddddddddddddddddddddddddd";
     private const long RunId = 123456789;
     private const int RunAttempt = 1;
     private const long JobId = 987654321;
@@ -25,7 +26,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void ConsumesActionableReportIntoBoundAttemptAndHeadlessEvidence()
     {
-        var bytes = CreateReport("ActionableFailure", "Failed", "failure", WorkflowSha);
+        var bytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
         var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
 
         Assert.Equal("ActionableFailure", consumed.Verdict);
@@ -50,7 +51,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void CompletePassIsDerivedOnlyFromCiAiVerdict()
     {
-        var bytes = CreateReport("CompletePass", "Passed", "success", WorkflowSha);
+        var bytes = CreateReport("CompletePass", "Passed", "success", EventSha);
         var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
 
         Assert.True(consumed.Attempt.EvidenceComplete);
@@ -71,7 +72,7 @@ public sealed class CiAiTestResultReportConsumerTests
     [Fact]
     public void RejectsIncompleteReportWithUnknownOrDuplicateRootProperties()
     {
-        var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", WorkflowSha);
+        var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", EventSha);
         var json = Encoding.UTF8.GetString(bytes);
         var duplicate = Encoding.UTF8.GetBytes(json[..^1] + ",\"Schema\":\"ciai.test-results.v1\"}");
         Assert.Throws<FormatException>(() =>
@@ -109,10 +110,10 @@ public sealed class CiAiTestResultReportConsumerTests
             Repository, BranchRef, CandidateSha, WorkflowPath, "refs/heads/development", WorkflowSha,
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
-            createdAt, expiresAt).Validate();
+            createdAt, expiresAt, TrustedEventSha: EventSha).Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
-            BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt).ValidateAgainst(mapping);
+            BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
         var snapshot = new CiAiRequestTaskMappingSnapshot(mapping, run, false);
         var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         return FoundryVerifiedCiAiReportArtifact.Verify(
