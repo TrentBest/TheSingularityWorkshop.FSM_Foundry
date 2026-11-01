@@ -22,7 +22,7 @@ The chapters follow a common teaching sequence: familiar problem, vocabulary, re
 | 03 | [Tasks, leases, and lifecycle ownership](03-tasks-leases-and-lifecycle.md) | How do we assign bounded work, prevent stale agents from acting, and preserve its history? | **Available**; CODE RED approval ownership discrepancy explicitly tracked |
 | 04 | [Capabilities, authority, and human approval](04-capabilities-and-authority.md) | How do hosts grant narrowly scoped power without trusting definitions or model output? | **Available**; CODE RED approval ownership discrepancy explicitly tracked |
 | 05 | [Evidence, verdicts, and repair decisions](05-evidence-and-repair.md) | What makes a result trustworthy enough to drive a bounded next action? | **Available**; CiAi integration proposals are tracked separately |
-| 06 | [Persistence, replay, and recovery](06-persistence-and-recovery.md) | How can state survive process restart without pretending a local journal is a distributed system? | Planned |
+| 06 | [Persistence, replay, and recovery](06-persistence-and-recovery.md) | How can state survive process restart without pretending a local journal is a distributed system? | **Available** |
 | 07 | [Hosts, adapters, and external systems](07-hosts-and-adapters.md) | How do desktop, web, CI, and headless hosts participate without owning Foundry semantics? | Planned |
 | 08 | [Scheduling, dependencies, and concurrency](08-scheduling-and-concurrency.md) | When can work run concurrently, and what must remain sequential? | Planned; no general dependency-graph scheduler is claimed |
 | 09 | [Observability, audit, and reproducibility](09-observability-and-evidence.md) | How can an operator reconstruct what happened and distinguish proof from presentation? | Planned |
