@@ -61,10 +61,10 @@ Keep `WorkflowDefinition`, FSM_COS `RuntimeAssembly`, and legacy host work descr
 
 Use the existing issue hierarchy; do not create competing roadmaps:
 
-- [Foundry #8 — CODE RED bounded CI-to-agent repair loop](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/8) is the current integration priority.
-- [Foundry #5 — governed issue-to-draft-PR loop](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/5) defines the first repository-local vertical slice.
-- [Foundry #6 — GitHub-native agent coordination](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/6) owns cross-repository claims, status, questions, dependencies, and handoffs.
-- [Foundry #7 — multi-model agent teams](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/7) owns fan-out/fan-in, provider roles, comparison, and arbitration.
+- [Foundry #8 — CODE RED bounded CI-to-agent repair loop](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/8) is the current integration priority.
+- [Foundry #5 — governed issue-to-draft-PR loop](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/5) defines the first repository-local vertical slice.
+- [Foundry #6 — GitHub-native agent coordination](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/6) owns cross-repository claims, status, questions, dependencies, and handoffs.
+- [Foundry #7 — multi-model agent teams](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/7) owns fan-out/fan-in, provider roles, comparison, and arbitration.
 - Coordinate with [HeadlessAi #10](https://github.com/TrentBest/TheSingularityWorkshop.HeadlessAi/issues/10) for resumable model turns and [CiAi #27](https://github.com/TrentBest/TheSingularityWorkshop.CiAi/issues/27) for exact-SHA evidence and bounded rerun contracts.
 - [MyVR #10](https://github.com/TrentBest/TheSingularityWorkshop.MyVR/issues/10) is the first end-to-end proving scenario. Do not claim the ecosystem loop is complete before that proof passes.
 
