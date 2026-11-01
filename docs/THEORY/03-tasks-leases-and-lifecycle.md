@@ -78,7 +78,7 @@ The persistent coordinator requires the current attempt to equal the latest dura
 2. [PersistentWorkTaskCoordinator.cs](../../src/Foundry.Workflow/PersistentWorkTaskCoordinator.cs) — couples lifecycle mutations to durable snapshot writes.
 3. [JsonlWorkTaskStore.cs](../../src/Foundry.Workflow/JsonlWorkTaskStore.cs) — append-only snapshot journal and replay validation.
 4. [Work Task Lifecycle contract](../WORK_TASK_LIFECYCLE.md) — complete lifecycle, capability, CODE RED, evidence, and limitation details.
-5. [Task coordinator tests](../../tests/Foundry.Workflow.Tests/WorkTaskCoordinatorTests.cs) and [persistent coordinator tests](../../tests/Foundry.Workflow.Tests/PersistentWorkTaskCoordinatorTests.cs) — executable contract evidence.
+5. [Task coordinator tests](../../tests/Foundry.Workflow.Tests/WorkTaskCoordinatorTests.cs) and [persistent coordinator tests](../../tests/Foundry.Workflow.Tests/JsonlWorkTaskStoreTests.cs) — executable contract evidence.
 
 ### Local persistence and recovery
 
