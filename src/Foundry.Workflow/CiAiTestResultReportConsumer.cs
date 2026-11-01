@@ -80,8 +80,8 @@ public static class CiAiTestResultReportConsumer
             task.Request.CorrelationId != mapping.CorrelationId ||
             !string.Equals(task.Request.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("CiAi report dispatch mapping does not identify the supplied Foundry task.");
-        if (task.Status is not (WorkTaskStatus.Validating or WorkTaskStatus.CodeRed))
-            throw new InvalidOperationException("CiAi evidence can be consumed only while the task is validating or under CODE RED review.");
+        if (task.Status != WorkTaskStatus.Validating)
+            throw new InvalidOperationException("A new CiAi report can be applied only to the task's active validation attempt; CODE RED recovery requires the host approval path first.");
         if (task.Attempt < 1 || task.Events.Count == 0)
             throw new InvalidOperationException("Foundry task has no durable validation-attempt history.");
 
