@@ -96,7 +96,7 @@ If any answer is missing, the operation should not inherit broad ambient authori
 3. [Capability registry](../../src/Foundry.Workflow/WorkTaskCapabilityRegistry.cs) — host-issued scoped action grants.
 4. [HeadlessAi turn bridge](../../docs/HEADLESSAI_TURN_BRIDGE.md) — durable at-most-once invocation behavior and untrusted proposal boundary.
 5. [Work task persistence](../../src/Foundry.Workflow/PersistentWorkTaskCoordinator.cs) — local persistence and fail-closed mutation behavior.
-6. [CiAi transport security proposal](../CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — feature-branch DNS-pinned transport design; not merged to development.
+6. [CiAi transport security proposal](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/feature/foundry-pinned-artifact-transport/docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — feature-branch DNS-pinned transport design; not merged to development.
 7. [CiAi callback contract](../CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — host-owned authenticated ingress contract; production endpoint remains unimplemented.
 
 Important remaining work includes production host authentication and authorization, secure credential provisioning and rotation, mandatory capability enforcement in a real GitHub adapter, authenticated CiAi callback deployment, hardened artifact retrieval integration, cross-process task coordination, journal backup/retention/reconciliation, production incident transport, and architecture reconciliation for CODE RED approval ownership.
