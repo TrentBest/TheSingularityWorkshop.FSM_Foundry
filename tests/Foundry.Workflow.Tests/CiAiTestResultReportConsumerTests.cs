@@ -116,13 +116,9 @@ public sealed class CiAiTestResultReportConsumerTests
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt).ValidateAgainst(mapping);
         var snapshot = new CiAiRequestTaskMappingSnapshot(mapping, run, false);
         var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        var notice = new CiAiValidatedArtifactNotice(
-            snapshot, "notice-1", ObservedAt.AddMinutes(1), "owner/ciai",
-            "workflow-evidence", "2", "revision-1", "artifact-1", "v1",
-            "application/json", bytes.Length,
-            new Uri("https://artifacts.example.com/report.json"), digest,
-            expiresAt, RunId.ToString(), "foundry-host", new string('d', 64));
-        return CiAiArtifactContentVerifier.Verify(notice, bytes, Now);
+        return FoundryVerifiedCiAiReportArtifact.Verify(
+            snapshot, bytes, "application/json", digest, bytes.Length,
+            expiresAt, RunId.ToString(), Now);
     }
 
     private static byte[] CreateReport(string verdict, string requiredStatus, string conclusion, string eventSha)
