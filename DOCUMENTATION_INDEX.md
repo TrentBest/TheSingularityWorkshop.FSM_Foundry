@@ -15,7 +15,9 @@
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
-- [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.\n- [CiAi artifact transport security](docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — DNS-pinned HTTPS connections, public-address filtering, redirect/proxy policy, and the remaining host integration gates.\n- [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
+- [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
+- [CiAi artifact transport security](docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — DNS-pinned HTTPS connections, public-address filtering, redirect/proxy policy, and the remaining host integration gates.
+- [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries and evidence labels.
 - [Contract inspection ledger](docs/CONTRACT_INSPECTION.md) — source-backed findings from the Workshop stack and unresolved decisions.
