@@ -54,7 +54,7 @@ Foundry validates the structural consistency of the verdict with required-check 
 
 ### Limits
 
-This slice is a consumer boundary, not the complete CODE RED loop. It does not host HTTPS, authenticate JWTs, download provider artifacts, verify ZIP archives, safely extract TRX, create CI reports, dispatch HeadlessAi, authorize repository commands, or provide distributed persistence. The current Foundry JSONL journals remain local-filesystem, single-process stores.
+This slice connects the verified report to Foundry's durable local task/attempt lifecycle and the existing HeadlessAi turn bridge, but it is not the complete CODE RED loop. It does not host HTTPS, authenticate JWTs, download provider artifacts, verify ZIP archives, safely extract TRX, create CI reports, automatically invoke HeadlessAi, authorize repository commands, or provide distributed persistence. The current Foundry JSONL journals remain local-filesystem, single-process stores.
 
 ## 04 — See it in a minute
 
@@ -63,7 +63,9 @@ The executable contract tests cover:
 - conversion of ActionableFailure into a provenance-bound repair attempt and HeadlessAi evidence;
 - conversion of CompletePass without caller-supplied success flags;
 - rejection of a candidate SHA that differs from the persisted dispatch; and
-- rejection of duplicate JSON properties.
+- rejection of duplicate JSON properties;
+- idempotent durable attempt application; and
+- a same-task HeadlessAi repair turn carrying the CiAi evidence and prior-turn provenance.
 
 The tests use a deterministic verified-artifact fixture. They do not claim a live provider retrieval or production host integration.
 
