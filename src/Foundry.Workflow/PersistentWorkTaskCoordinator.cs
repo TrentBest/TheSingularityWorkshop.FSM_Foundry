@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace TheSingularityWorkshop.Foundry;
 
 /// <summary>
@@ -93,6 +95,75 @@ public sealed class PersistentWorkTaskCoordinator
                     currentAttempt, expectation, maximumDuration, now);
                 return Persist(snapshot);
             });
+        }
+    }
+
+    /// <summary>
+    /// Consumes a verified CiAi report, appends its exact attempt idempotently, and applies
+    /// the existing Foundry lifecycle policy using only CiAi's verdict-derived attempt.
+    /// A duplicate delivery already reflected in task history is acknowledged without
+    /// applying a second transition.
+    /// </summary>
+    public CiAiRepairFeedbackResult ApplyCiAiReport(
+        string taskId,
+        Guid leaseId,
+        FoundryVerifiedCiAiReportArtifact artifact,
+        TimeSpan maximumDuration,
+        DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
+        ArgumentNullException.ThrowIfNull(artifact);
+        lock (_gate)
+        {
+            EnsureHealthy();
+            var journal = _repairAttemptJournal ?? throw new InvalidOperationException(
+                "A durable repair-attempt journal is required before consuming CiAi repair evidence.");
+            var task = _coordinator.GetSnapshot(taskId);
+            var mapping = artifact.Request.Mapping.Validate();
+            var run = artifact.Request.RunBinding
+                ?? throw new InvalidOperationException("CiAi report is not bound to an exact GitHub run.");
+            if (!string.Equals(mapping.TaskId, taskId, StringComparison.Ordinal))
+                throw new UnauthorizedAccessException("CiAi report mapping identifies a different Foundry task.");
+
+            var reportDigest = Convert.ToHexString(SHA256.HashData(artifact.Bytes.Span)).ToLowerInvariant();
+            var prior = journal.GetAttempts(taskId).SingleOrDefault(item =>
+                item.CiRunId == run.RunId && item.CiRunAttempt == run.RunAttempt);
+            if (prior is not null)
+            {
+                if (!string.Equals(prior.EvidencePayloadSha256, reportDigest, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(prior.CandidateSha, mapping.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                    prior.CorrelationId != mapping.CorrelationId ||
+                    !string.Equals(prior.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("A previously recorded CiAi run was redelivered with conflicting report content or task provenance.");
+
+                var alreadyApplied = task.Events.Any(item =>
+                    item.CiRunId == run.RunId && item.CiRunAttempt == run.RunAttempt &&
+                    string.Equals(item.EvidencePayloadSha256, reportDigest, StringComparison.OrdinalIgnoreCase));
+                if (alreadyApplied)
+                    return new CiAiRepairFeedbackResult(task, null, IsDuplicateDelivery: true);
+            }
+
+            var consumed = CiAiTestResultReportConsumer.Consume(artifact, task, now);
+            var appendOutcome = journal.Append(consumed.Attempt);
+            if (appendOutcome is WorkTaskRepairAttemptAppendOutcome.Conflict or
+                WorkTaskRepairAttemptAppendOutcome.OutOfOrder)
+                throw new InvalidOperationException($"CiAi repair attempt could not be appended: {appendOutcome}.");
+
+            var expectation = new WorkTaskRepairEvidenceExpectation(
+                consumed.Attempt.TaskId,
+                consumed.Attempt.CorrelationId,
+                consumed.Attempt.Repository,
+                consumed.Attempt.Branch,
+                consumed.Attempt.WorkflowPath,
+                consumed.Attempt.CandidateSha,
+                consumed.Attempt.TaskStartedAt,
+                consumed.Attempt.CiRunId,
+                consumed.Attempt.CiRunAttempt);
+
+            var updated = ApplyRepairDecision(taskId, leaseId, consumed.Attempt,
+                expectation, maximumDuration, now);
+            return new CiAiRepairFeedbackResult(updated, consumed,
+                IsDuplicateDelivery: appendOutcome == WorkTaskRepairAttemptAppendOutcome.Duplicate);
         }
     }
 
