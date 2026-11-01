@@ -1,3 +1,8 @@
+public sealed record CiAiRepairFeedbackResult(
+    WorkTaskSnapshot Snapshot,
+    CiAiConsumedTestResult? Consumed,
+    bool IsDuplicateDelivery);
+
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
