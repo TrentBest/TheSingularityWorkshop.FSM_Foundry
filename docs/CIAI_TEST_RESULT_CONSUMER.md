@@ -7,12 +7,12 @@
 
 Foundry consumes the ciai.test-results.v1 report only after the host has authenticated the registered CiAi sender, validated the artifact-ready notice against the persisted dispatch mapping, retrieved the artifact, and verified its declared size and SHA-256 digest.
 
-FoundryVerifiedCiAiReportArtifact is the provider-neutral, immutable Foundry content value. The host composes the authenticated notice and retrieval path with `FoundryVerifiedCiAiReportArtifact.FromVerifiedArtifactContent`, which carries forward the exact validated notice metadata and rechecks the retrieved bytes before report parsing. CiAiTestResultReportConsumer is the provider-neutral report consumer. It checks the report's schema and exact binding to the task's persisted dispatch/run identity, then creates:
+FoundryVerifiedCiAiReportArtifact is the provider-neutral, immutable Foundry content value; after retrieval verification, the host supplies the validated notice's request snapshot, media type, digest, size, expiry, and provider run ID to its `Verify` factory. This keeps the report consumer independent of the HTTP ingress and transport implementation. CiAiTestResultReportConsumer is the provider-neutral report consumer. It checks the report's schema and exact binding to the task's persisted dispatch/run identity, then creates:
 
 - a WorkTaskRepairAttempt whose evidence flags are derived exclusively from CiAi's named verdict; and
 - a bounded FoundryHeadlessAiEvidence context item for the next HeadlessAi turn.
 
-The consumer does not reference the CiAi assembly. This PR is stacked on the Foundry host-neutral ingress/retrieval slice so the verified artifact content can be composed without weakening either boundary.
+The consumer does not reference the CiAi assembly or the separate ingress implementation project. It consumes the versioned JSON contract and Foundry's persisted dispatch-mapping contract, keeping this slice independently buildable on development.
 
 ## 02 — Why
 
@@ -37,7 +37,7 @@ The host sequence is:
 2. Validate the notice against the trusted provider registration and exact persisted request/run mapping.
 3. Retrieve the artifact through a transport that enforces connection-time network policy, redirect restrictions, timeout, and byte limits.
 4. Verify the retrieved bytes against the notice's declared digest and size.
-5. Restore the Foundry task snapshot and call `FoundryVerifiedCiAiReportArtifact.FromVerifiedArtifactContent` with the `CiAiVerifiedArtifactContent` returned by the retrieval verifier.
+5. Restore the Foundry task snapshot and call `FoundryVerifiedCiAiReportArtifact.Verify` with the exact `CiAiRequestTaskMappingSnapshot` retained by the validated notice, the retrieved `CiAiVerifiedArtifactContent.Bytes`, and the digest, size, expiry, provider run ID, and media type from that same notice.
 6. Call PersistentWorkTaskCoordinator.ApplyCiAiReport. Foundry consumes the report only for the active validation attempt, appends the exact attempt idempotently, and applies the existing bounded lifecycle policy; a repeated delivery already reflected in task history is acknowledged without a second transition. A CODE RED task must first pass the host approval/recovery path.
 7. When the result is RepairRequired, supply the returned FoundryHeadlessAiEvidence to FoundryHeadlessAiTurnCoordinator.InvokeAsync with the prior turn ID and prior candidate SHA. The repair turn remains attached to the same task/lease, and Foundry verifies that the prior turn ID resolves to a completed turn for that same task, correlation, repository, branch, base SHA, and prior candidate SHA. The model response remains a proposal and requires independent host authorization before any repository mutation.
 
