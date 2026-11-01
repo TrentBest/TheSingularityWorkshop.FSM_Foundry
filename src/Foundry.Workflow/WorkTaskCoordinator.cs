@@ -237,7 +237,7 @@ public sealed class WorkTaskCoordinator
     }
 
     /// <summary>Rehydrates a task from a validated durable snapshot before dispatch starts.</summary>
-    public void Restore(WorkTaskSnapshot snapshot)
+    internal void Restore(WorkTaskSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         JsonlWorkTaskStore.ValidateSnapshot(snapshot);
