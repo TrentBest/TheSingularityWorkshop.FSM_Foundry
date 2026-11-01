@@ -16,6 +16,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
     private const string CandidateSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private const string BaseSha = "cccccccccccccccccccccccccccccccccccccccc";
     private const string WorkflowSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string EventSha = "dddddddddddddddddddddddddddddddddddddddd";
     private const long RunId = 123456789;
     private const int RunAttempt = 1;
     private const long JobId = 987654321;
@@ -117,10 +118,10 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Repository, BranchRef, CandidateSha, WorkflowPath, "refs/heads/development", WorkflowSha,
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
-            createdAt, expiresAt).Validate();
+            createdAt, expiresAt, TrustedEventSha: EventSha).Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
-            BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt).ValidateAgainst(mapping);
+            BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
         var snapshot = new CiAiRequestTaskMappingSnapshot(mapping, run, false);
         var bytes = CreateReport();
         var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
@@ -162,7 +163,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             WorkflowDefinitionSha = WorkflowSha,
             EventName = "workflow_dispatch",
             EventRef = "refs/heads/development",
-            EventSha = WorkflowSha,
+            EventSha,
             RunId,
             RunAttempt,
             JobId,
