@@ -160,12 +160,12 @@ public static class CiAiTestResultReportConsumer
             throw new InvalidDataException("CiAi report observation time is outside the bound run and artifact validity window.");
 
         var reasonCodes = ReadReasonCodes(properties);
-        var (failedResultDigests, failedSummary) = ReadFailedResults(properties);
+        var (failedResultDigests, failedSummary, counts) = ReadAndValidateResults(properties);
+        ValidateResultCounters(properties, counts);
+        ValidateVerdictResults(verdict, counts, failedSummary, failedResultDigests);
         var evidenceComplete = verdict != "IncompleteOrUntrusted";
         var successful = verdict == "CompletePass";
         var actionable = verdict == "ActionableFailure";
-        if (actionable && failedResultDigests.Count == 0)
-            throw new InvalidDataException("CiAi ActionableFailure report contains no failed test records.");
 
         var diagnosticsFingerprint = actionable
             ? HashText(string.Join("\n", reasonCodes.Order(StringComparer.Ordinal)
@@ -265,14 +265,23 @@ public static class CiAiTestResultReportConsumer
         return values;
     }
 
-    private static (List<string> Digests, List<string> Summary) ReadFailedResults(
-        Dictionary<string, JsonElement> properties)
+    private sealed record CiAiResultCounts(int Total, int Passed, int Failed, int Skipped, int Other);
+
+    private static (List<string> Digests, List<string> Summary, CiAiResultCounts Counts)
+        ReadAndValidateResults(Dictionary<string, JsonElement> properties)
     {
         var results = properties["Results"];
         if (results.ValueKind != JsonValueKind.Array || results.GetArrayLength() > 10_000)
             throw new FormatException("CiAi report test results must be a bounded array.");
+
         var digests = new List<string>();
         var summaries = new List<string>();
+        var counts = new CiAiResultCounts(results.GetArrayLength(), 0, 0, 0, 0);
+        var passed = 0;
+        var failed = 0;
+        var skipped = 0;
+        var other = 0;
+
         foreach (var item in results.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
@@ -280,23 +289,85 @@ public static class CiAiTestResultReportConsumer
             ValidateUniqueProperties(item);
             var values = item.EnumerateObject().ToDictionary(property => property.Name,
                 property => property.Value, StringComparer.Ordinal);
-            if (!values.TryGetValue("Outcome", out var outcome) ||
-                outcome.ValueKind != JsonValueKind.String ||
-                !string.Equals(outcome.GetString(), "Failed", StringComparison.Ordinal))
+            if (!values.TryGetValue("Outcome", out var outcomeElement) ||
+                outcomeElement.ValueKind != JsonValueKind.String)
+                throw new FormatException("CiAi test result outcome must be a string.");
+
+            var outcome = outcomeElement.GetString();
+            switch (outcome)
+            {
+                case "Passed":
+                    passed++;
+                    break;
+                case "Failed":
+                    failed++;
+                    break;
+                case "Skipped":
+                    skipped++;
+                    break;
+                case "Other":
+                    other++;
+                    break;
+                default:
+                    throw new FormatException("CiAi test result outcome is not a recognized normalized outcome.");
+            }
+
+            if (outcome != "Failed")
                 continue;
+
             if (!values.TryGetValue("RecordSha256", out var digest) ||
                 digest.ValueKind != JsonValueKind.String || digest.GetString() is not { Length: 64 } digestText ||
                 !digestText.All(Uri.IsHexDigit))
                 throw new FormatException("CiAi failed test record is missing its SHA-256 identity.");
             digests.Add(digestText.ToLowerInvariant());
+
             var name = OptionalText(values, "TestName", 512);
             var message = OptionalText(values, "Message", 4_000);
             var stack = OptionalText(values, "StackTrace", 8_000);
             summaries.Add($"{name ?? "Failed test"}: {message ?? stack ?? "No diagnostic text supplied"}");
         }
+
         if (digests.Distinct(StringComparer.Ordinal).Count() != digests.Count)
             throw new FormatException("CiAi report contains duplicate failed-test record digests.");
-        return (digests, summaries);
+
+        counts = counts with { Passed = passed, Failed = failed, Skipped = skipped, Other = other };
+        return (digests, summaries, counts);
+    }
+
+    private static void ValidateResultCounters(Dictionary<string, JsonElement> properties,
+        CiAiResultCounts actual)
+    {
+        var declared = new CiAiResultCounts(
+            ReadNonNegativeCount(properties, "Total"),
+            ReadNonNegativeCount(properties, "Passed"),
+            ReadNonNegativeCount(properties, "Failed"),
+            ReadNonNegativeCount(properties, "Skipped"),
+            ReadNonNegativeCount(properties, "Other"));
+
+        if (declared != actual ||
+            (long)declared.Passed + declared.Failed + declared.Skipped + declared.Other != declared.Total)
+            throw new InvalidDataException("CiAi report aggregate test counters do not match the individual result records.");
+    }
+
+    private static int ReadNonNegativeCount(Dictionary<string, JsonElement> properties, string name)
+    {
+        var value = ReadInt32(properties, name);
+        if (value < 0)
+            throw new InvalidDataException($"CiAi report test counter '{name}' cannot be negative.");
+        return value;
+    }
+
+    private static void ValidateVerdictResults(string verdict, CiAiResultCounts counts,
+        IReadOnlyList<string> failedSummaries, IReadOnlyList<string> failedDigests)
+    {
+        if (verdict == "CompletePass" && (counts.Failed != 0 || counts.Other != 0))
+            throw new InvalidDataException("CiAi CompletePass report cannot contain failed or unknown test outcomes.");
+        if (verdict == "ActionableFailure")
+        {
+            if (counts.Failed == 0 || failedDigests.Count != counts.Failed ||
+                failedSummaries.Count != counts.Failed)
+                throw new InvalidDataException("CiAi ActionableFailure report must contain a diagnostic record for every failed test.");
+        }
     }
 
     private static string BuildBoundedSummary(string verdict, IReadOnlyList<string> reasons,
