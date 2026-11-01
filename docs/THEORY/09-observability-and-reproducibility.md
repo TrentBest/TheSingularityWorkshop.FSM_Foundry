@@ -87,7 +87,7 @@ The evidence label must match the actual scope. “Implemented on development”
 1. [WorkflowExecutionCoordinator.cs](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs) — immutable run snapshots and structured outcomes.
 2. [WorkTaskCoordinator.cs](../../src/Foundry.Workflow/WorkTaskCoordinator.cs) — sequenced task event history and evidence-derived decisions.
 3. [JsonlWorkTaskStore.cs](../../src/Foundry.Workflow/JsonlWorkTaskStore.cs) — durable task snapshots and replay validation.
-4. [CodeRedStatusNotice.cs](../../src/Foundry.Workflow/CodeRedStatusNoticeFactory.cs) and [CodeRedStatusNotifier.cs](../../src/Foundry.Workflow/CodeRedStatusNotifier.cs) — validated status projection and host delivery boundary.
+4. [CodeRedStatusNotice.cs](../../src/Foundry.Workflow/CodeRedStatusNotice.cs) and [CodeRedStatusNotifier.cs](../../src/Foundry.Workflow/CodeRedStatusNotifier.cs) — validated status projection and host delivery boundary.
 5. [WorkTaskRepairAttemptJournal.cs](../../src/Foundry.Workflow/WorkTaskRepairAttemptJournal.cs) — exact CI attempt provenance and evidence digest.
 6. [Gallery](../../Gallery.md) and [FSM_API probe workflow](../../.github/workflows/foundry-fsm-api-probe.yml) — reproducible demonstrations and CI artifacts.
 7. [Documentation index](../../DOCUMENTATION_INDEX.md) and [roadmap](../ROADMAP.md) — capability status and evidence ledger.
