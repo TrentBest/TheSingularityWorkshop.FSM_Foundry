@@ -86,7 +86,11 @@ public static class PinnedHttpsArtifactHttpClientFactory
         if ((bytes[0] & 0xE0) != 0x20)
             return false;
         if (bytes[0] == 0x20 && bytes[1] == 0x01 &&
-            (bytes[2] == 0x0D && bytes[3] == 0xB8 || bytes[2] == 0x00 && bytes[3] == 0x00))
+            ((bytes[2] & 0xFE) == 0x00 || bytes[2] == 0x0D && bytes[3] == 0xB8))
+            return false;
+        if (bytes[0] == 0x20 && bytes[1] == 0x02)
+            return false;
+        if (bytes[0] == 0x3F && bytes[1] == 0xFF && (bytes[2] & 0xF0) == 0x00)
             return false;
 
         return true;
