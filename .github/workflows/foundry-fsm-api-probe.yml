@@ -9,6 +9,7 @@ on:
       - development
       - work/code-red-task-lifecycle
       - feature/foundry-headlessai-turn-seam
+      - feature/foundry-pinned-artifact-transport
   workflow_dispatch:
 
 permissions:
