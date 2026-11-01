@@ -68,7 +68,7 @@ Likewise, cancellation is cooperative. A handler that ignores its cancellation t
 
 CODE RED is a fail-safe mutation suspension and escalation state. The host owns incident notification transport and authenticates the human approver.
 
-The current development lifecycle requires a signed, single-use host-issued recovery receipt and verifies it in Foundry before returning the task to investigation. The recorded architecture decision for this workstream places human-approval enforcement in the host adapter rather than requiring a verifiable host-issued receipt inside Foundry's recovery path. This is a known implementation/decision discrepancy, documented rather than silently resolved. A dedicated architecture reconciliation must align the runtime, contract, and tests.
+The current `development` lifecycle still verifies a signed, single-use host-issued recovery receipt inside Foundry. The recorded architecture decision places human-approval enforcement in the host adapter. Draft PR [#18](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/pull/18) proposes the host-owned approval gate, rechecks incident/task sequences after approval, and retains receipt fields only for old journal replay. Its exact-head proof workflow passed, but it remains unmerged; until then, this implementation/decision discrepancy remains open.
 
 No model response, issue comment, CI result, or task transition reason is a substitute for an authenticated human approval.
 
