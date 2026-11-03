@@ -140,6 +140,40 @@ public sealed class WorkTaskCapabilityRegistryTests
     }
 
     [Fact]
+    public void ReviewReadyTaskCanGrantOnlyDraftPullRequestHandoff()
+    {
+        var registry = new WorkTaskCapabilityRegistry();
+        var claimed = ActiveTask();
+        var reviewReady = claimed with { Status = WorkTaskStatus.ReviewReady };
+
+        var capability = registry.Grant(reviewReady, "work/task-8", CandidateSha,
+            Array.Empty<string>(), new[] { WorkTaskAction.CreateDraftPullRequest },
+            Now.AddMinutes(1), TimeSpan.FromMinutes(5));
+
+        Demand(registry, capability, reviewReady, WorkTaskAction.CreateDraftPullRequest,
+            now: Now.AddMinutes(2));
+        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
+            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(2)));
+        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
+            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(2)));
+        Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(reviewReady, "work/task-8",
+            CandidateSha, new[] { "src/Foundry.Workflow" },
+            new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
+            Now.AddMinutes(1), TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
+    public void DraftPullRequestHandoffCannotBeAuthorizedBeforeReviewReady()
+    {
+        var registry = new WorkTaskCapabilityRegistry();
+        var claimed = ActiveTask();
+        Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(claimed,
+            "work/task-8", CandidateSha, Array.Empty<string>(),
+            new[] { WorkTaskAction.CreateDraftPullRequest },
+            Now, TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
     public void CapabilityExpiresAndCanBeRevoked()
     {
         var registry = new WorkTaskCapabilityRegistry();
