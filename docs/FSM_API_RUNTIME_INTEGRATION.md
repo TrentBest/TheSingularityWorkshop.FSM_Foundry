@@ -3,7 +3,7 @@
 
 # FSM_API Runtime Integration
 
-**Status:** implemented on [draft PR #29](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/pull/29) and passed exact-head [CI run #41713120380](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41713120380) on head `8041e76e088d8d7f8965a3443a685ddcc7c0a3f3`. This chapter explains the production integration, not merely the standalone FSM_API demonstration.
+**Status:** implemented on [draft PR #29](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/pull/29) and passed exact-head [CI run #41725200636](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41725200636) on head `7f89891b81e68638d9cf72f67b902e170896ea4b`. This chapter explains the production integration, not merely the standalone FSM_API demonstration.
 
 ## 1. Why the dependency belongs in the runtime
 
@@ -45,7 +45,7 @@ stateDiagram-v2
     Running --> Invalid: Definition validation fails
 ```
 
-Terminal states have no outgoing transitions. Foundry validates that a requested transition is legal, and the FSM_API definition independently evaluates the transition guard before changing the handle's current state.
+Terminal states have no outgoing transitions. The FSM_API definition is the sole authority for transition legality: Foundry submits a request, and FSM_API evaluates the registered guard before changing the handle's current state. If no edge matches, the state remains unchanged and the adapter fails closed.
 
 ## 3. How the integration works
 
@@ -59,7 +59,7 @@ Submit creates an FSM_API handle for the new run. The handle's CurrentState is t
 
 A transition request is placed on that run's context. The adapter calls FSM_API.Interaction.Update(processingGroup), allowing FSM_API to evaluate the registered guard and perform the transition. The request is cleared after the update.
 
-This is intentionally not a call to FSMHandle.TransitionTo. Foundry uses its legal-transition policy and FSM_API's defined transition graph together, rather than bypassing the graph with a forced transition.
+This is intentionally not a call to FSMHandle.TransitionTo. The adapter does not maintain a second legal-transition policy; it relies exclusively on FSM_API's defined transition graph and guards.
 
 The processing rate is -1, so the FSM_API group processes every time Foundry explicitly updates it. Foundry does not start a background timer or add a competing scheduler. The group update is a synchronous state-transition operation; asynchronous workflow handlers remain outside FSM callbacks.
 
