@@ -183,7 +183,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.Equal(Branch, correlation.HeadBranch);
         Assert.Equal(WorkflowPath, correlation.WorkflowPath);
         Assert.Equal("success", correlation.Conclusion);
-        Assert.Contains("head_sha=" + CandidateSha, handler.Requests.Single(item =>
+        Assert.Contains("head_sha=" + CandidateSha, handler.Requests.Single(item => item.Method == HttpMethod.Get &&
             item.Uri.Contains("/actions/workflows/", StringComparison.Ordinal)).Uri);
 
         var evidence = await dispatcher.VerifyRequiredJobsAsync(receipt, correlation!, [RequiredJob]);
@@ -211,6 +211,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
+                    total_count = 1,
                     workflow_runs = new[] { new
                     {
                         id = 123456L, run_attempt = 1,
@@ -272,7 +273,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             return Json(HttpStatusCode.OK, """
-                {"workflow_runs":[
+                {"total_count":1,"workflow_runs":[
                   {"id":1,"run_attempt":1,"html_url":"https://github.com/TrentBest/Sample/actions/runs/1",
                    "status":"completed","conclusion":"success","head_branch":"agents/task-123",
                    "head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
