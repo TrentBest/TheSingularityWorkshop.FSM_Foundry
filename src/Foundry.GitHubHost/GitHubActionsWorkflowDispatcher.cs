@@ -198,9 +198,11 @@ public sealed class GitHubActionsWorkflowDispatcher
         var query = $"repos/{receipt.Repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/runs?event=workflow_dispatch&branch={Uri.EscapeDataString(receipt.Branch)}&head_sha={receipt.CandidateSha}&per_page=100";
         using var response = await SendAsync(HttpMethod.Get, query, token, null, cancellationToken).ConfigureAwait(false);
         using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
-        if (!document.RootElement.TryGetProperty("workflow_runs", out var runs) ||
-            runs.ValueKind != JsonValueKind.Array)
-            throw new InvalidDataException("GitHub workflow-runs response is malformed.");
+        if (!document.RootElement.TryGetProperty("total_count", out var totalRuns) ||
+            !totalRuns.TryGetInt32(out var totalRunCount) || totalRunCount < 0 || totalRunCount > 100 ||
+            !document.RootElement.TryGetProperty("workflow_runs", out var runs) ||
+            runs.ValueKind != JsonValueKind.Array || runs.GetArrayLength() != totalRunCount)
+            throw new InvalidDataException("GitHub workflow-runs response is incomplete or exceeds the correlation limit.");
 
         var matches = new List<GitHubActionsRunCorrelation>();
         foreach (var run in runs.EnumerateArray())
@@ -225,6 +227,7 @@ public sealed class GitHubActionsWorkflowDispatcher
             var conclusion = GetNullableString(run, "conclusion");
             if (!Uri.TryCreate(htmlUrl, UriKind.Absolute, out var parsedUrl) ||
                 parsedUrl.Scheme != Uri.UriSchemeHttps || parsedUrl.Host != "github.com" ||
+                parsedUrl.AbsolutePath != $"/{receipt.Repository}/actions/runs/{runId}" ||
                 string.IsNullOrWhiteSpace(status))
                 throw new InvalidDataException("GitHub returned invalid workflow run metadata.");
 
