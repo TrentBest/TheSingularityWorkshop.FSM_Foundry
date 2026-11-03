@@ -29,20 +29,38 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
-    public async Task MutationMayAdvanceCandidateWhilePreservingAuthorizedInputProvenance()
+    public async Task WriteOperationCannotAdvanceCandidateSha()
     {
         using var fixture = new Fixture();
         var capability = fixture.Grant(WorkTaskAction.WriteFiles);
-        var nextCandidateSha = new string('d', 40);
-        fixture.Adapter.ResultingCandidateSha = nextCandidateSha;
+        fixture.Adapter.ResultingCandidateSha = new string('d', 40);
         var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
             CandidateSha, "src/Foundry.Workflow/Example.cs", "namespace Example;");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+
+        var audit = Assert.Single(fixture.Journal.GetAll());
+        Assert.Equal(RepositoryOperationAuditStatus.Failed, audit.Status);
+        Assert.Equal(1, fixture.Adapter.Calls);
+    }
+
+    [Fact]
+    public async Task ExplicitCommitOperationMayAdvanceCandidateSha()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.CreateCommit);
+        var nextCandidateSha = new string('d', 40);
+        fixture.Adapter.ResultingCandidateSha = nextCandidateSha;
+        var operation = new CreateRepositoryCommitOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "Commit staged changes");
 
         var result = await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation,
             Now.AddMinutes(1));
 
         Assert.Equal(CandidateSha, result.RequestedCandidateSha);
         Assert.Equal(nextCandidateSha, result.ResultingCandidateSha);
+        Assert.Equal(RepositoryOperationAuditStatus.Completed, Assert.Single(fixture.Journal.GetAll()).Status);
     }
 
     [Fact]
