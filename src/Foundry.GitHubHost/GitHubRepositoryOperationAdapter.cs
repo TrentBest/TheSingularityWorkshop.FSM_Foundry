@@ -66,9 +66,9 @@ public sealed class GitHubRepositoryOperationPolicy
 }
 
 /// <summary>
-/// First concrete GitHub host adapter increment. It supports exact-base branch creation and
-/// immutable-SHA bounded text reads. Staged writes, commits, and CI dispatch remain deliberately
-/// unavailable until their durable idempotency/reconciliation stores are implemented.
+/// Concrete GitHub host adapter increment. It supports exact-base branch creation,
+/// immutable-SHA bounded text reads, and durable staged blob writes. Commit advancement and
+/// CI dispatch remain unavailable until their reconciliation and exact-run contracts are implemented.
 /// </summary>
 public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapter
 {
@@ -146,6 +146,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
             $"repos/{operation.Repository}/git/refs", token, body, cancellationToken).ConfigureAwait(false);
         var result = await ReadJsonAsync<GitRefResponse>(created!, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(result.Ref, branchRef, StringComparison.Ordinal) ||
+            !string.Equals(result.Object?.Type, "commit", StringComparison.Ordinal) ||
             !string.Equals(result.Object?.Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("GitHub created a ref that does not match the authorized candidate identity.");
 
@@ -165,7 +166,8 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
             $"repos/{operation.Repository}/contents/{encodedPath}?ref={operation.CandidateSha}",
             token, null, cancellationToken).ConfigureAwait(false);
         var payload = await ReadJsonAsync<GitContentResponse>(file!, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(payload.Type, "file", StringComparison.Ordinal) ||
+        if (!string.Equals(payload.Path, operation.Path, StringComparison.Ordinal) ||
+            !string.Equals(payload.Type, "file", StringComparison.Ordinal) ||
             !string.Equals(payload.Encoding, "base64", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(payload.Content))
             throw new InvalidDataException("GitHub returned an unsupported repository content representation.");
@@ -221,7 +223,9 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
             $"repos/{repository}/git/ref/{Uri.EscapeDataString(branchRef)}",
             token, null, cancellationToken).ConfigureAwait(false);
         var branchPayload = await ReadJsonAsync<GitRefResponse>(response!, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(branchPayload.Object?.Sha, candidateSha, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(branchPayload.Ref, branchRef, StringComparison.Ordinal) ||
+            !string.Equals(branchPayload.Object?.Type, "commit", StringComparison.Ordinal) ||
+            !string.Equals(branchPayload.Object?.Sha, candidateSha, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Candidate branch moved; the requested SHA is no longer its authorized tip.");
     }
 
@@ -297,5 +301,5 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     private sealed record GitCommitResponse(string Sha);
     private sealed record GitRefResponse(string Ref, GitObjectResponse? Object);
     private sealed record GitObjectResponse(string Sha, string Type);
-    private sealed record GitContentResponse(string Type, string Encoding, string Content);
+    private sealed record GitContentResponse(string Path, string Type, string Encoding, string Content);
 }
