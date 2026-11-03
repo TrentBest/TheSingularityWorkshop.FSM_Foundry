@@ -28,9 +28,9 @@ The current closed operation set contains five typed operations:
 The operation carries the full 40-character candidate SHA against which its capability is checked. For branch creation, this is the task's authorized base SHA and the target branch must not already exist; the operation creates a ref at that exact commit. The adapter result distinguishes:
 
 - `RequestedCandidateSha`: the exact commit authorized before the operation.
-- `ResultingCandidateSha`: the commit after the operation (which may differ for a mutation).
+- `ResultingCandidateSha`: the commit after the operation. Only an explicit commit operation may advance it.
 
-That distinction matters because a successful write or commit normally advances the branch to a new commit. A branch creation, read, or CI dispatch must retain the exact requested SHA. For a mutation, the host adapter must verify that the resulting commit is based on the authorized candidate and return the exact resulting SHA from the repository authority. Foundry validates the returned SHA shape and requested-SHA correlation; it does not independently prove Git commit ancestry. A subsequent operation against the new SHA requires a new capability scoped to that SHA.
+File writes are staged and must retain the exact requested candidate SHA; they do not create commits or move the branch ref. Only the explicit commit operation may advance the candidate SHA. The host adapter must verify that the resulting commit has the authorized candidate as its parent (or otherwise prove the documented ancestry invariant) and return the exact resulting SHA from the repository authority. Foundry validates the operation-kind/SHA rule, SHA shape, and requested-SHA correlation; it does not independently prove Git commit ancestry. A subsequent operation against the new SHA requires a new capability scoped to that SHA.
 
 All operation identities and paths are bounded and control-character-free; file content is limited to 64 KiB. This is a narrow typed API, not a generic process or tool runner.
 
@@ -58,7 +58,7 @@ A production adapter must independently enforce all policy that depends on the h
 2. Bind the configured repository to the durable task repository and reject all other repositories.
 3. For `CreateBranch`, create only the capability-bound isolated branch, only if it does not already exist, and point it at the exact authorized base SHA. For all later operations, operate only on that pre-authorized candidate branch.
 4. Enforce normalized path containment and the capability's allowed path scope. Reject traversal, encoded traversal, absolute paths, and paths outside the configured repository root.
-5. For file writes and commits, use the authorized candidate SHA as a concurrency precondition; verify the resulting commit's parent/ancestry and report its exact SHA.
+5. Stage file writes as immutable blobs while retaining the candidate SHA. For commit, construct a new commit from the staged tree with the authorized candidate as parent; update the candidate ref without force and verify its exact resulting SHA.
 6. Map CI workflow keys through a host-owned allowlist. Dispatch only the exact authorized branch/ref and candidate SHA; never accept a model-supplied workflow file path, endpoint, or arbitrary dispatch payload.
 7. Return a stable, non-secret operation reference and truthful result provenance. Do not treat a successful HTTP response alone as evidence that the requested repository state exists.
 8. Apply bounded request sizes, timeouts, retries, rate limits, cancellation, and safe error redaction.
@@ -73,7 +73,7 @@ The feature branch contains:
 - `IRepositoryOperationAdapter` and `AuthorizedRepositoryOperationDispatcher`.
 - The workflow-registry handler and data-only request contract.
 - `IRepositoryOperationAuditJournal`, `JsonlRepositoryOperationJournal`, and dispatcher integration that flushes Pending before transport and a terminal record after result validation.
-- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, candidate advancement after a mutation, durable replay, pending crash state, payload redaction, and capability revocation during audit reservation.
+- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, candidate advancement only after explicit commit, durable replay, pending crash state, payload redaction, and capability revocation during audit reservation.
 
 The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full proof workflow in [GitHub Actions run #41582975207](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41582975207). Workflow tests, project builds, the separate-process FSM_API probe, the repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
 
