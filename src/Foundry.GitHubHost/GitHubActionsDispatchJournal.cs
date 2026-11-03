@@ -198,7 +198,13 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                     record.AcknowledgedAt is not null || record.RunId is not null || record.RunAttempt is not null)
                     throw new InvalidDataException("Dispatch journal must begin with a Dispatching intent.");
             }
-            else if (record.State switch
+            else if (!string.Equals(record.Repository, previous.Repository, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(record.WorkflowFile, previous.WorkflowFile, StringComparison.Ordinal) ||
+                !string.Equals(record.WorkflowPath, previous.WorkflowPath, StringComparison.Ordinal) ||
+                !string.Equals(record.Branch, previous.Branch, StringComparison.Ordinal) ||
+                !string.Equals(record.CandidateSha, previous.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                record.CreatedAt != previous.CreatedAt ||
+                record.State switch
             {
                 GitHubActionsDispatchState.Acknowledged =>
                     previous.State == GitHubActionsDispatchState.Dispatching &&
@@ -206,10 +212,12 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                     record.RunId is null && record.RunAttempt is null,
                 GitHubActionsDispatchState.Correlated =>
                     (previous.State is GitHubActionsDispatchState.Dispatching or GitHubActionsDispatchState.Acknowledged) &&
-                    record.RunId is > 0 && record.RunAttempt is > 0,
+                    record.RunId is > 0 && record.RunAttempt is > 0 &&
+                    record.AcknowledgedAt == previous.AcknowledgedAt,
                 GitHubActionsDispatchState.Verified =>
                     previous.State == GitHubActionsDispatchState.Correlated &&
-                    record.RunId == previous.RunId && record.RunAttempt == previous.RunAttempt,
+                    record.RunId == previous.RunId && record.RunAttempt == previous.RunAttempt &&
+                    record.AcknowledgedAt == previous.AcknowledgedAt,
                 _ => false
             } is false)
             {
