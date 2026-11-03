@@ -203,7 +203,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         using var response = await SendAsync(HttpMethod.Post,
             $"repos/{operation.Repository}/git/blobs", token, body, cancellationToken).ConfigureAwait(false);
         var blob = await ReadJsonAsync<GitBlobResponse>(response!, cancellationToken).ConfigureAwait(false);
-        RepositoryOperation.RequireSha(blob.Sha, nameof(blob.Sha));
+        RequireSha(blob.Sha, nameof(blob.Sha));
 
         var staged = _stagingStore.Stage(new GitHubStagedBlob(
             operation.Repository, operation.Branch, operation.CandidateSha, operation.Path!,
@@ -223,6 +223,12 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         var branchPayload = await ReadJsonAsync<GitRefResponse>(response!, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(branchPayload.Object?.Sha, candidateSha, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Candidate branch moved; the requested SHA is no longer its authorized tip.");
+    }
+
+    private static void RequireSha(string value, string parameterName)
+    {
+        if (value is not { Length: 40 } || !value.All(Uri.IsHexDigit))
+            throw new InvalidDataException($"GitHub returned an invalid SHA for {parameterName}.");
     }
 
     private async ValueTask<string> GetTokenAsync(string repository, CancellationToken cancellationToken)
