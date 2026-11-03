@@ -3,7 +3,7 @@
 
 # FSM_API Runtime Integration
 
-**Status:** implemented on [draft PR #29](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/pull/29); exact-head CI verification is pending. This chapter explains the production integration, not merely the standalone FSM_API demonstration.
+**Status:** implemented on [draft PR #29](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/pull/29) and passed exact-head [CI run #41713120380](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41713120380) on head `8041e76e088d8d7f8965a3443a685ddcc7c0a3f3`. This chapter explains the production integration, not merely the standalone FSM_API demonstration.
 
 ## 1. Why the dependency belongs in the runtime
 
