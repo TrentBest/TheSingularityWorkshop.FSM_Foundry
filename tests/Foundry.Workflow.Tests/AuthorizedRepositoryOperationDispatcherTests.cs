@@ -79,7 +79,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     public async Task BranchCreationMustStartAtTheExactAuthorizedBaseSha()
     {
         using var fixture = new Fixture();
-        var capability = fixture.Grant(WorkTaskAction.CreateBranch);
+        var capability = fixture.GrantAt(BaseSha, WorkTaskAction.CreateBranch);
         var operation = new CreateRepositoryBranchOperation("task-8", Repository,
             "work/task-8", BaseSha);
 
@@ -272,7 +272,10 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         }
 
         public WorkTaskCapability Grant(params WorkTaskAction[] actions) =>
-            Capabilities.Grant(Task, "work/task-8", CandidateSha,
+            GrantAt(CandidateSha, actions);
+
+        public WorkTaskCapability GrantAt(string candidateSha, params WorkTaskAction[] actions) =>
+            Capabilities.Grant(Task, "work/task-8", candidateSha,
                 new[] { "src/Foundry.Workflow" }, actions, Now, TimeSpan.FromMinutes(10));
 
         public void Dispose()
