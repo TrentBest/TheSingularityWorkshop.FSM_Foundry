@@ -29,8 +29,9 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var journalPath = NewJournalPath();
         var dispatcher = CreateDispatcher(handler, journalPath);
 
-        var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
 
+        Assert.Equal("task-123", receipt.TaskId);
         Assert.Equal(Repository, receipt.Repository);
         Assert.Equal(Branch, receipt.Branch);
         Assert.Equal(CandidateSha, receipt.CandidateSha);
@@ -73,7 +74,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var firstDispatcher = CreateDispatcher(firstHandler, journalPath);
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            async () => await firstDispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha));
+            async () => await firstDispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
         Assert.False(string.IsNullOrWhiteSpace(capturedRequestId));
         Assert.Equal(GitHubActionsDispatchState.Dispatching,
             new JsonlGitHubActionsDispatchJournal(journalPath).Get(capturedRequestId).State);
@@ -117,7 +118,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
         Assert.DoesNotContain(handler.Requests, item => item.Method == HttpMethod.Post);
     }
 
@@ -170,7 +171,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
         correlationRequestId = receipt.RequestId;
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
@@ -228,7 +229,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
         correlationRequestId = receipt.RequestId;
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -252,10 +253,10 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.OK, """{"total_count":1,"workflow_runs":[]}""");
         });
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
-        await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
+        await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
         Assert.Single(handler.Requests.Where(item => item.Method == HttpMethod.Post));
     }
 
@@ -281,7 +282,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                 """);
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -295,7 +296,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            async () => await dispatcher.DispatchAsync(Repository, "arbitrary-workflow", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "arbitrary-workflow", Branch, CandidateSha));
         Assert.Empty(handler.Requests);
     }
 
