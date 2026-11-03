@@ -69,7 +69,8 @@ public sealed class GitHubRepositoryOperationPolicy
 /// <summary>
 /// Concrete GitHub host adapter increment. It supports exact-base branch creation,
 /// immutable-SHA bounded text reads, durable staged blob writes, and explicit single-parent
-/// commits with non-force ref advancement and post-update verification. CI dispatch remains unavailable.
+/// commits with non-force ref advancement and post-update verification. CI dispatch is enabled only
+/// when the host composes the separate allowlisted Actions dispatcher.
 /// </summary>
 public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapter
 {
@@ -79,6 +80,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     private readonly IGitHubAccessTokenProvider _tokens;
     private readonly GitHubRepositoryOperationPolicy _policy;
     private readonly IGitHubRepositoryStagingStore _stagingStore;
+    private readonly GitHubActionsWorkflowDispatcher? _actionsDispatcher;
     private readonly Func<DateTimeOffset> _clock;
 
     public GitHubRepositoryOperationAdapter(
@@ -86,12 +88,14 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         IGitHubAccessTokenProvider tokens,
         GitHubRepositoryOperationPolicy policy,
         IGitHubRepositoryStagingStore stagingStore,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null,
+        GitHubActionsWorkflowDispatcher? actionsDispatcher = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _stagingStore = stagingStore ?? throw new ArgumentNullException(nameof(stagingStore));
+        _actionsDispatcher = actionsDispatcher;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         if (_httpClient.BaseAddress is null ||
             !string.Equals(_httpClient.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
@@ -117,9 +121,22 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
                 await WriteFileAsync(write, cancellationToken).ConfigureAwait(false),
             CreateRepositoryCommitOperation commit =>
                 await CreateCommitAsync(commit, cancellationToken).ConfigureAwait(false),
-            _ => throw new NotSupportedException(
-                "This adapter increment supports branch creation, immutable text reads, staged writes, and explicit commits only.")
+            RequestRepositoryCiOperation ci =>
+                await RequestCiAsync(ci, cancellationToken).ConfigureAwait(false),
+            _ => throw new NotSupportedException("The repository operation is not supported by this host adapter.")
         };
+    }
+
+    private async ValueTask<RepositoryOperationResult> RequestCiAsync(
+        RequestRepositoryCiOperation operation, CancellationToken cancellationToken)
+    {
+        if (_actionsDispatcher is null)
+            throw new NotSupportedException("GitHub Actions dispatch is not configured by this host.");
+        var receipt = await _actionsDispatcher.DispatchAsync(operation.Repository, operation.WorkflowKey,
+            operation.Branch, operation.CandidateSha, cancellationToken).ConfigureAwait(false);
+        return new RepositoryOperationResult(
+            "github:actions-dispatch:" + receipt.RequestId,
+            operation.CandidateSha, operation.CandidateSha);
     }
 
     private async ValueTask<RepositoryOperationResult> CreateBranchAsync(
