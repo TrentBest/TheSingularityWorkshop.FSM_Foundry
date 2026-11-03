@@ -20,6 +20,7 @@ public interface IGitHubRepositoryStagingStore
 {
     GitHubStagedBlob Stage(GitHubStagedBlob stagedBlob);
     IReadOnlyList<GitHubStagedBlob> GetStaged(string repository, string branch, string candidateSha);
+    IReadOnlyList<GitHubStagedBlob> FreezeBatch(string repository, string branch, string candidateSha);
 }
 
 /// <summary>
@@ -37,6 +38,7 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
     private readonly string _path;
     private readonly string _lockPath;
     private readonly Dictionary<string, GitHubStagedBlob> _entries = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _frozenBatches = new(StringComparer.Ordinal);
     private long _sequence;
 
     public JsonlGitHubRepositoryStagingStore(string path)
@@ -61,12 +63,14 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
                 string.Equals(previous.BlobSha, stagedBlob.BlobSha, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(previous.ContentSha256, stagedBlob.ContentSha256, StringComparison.OrdinalIgnoreCase))
                 return previous;
+            if (_frozenBatches.Contains(BatchKey(stagedBlob.Repository, stagedBlob.Branch, stagedBlob.CandidateSha)))
+                throw new InvalidOperationException("The candidate staging batch is frozen for commit; new writes require a new candidate SHA.");
             var batchCount = _entries.Values.Count(entry => SameBatch(entry, stagedBlob));
             if (!_entries.ContainsKey(key) && batchCount >= MaximumStagedPathsPerCandidate)
                 throw new InvalidOperationException("The candidate staging batch reached its 128-path limit.");
 
             var record = new JournalRecord(
-                SchemaVersion, _sequence + 1, stagedBlob.Repository, stagedBlob.Branch,
+                SchemaVersion, _sequence + 1, "stage", stagedBlob.Repository, stagedBlob.Branch,
                 stagedBlob.CandidateSha, stagedBlob.Path, stagedBlob.BlobSha,
                 stagedBlob.ContentSha256, stagedBlob.StagedAt);
             Append(record);
@@ -94,6 +98,35 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
         }
     }
 
+    public IReadOnlyList<GitHubStagedBlob> FreezeBatch(
+        string repository, string branch, string candidateSha)
+    {
+        ValidateIdentity(repository, branch, candidateSha);
+        lock (_gate)
+        {
+            using var fileLock = AcquireFileLock();
+            Replay();
+            var batchKey = BatchKey(repository, branch, candidateSha);
+            var entries = _entries.Values
+                .Where(entry =>
+                    string.Equals(entry.Repository, repository, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(entry.Branch, branch, StringComparison.Ordinal) &&
+                    string.Equals(entry.CandidateSha, candidateSha, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(entry => entry.Path, StringComparer.Ordinal)
+                .ToArray();
+            if (entries.Length == 0 || _frozenBatches.Contains(batchKey))
+                return Array.AsReadOnly(entries);
+
+            var record = new JournalRecord(
+                SchemaVersion, _sequence + 1, "freeze", repository, branch,
+                candidateSha, null, null, null, DateTimeOffset.UtcNow);
+            Append(record);
+            _frozenBatches.Add(batchKey);
+            _sequence = record.Sequence;
+            return Array.AsReadOnly(entries);
+        }
+    }
+
     private FileStream AcquireFileLock()
     {
         var timer = Stopwatch.StartNew();
@@ -117,6 +150,7 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
     private void Replay()
     {
         _entries.Clear();
+        _frozenBatches.Clear();
         _sequence = 0;
         if (!File.Exists(_path))
             return;
@@ -151,10 +185,22 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
             }
             if (record.Sequence != _sequence + 1)
                 throw new InvalidDataException($"GitHub staging journal sequence is invalid at record {lineNumber}.");
-            var key = Key(record.Repository, record.Branch, record.CandidateSha, record.Path);
-            _entries[key] = new GitHubStagedBlob(
-                record.Repository, record.Branch, record.CandidateSha, record.Path,
-                record.BlobSha, record.ContentSha256, record.StagedAt);
+            var batchKey = BatchKey(record.Repository, record.Branch, record.CandidateSha);
+            if (record.EventType == "stage")
+            {
+                if (_frozenBatches.Contains(batchKey))
+                    throw new InvalidDataException($"Staging journal contains a write after the batch was frozen at record {lineNumber}.");
+                var key = Key(record.Repository, record.Branch, record.CandidateSha, record.Path!);
+                _entries[key] = new GitHubStagedBlob(
+                    record.Repository, record.Branch, record.CandidateSha, record.Path!,
+                    record.BlobSha!, record.ContentSha256!, record.StagedAt);
+            }
+            else
+            {
+                if (!_entries.Values.Any(entry => SameBatch(entry, record)))
+                    throw new InvalidDataException($"Staging journal freezes an empty batch at record {lineNumber}.");
+                _frozenBatches.Add(batchKey);
+            }
             _sequence = record.Sequence;
         }
     }
@@ -179,9 +225,17 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
             record.StagedAt == default)
             throw new ArgumentException("Staging journal metadata is invalid.");
         ValidateIdentity(record.Repository, record.Branch, record.CandidateSha);
-        ValidatePath(record.Path);
-        RequireSha(record.BlobSha, nameof(record.BlobSha));
-        RequireDigest(record.ContentSha256, nameof(record.ContentSha256));
+        if (record.EventType == "stage")
+        {
+            ValidatePath(record.Path ?? throw new ArgumentException("A staged path is required."));
+            RequireSha(record.BlobSha ?? string.Empty, nameof(record.BlobSha));
+            RequireDigest(record.ContentSha256 ?? string.Empty, nameof(record.ContentSha256));
+        }
+        else if (record.EventType != "freeze" ||
+            record.Path is not null || record.BlobSha is not null || record.ContentSha256 is not null)
+        {
+            throw new ArgumentException("Staging journal event type or payload is invalid.");
+        }
     }
 
     private static void Validate(GitHubStagedBlob stagedBlob)
@@ -224,8 +278,11 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
             throw new ArgumentException("A full 64-character hexadecimal SHA-256 digest is required.", parameterName);
     }
 
+    private static string BatchKey(string repository, string branch, string candidateSha) =>
+        string.Join("\n", repository.ToUpperInvariant(), branch, candidateSha.ToLowerInvariant());
+
     private static string Key(string repository, string branch, string candidateSha, string path) =>
-        string.Join("\n", repository.ToUpperInvariant(), branch, candidateSha.ToLowerInvariant(), path);
+        BatchKey(repository, branch, candidateSha) + "\n" + path;
 
     private static bool SameBatch(GitHubStagedBlob left, GitHubStagedBlob right) =>
         string.Equals(left.Repository, right.Repository, StringComparison.OrdinalIgnoreCase) &&
@@ -235,11 +292,12 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
     private sealed record JournalRecord(
         int SchemaVersion,
         long Sequence,
+        string EventType,
         string Repository,
         string Branch,
         string CandidateSha,
-        string Path,
-        string BlobSha,
-        string ContentSha256,
+        string? Path,
+        string? BlobSha,
+        string? ContentSha256,
         DateTimeOffset StagedAt);
 }
