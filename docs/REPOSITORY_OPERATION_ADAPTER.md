@@ -19,6 +19,7 @@ The current closed operation set contains five typed operations:
 
 | Operation | Capability action | Scope |
 |---|---|---|
+| Create candidate branch | `CreateBranch` | New isolated branch at the exact task base SHA |
 | Read repository file | `ReadRepository` | One bounded path |
 | Write repository file | `WriteFiles` | One bounded path and bounded content |
 | Create commit | `CreateCommit` | Existing isolated candidate branch |
@@ -61,9 +62,9 @@ The feature branch contains:
 - `RepositoryOperation` and the five closed operation types, including exact-base candidate branch creation.
 - `IRepositoryOperationAdapter` and `AuthorizedRepositoryOperationDispatcher`.
 - The workflow-registry handler and data-only request contract.
-- Fake-adapter tests for authorization failures, path scope, wrong task/repository/branch/SHA, CODE RED, lease expiry, provenance mismatch, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
+- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
 
-Exact-head validation passed for PR #26 head `afa96ffc64d29aa2c7f448eca4e1b3ea37db415b` in [GitHub Actions run #41581638543](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41581638543). The workflow runtime tests, project builds, separate-process FSM_API probe, repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
+The dispatcher/handler implementation passed the full proof workflow on earlier head `afa96ffc64d29aa2c7f448eca4e1b3ea37db415b` in [GitHub Actions run #41581638543](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41581638543). Subsequent documentation corrections, path-hardening tests, and the new branch-creation operation are newer than that run; exact-head revalidation is pending.
 
 Not implemented by this boundary:
 
