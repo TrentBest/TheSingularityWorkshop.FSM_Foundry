@@ -136,7 +136,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
         var reopened = new JsonlGitHubRepositoryStagingStore(stagingPath);
         Assert.Single(reopened.FreezeBatch(Repository, "agents/task-123", CandidateSha));
         Assert.Throws<InvalidOperationException>(() => reopened.Stage(additional));
-        Assert.Contains("\"EventType\":\"freeze\"", File.ReadAllText(stagingPath), StringComparison.Ordinal);
+        Assert.Contains("\"eventType\":\"freeze\"", File.ReadAllText(stagingPath), StringComparison.Ordinal);
     }
 
     [Fact]
