@@ -332,11 +332,11 @@ public sealed class GitHubActionsWorkflowDispatcher
             results.All(result => result.Succeeded);
         if (allSucceeded)
         {
-            var durable = _journal.Get(receipt.RequestId);
-            if (durable.State == GitHubActionsDispatchState.Correlated)
+            var verifiedRecord = _journal.Get(receipt.RequestId);
+            if (verifiedRecord.State == GitHubActionsDispatchState.Correlated)
                 _journal.Verify(receipt.RequestId, correlation.RunId, correlation.RunAttempt);
-            else if (durable.State != GitHubActionsDispatchState.Verified ||
-                durable.RunId != correlation.RunId || durable.RunAttempt != correlation.RunAttempt)
+            else if (verifiedRecord.State != GitHubActionsDispatchState.Verified ||
+                verifiedRecord.RunId != correlation.RunId || verifiedRecord.RunAttempt != correlation.RunAttempt)
                 throw new InvalidOperationException("Durable dispatch state does not match the verified workflow attempt.");
         }
         return new GitHubActionsAttemptEvidence(correlation.RunId, correlation.RunAttempt,
