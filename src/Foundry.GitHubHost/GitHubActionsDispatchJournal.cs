@@ -106,7 +106,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
     public GitHubActionsDispatchRecord Correlate(string requestId, long runId, int runAttempt) =>
         Transition(requestId, current =>
         {
-            if (current.State is GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified ||
+            if ((current.State is GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified) ||
                 runId <= 0 || runAttempt <= 0)
                 throw new InvalidOperationException("Dispatch correlation identity or state is invalid.");
             return current with
