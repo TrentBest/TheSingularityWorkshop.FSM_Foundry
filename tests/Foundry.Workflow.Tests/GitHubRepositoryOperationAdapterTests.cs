@@ -112,6 +112,34 @@ public sealed class GitHubRepositoryOperationAdapterTests
     }
 
     [Fact]
+    public void StagingBatchFreezeSurvivesRestartAndRejectsNewWrites()
+    {
+        var stagingPath = Path.Combine(Path.GetTempPath(), "FoundryGitHubHostTests",
+            Guid.NewGuid().ToString("N") + ".jsonl");
+        var store = new JsonlGitHubRepositoryStagingStore(stagingPath);
+        var staged = new GitHubStagedBlob(
+            Repository, "agents/task-123", CandidateSha, "src/Example.cs",
+            "abcdef0123456789abcdef0123456789abcdef01",
+            new string('a', 64), DateTimeOffset.UtcNow);
+        store.Stage(staged);
+
+        Assert.Single(store.FreezeBatch(Repository, "agents/task-123", CandidateSha));
+        Assert.Equal(staged, store.Stage(staged));
+        var additional = staged with
+        {
+            Path = "src/Additional.cs",
+            BlobSha = "abcdef0123456789abcdef0123456789abcdef02",
+            ContentSha256 = new string('b', 64)
+        };
+        Assert.Throws<InvalidOperationException>(() => store.Stage(additional));
+
+        var reopened = new JsonlGitHubRepositoryStagingStore(stagingPath);
+        Assert.Single(reopened.FreezeBatch(Repository, "agents/task-123", CandidateSha));
+        Assert.Throws<InvalidOperationException>(() => reopened.Stage(additional));
+        Assert.Contains("\"EventType\":\"freeze\"", File.ReadAllText(stagingPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CommitAdvancesCandidateRefOnlyAfterBuildingSingleParentCommit()
     {
         const string baseTree = "1111111111111111111111111111111111111111";
@@ -330,6 +358,10 @@ public sealed class GitHubRepositoryOperationAdapterTests
             _entries.Values.Where(entry =>
                 entry.Repository == repository && entry.Branch == branch &&
                 entry.CandidateSha == candidateSha).ToArray();
+
+        public IReadOnlyList<GitHubStagedBlob> FreezeBatch(
+            string repository, string branch, string candidateSha) =>
+            GetStaged(repository, branch, candidateSha);
     }
 
     private sealed class TestTokenProvider : IGitHubAccessTokenProvider
