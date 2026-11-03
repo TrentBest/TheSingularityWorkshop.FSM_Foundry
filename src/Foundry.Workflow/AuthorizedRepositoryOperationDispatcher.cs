@@ -146,13 +146,13 @@ public sealed class AuthorizedRepositoryOperationDispatcher
     private readonly PersistentWorkTaskCoordinator _tasks;
     private readonly WorkTaskCapabilityRegistry _capabilities;
     private readonly IRepositoryOperationAdapter _adapter;
-    private readonly JsonlRepositoryOperationJournal _journal;
+    private readonly IRepositoryOperationAuditJournal _journal;
 
     public AuthorizedRepositoryOperationDispatcher(
         PersistentWorkTaskCoordinator tasks,
         WorkTaskCapabilityRegistry capabilities,
         IRepositoryOperationAdapter adapter,
-        JsonlRepositoryOperationJournal journal)
+        IRepositoryOperationAuditJournal journal)
     {
         _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
