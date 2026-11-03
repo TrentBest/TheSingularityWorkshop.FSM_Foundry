@@ -14,8 +14,8 @@
 - [Domain and ownership](docs/DOMAIN.md) — proposed Foundry domain, ownership boundaries, safety invariants, and first release slice.
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
-- [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md)
-- [Host repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated typed operations, candidate SHA transitions, host adapter obligations, and implementation limits. — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
+- [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
+- [Host repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated typed operations, candidate SHA transitions, host adapter obligations, and implementation limits.
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
 - [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
@@ -51,4 +51,4 @@ Every claimed capability must point to implementation, tests, a workflow run, or
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
