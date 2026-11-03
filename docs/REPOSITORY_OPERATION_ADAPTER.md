@@ -27,7 +27,7 @@ The current closed operation set is:
 The operation carries the full 40-character candidate SHA against which its capability is checked. The adapter result distinguishes:
 
 - `RequestedCandidateSha`: the exact commit authorized before the operation.
-- `ResultingCandidateSha`: the commit after the operation.
+- `ResultingCandidateSha`: the commit after the operation (which may differ for a mutation).
 
 That distinction matters because a successful write or commit normally advances the branch to a new commit. A read or CI dispatch must retain the exact requested SHA. For a mutation, the host adapter must verify that the resulting commit is based on the authorized candidate and return the exact resulting SHA from the repository authority. Foundry validates the returned SHA shape and requested-SHA correlation; it does not independently prove Git commit ancestry. A subsequent operation against the new SHA requires a new capability scoped to that SHA.
 
@@ -63,7 +63,7 @@ The feature branch contains:
 - The workflow-registry handler and data-only request contract.
 - Fake-adapter tests for authorization failures, path scope, wrong task/repository/branch/SHA, CODE RED, lease expiry, provenance mismatch, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
 
-The exact-head CI run for the original dispatcher/handler implementation passed before the candidate-result refinement. The current branch must be revalidated after the result-contract and test changes before this document can be treated as validated evidence.
+Exact-head validation passed for PR #26 head `afa96ffc64d29aa2c7f448eca4e1b3ea37db415b` in [GitHub Actions run #41581638543](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41581638543). The workflow runtime tests, project builds, separate-process FSM_API probe, repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
 
 Not implemented by this boundary:
 
