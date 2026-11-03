@@ -68,8 +68,8 @@ public sealed class GitHubRepositoryOperationPolicy
 
 /// <summary>
 /// Concrete GitHub host adapter increment. It supports exact-base branch creation,
-/// immutable-SHA bounded text reads, and durable staged blob writes. Commit advancement and
-/// CI dispatch remain unavailable until their reconciliation and exact-run contracts are implemented.
+/// immutable-SHA bounded text reads, durable staged blob writes, and explicit single-parent
+/// commits with non-force ref advancement and post-update verification. CI dispatch remains unavailable.
 /// </summary>
 public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapter
 {
