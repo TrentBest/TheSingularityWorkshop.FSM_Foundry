@@ -38,7 +38,7 @@ A host can:
 
 The first version executes named handlers sequentially. It validates the complete definition before invoking any handler, stops after failure, distinguishes cancellation from failure and timeout, and records remaining steps as skipped. Cancellation and timeout are cooperative: a handler that ignores its token cannot be forcibly stopped. The coordinator retains snapshots only in memory.
 
-The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs) remain deterministic state-execution demonstrations. They exercise real FSM_API behavior and generate reproducible evidence; they are not automatically treated as Hub workflows.
+The [production workflow coordinator](src/Foundry.Workflow/WorkflowExecutionCoordinator.cs) now delegates retained run-lifecycle state transitions to FSM_API through [FsmApiWorkflowLifecycle](src/Foundry.Workflow/FsmApiWorkflowLifecycle.cs), using the FSM_API development source pinned by CI. Foundry still owns workflow meaning, cancellation, results, and host lifecycle; `WorkflowRunner` remains the sequential handler executor. The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs) remain deterministic state-execution demonstrations and reproducible evidence, not Hub workflow definitions.
 
 ## 04 — Contracts, tests, and boundaries
 
