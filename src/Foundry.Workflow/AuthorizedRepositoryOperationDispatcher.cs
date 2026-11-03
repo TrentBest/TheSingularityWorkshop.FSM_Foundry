@@ -18,6 +18,7 @@ public abstract record RepositoryOperation
     public string TaskId { get; }
     public string Repository { get; }
     public string Branch { get; }
+    /// <summary>The exact candidate commit against which this operation is authorized.</summary>
     public string CandidateSha { get; }
     public abstract WorkTaskAction Action { get; }
     public virtual string? Path => null;
@@ -97,7 +98,8 @@ public sealed record RequestRepositoryCiOperation : RepositoryOperation
 
 /// <summary>
 /// Host-owned repository transport. Implementations hold credentials and must independently
-/// enforce their configured repository, branch, workflow, and network policy.
+/// enforce their configured repository, branch, workflow, and network policy. For mutations,
+/// the adapter must verify that the resulting commit is based on the authorized candidate SHA.
 /// </summary>
 public interface IRepositoryOperationAdapter
 {
@@ -105,10 +107,14 @@ public interface IRepositoryOperationAdapter
         RepositoryOperation operation, CancellationToken cancellationToken);
 }
 
-/// <summary>Non-secret result returned by a host repository adapter.</summary>
+/// <summary>
+/// Non-secret adapter result. RequestedCandidateSha identifies the authorized input commit;
+/// ResultingCandidateSha identifies the commit after the operation (which may differ for writes).
+/// </summary>
 public sealed record RepositoryOperationResult(
     string OperationReference,
-    string CandidateSha,
+    string RequestedCandidateSha,
+    string ResultingCandidateSha,
     string? Detail = null);
 
 /// <summary>
@@ -150,8 +156,15 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         var result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(result);
         if (string.IsNullOrWhiteSpace(result.OperationReference) ||
-            !string.Equals(result.CandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Repository adapter returned an invalid operation reference or changed candidate provenance.");
+            !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            result.ResultingCandidateSha is not { Length: 40 } ||
+            !result.ResultingCandidateSha.All(Uri.IsHexDigit))
+            throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
+
+        if (operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation &&
+            !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Read and CI operations must retain the exact authorized candidate SHA.");
+
         return result;
     }
 }
