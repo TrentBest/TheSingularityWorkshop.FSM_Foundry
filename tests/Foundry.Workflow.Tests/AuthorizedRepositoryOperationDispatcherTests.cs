@@ -76,6 +76,36 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task BranchCreationMustStartAtTheExactAuthorizedBaseSha()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.CreateBranch);
+        var operation = new CreateRepositoryBranchOperation("task-8", Repository,
+            "work/task-8", BaseSha);
+
+        var result = await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation,
+            Now.AddMinutes(1));
+
+        Assert.Equal(BaseSha, result.RequestedCandidateSha);
+        Assert.Equal(BaseSha, result.ResultingCandidateSha);
+        Assert.Equal(1, fixture.Adapter.Calls);
+        Assert.Same(operation, fixture.Adapter.LastOperation);
+    }
+
+    [Fact]
+    public async Task BranchCreationCannotMoveTheAuthorizedBaseCommit()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.CreateBranch);
+        fixture.Adapter.ResultingCandidateSha = new string('c', 40);
+        var operation = new CreateRepositoryBranchOperation("task-8", Repository,
+            "work/task-8", BaseSha);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+    }
+
+    [Fact]
     public async Task CiAdapterMustPreserveTheExactRequestedCandidateSha()
     {
         using var fixture = new Fixture();
