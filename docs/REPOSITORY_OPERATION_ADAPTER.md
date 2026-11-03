@@ -34,13 +34,23 @@ That distinction matters because a successful write or commit normally advances 
 
 All operation identities and paths are bounded and control-character-free; file content is limited to 64 KiB. This is a narrow typed API, not a generic process or tool runner.
 
-## 3. Workflow integration
+## 3. Durable operation audit
+
+The dispatcher requires an `IRepositoryOperationAuditJournal`. Before calling the adapter it appends and flushes a `Pending` record containing task/repository/branch identity, operation kind, action, candidate SHA, optional path, timestamp, and a SHA-256 digest for write content or other bounded request payload. It never stores file contents, commit messages, credentials, or adapter detail text.
+
+After the adapter returns, Foundry validates result provenance and appends either `Completed` with the stable operation reference and resulting SHA, or `Failed` with only the exception type. Failure messages are deliberately excluded because host/provider exceptions can contain secrets or request data.
+
+A process crash after the host has performed a side effect but before the terminal record is flushed leaves a durable `Pending` entry. That state is **indeterminate**: it is evidence that an attempt began, not proof that it failed or succeeded. A host must reconcile it against GitHub before any retry; the journal never replays an operation. The JSONL implementation uses a sidecar exclusive file lock, reloads under that lock, rejects malformed/incomplete history, and flushes each record to disk. It coordinates cooperating local processes on a local filesystem; it is not a distributed database or a substitute for a host's durable production audit store.
+
+The dispatcher depends on the audit interface rather than the JSONL implementation, so a host may supply a storage implementation appropriate to its deployment. The current JSONL store is the verified local implementation.
+
+## 4. Workflow integration
 
 `RepositoryOperationWorkflowHandler.Register` registers the `repository.operation` key in the existing `WorkflowHandlerRegistry`. The workflow input is data-only and identifies a supported operation. The host supplies a capability resolver callback and clock when registering the handler.
 
 The request deliberately contains no capability ID. Its `create-branch` operation name can select only the closed branch-creation operation; it cannot select a branch name outside the branch already bound to the host-issued capability. The resolver receives the task ID and retrieves host-owned capability state. The dispatcher then validates that capability against the current durable task snapshot. The handler runs inside the existing sequential `WorkflowRunner`; this feature does not introduce a second executor or scheduler.
 
-## 4. Host adapter obligations
+## 5. Host adapter obligations
 
 A production adapter must independently enforce all policy that depends on the host or GitHub:
 
@@ -55,14 +65,15 @@ A production adapter must independently enforce all policy that depends on the h
 
 The adapter must not implement arbitrary shell execution, merge, release, deployment, branch deletion, or package publication through this interface.
 
-## 5. Implemented evidence and remaining limits
+## 6. Implemented evidence and remaining limits
 
 The feature branch contains:
 
 - `RepositoryOperation` and the five closed operation types, including exact-base candidate branch creation.
 - `IRepositoryOperationAdapter` and `AuthorizedRepositoryOperationDispatcher`.
 - The workflow-registry handler and data-only request contract.
-- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
+- `IRepositoryOperationAuditJournal`, `JsonlRepositoryOperationJournal`, and dispatcher integration that flushes Pending before transport and a terminal record after result validation.
+- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, candidate advancement after a mutation, durable replay, pending crash state, and payload redaction.
 
 The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full proof workflow in [GitHub Actions run #41582975207](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41582975207). Workflow tests, project builds, the separate-process FSM_API probe, the repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
 
@@ -71,14 +82,14 @@ Not implemented by this boundary:
 - A concrete GitHub REST/GraphQL adapter or credential provider.
 - A concrete host/GitHub implementation for branch creation, base-SHA selection, or branch lifecycle management.
 - A host-enforced workflow-key allowlist implementation.
-- Durable per-operation request/response audit records.
+- A production/distributed audit backend; the current JSONL implementation is local-filesystem storage and not a distributed ledger.
 - Git ancestry verification inside Foundry (the host adapter owns that verification).
 - End-to-end connection to the ReviewReady draft-PR handoff in PR #25.
 - A complete autonomous issue-to-draft-PR loop.
 
 The current tests prove the Foundry authorization seam with a fake adapter; they do not prove live GitHub mutation or a production host's credential, network, branch, or workflow policies.
 
-## 6. Verification
+## 7. Verification
 
 Run the focused workflow tests and the repository's full proof workflow on the exact candidate commit. Evidence must identify the exact repository, full candidate SHA, workflow, run, attempt, and required job outcomes. A green run is evidence, not permission to merge or publish.
 
