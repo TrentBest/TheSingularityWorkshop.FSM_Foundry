@@ -63,6 +63,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         Assert.Equal(CandidateSha, entry.ResultingCandidateSha);
         Assert.NotNull(entry.RequestPayloadSha256);
         Assert.Equal(64, entry.RequestPayloadSha256!.Length);
+        Assert.Equal("fake-operation-1", entry.OperationReference);
         var journalText = File.ReadAllText(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
         Assert.DoesNotContain(privateContent, journalText, StringComparison.Ordinal);
         var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
@@ -121,6 +122,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, readOutsideScope, Now.AddMinutes(1)));
 
         Assert.Equal(0, fixture.Adapter.Calls);
+        Assert.Empty(fixture.Journal.GetAll());
     }
 
     [Fact]
