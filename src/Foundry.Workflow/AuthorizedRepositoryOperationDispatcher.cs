@@ -186,6 +186,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
             result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
             ArgumentNullException.ThrowIfNull(result);
             if (string.IsNullOrWhiteSpace(result.OperationReference) ||
+                result.OperationReference.Length > 512 || result.OperationReference.Any(char.IsControl) ||
                 !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
                 result.ResultingCandidateSha is not { Length: 40 } ||
                 !result.ResultingCandidateSha.All(Uri.IsHexDigit))
