@@ -183,6 +183,56 @@ public sealed class GitHubRepositoryOperationAdapterTests
     }
 
     [Fact]
+    public async Task CommitRetryRecognizesAlreadyAdvancedDeterministicCandidate()
+    {
+        const string baseTree = "1111111111111111111111111111111111111111";
+        const string newTree = "2222222222222222222222222222222222222222";
+        const string commitSha = "3333333333333333333333333333333333333333";
+        const string message = "Retry the same commit";
+        var store = new InMemoryStagingStore();
+        store.Stage(new GitHubStagedBlob(
+            Repository, "agents/task-123", CandidateSha, "src/Example.cs",
+            "abcdef0123456789abcdef0123456789abcdef01",
+            new string('a', 64), DateTimeOffset.UtcNow));
+        var handler = new StubGitHubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.EndsWith("/git/commits/" + CandidateSha, StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    sha = CandidateSha, tree = new { sha = baseTree },
+                    author = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" },
+                    committer = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" }
+                }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/trees", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = newTree }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/commits", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = commitSha }));
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    @ref = "refs/heads/agents/task-123",
+                    @object = new { sha = commitSha, type = "commit" }
+                }));
+            if (request.Method == HttpMethod.Get && path.EndsWith("/git/commits/" + commitSha, StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    sha = commitSha, tree = new { sha = newTree },
+                    parents = new[] { new { sha = CandidateSha } }, message
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var adapter = CreateAdapter(handler, store);
+        var operation = new CreateRepositoryCommitOperation(
+            "task-123", Repository, "agents/task-123", CandidateSha, message);
+
+        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+
+        Assert.Equal(commitSha, result.ResultingCandidateSha);
+        Assert.DoesNotContain(handler.Requests, request => request.Method == HttpMethod.Patch);
+    }
+
+    [Fact]
     public async Task CommitRefusesToAdvanceWhenCandidateBranchMoved()
     {
         const string baseTree = "1111111111111111111111111111111111111111";
