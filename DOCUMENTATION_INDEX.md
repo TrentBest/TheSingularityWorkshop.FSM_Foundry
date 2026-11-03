@@ -15,7 +15,7 @@
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
-- [Host repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated typed operations, candidate SHA transitions, host adapter obligations, and implementation limits.
+- [Host repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated typed operations, candidate SHA transitions, durable non-secret audit, host adapter obligations, and implementation limits.
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
 - [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
