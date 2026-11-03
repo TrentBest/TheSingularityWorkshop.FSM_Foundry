@@ -128,7 +128,8 @@ public sealed class GitHubActionsWorkflowDispatcher
         if (_http.BaseAddress is null ||
             !string.Equals(_http.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(_http.BaseAddress.Host, "api.github.com", StringComparison.OrdinalIgnoreCase) ||
-            _http.BaseAddress.Port != 443)
+            _http.BaseAddress.Port != 443 || _http.BaseAddress.AbsolutePath != "/" ||
+            !_http.BaseAddress.Query.Equals(string.Empty, StringComparison.Ordinal))
             throw new ArgumentException("The GitHub API client must use the fixed https://api.github.com origin.", nameof(http));
     }
 
@@ -272,6 +273,15 @@ public sealed class GitHubActionsWorkflowDispatcher
             !string.Equals(correlation.HeadBranch, receipt.Branch, StringComparison.Ordinal) ||
             !string.Equals(correlation.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("Run correlation does not match the dispatch receipt.");
+        var durable = _journal.Get(receipt.RequestId);
+        if (!string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(durable.WorkflowFile, receipt.WorkflowFile, StringComparison.Ordinal) ||
+            !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
+            !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
+            !string.Equals(durable.CandidateSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            durable.State is not (GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified) ||
+            durable.RunId != correlation.RunId || durable.RunAttempt != correlation.RunAttempt)
+            throw new UnauthorizedAccessException("Required-job verification is not bound to the durable exact run attempt.");
         var required = requiredJobNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToArray();
         if (required.Length == 0 || required.Length != requiredJobNames.Count ||
             required.Distinct(StringComparer.Ordinal).Count() != required.Length ||
@@ -314,7 +324,9 @@ public sealed class GitHubActionsWorkflowDispatcher
             results.Add(new GitHubActionsRequiredJobResult(requiredName,
                 found.Length == 0 ? "missing" : job.Status, found.Length == 0 ? null : job.Conclusion, succeeded));
         }
-        var allSucceeded = results.All(result => result.Succeeded);
+        var allSucceeded = string.Equals(correlation.Status, "completed", StringComparison.Ordinal) &&
+            string.Equals(correlation.Conclusion, "success", StringComparison.Ordinal) &&
+            results.All(result => result.Succeeded);
         if (allSucceeded)
         {
             var durable = _journal.Get(receipt.RequestId);
