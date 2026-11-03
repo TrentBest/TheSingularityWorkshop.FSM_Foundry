@@ -18,6 +18,26 @@ Never delete or rewrite a branch on the owner's behalf. Before recommending reti
 
 A green CI run is not merge or release authorization. Do not merge, tag, deploy, publish a NuGet package, or replace `master` unless the owner explicitly authorizes that exact action. Keep package-publishing jobs gated or skipped by default.
 
+## Branch activity and Sith-policy audit — mandatory
+
+A branch name or the repository default-branch view is not an activity report. At the start of every repository review, and before recommending branch retirement:
+
+1. Enumerate every branch from GitHub's branch API; never rely on the branch-selector dropdown or a remembered inventory.
+2. Resolve each branch tip to its latest commit metadata and sort by **committer timestamp descending**. Report branch, timestamp (UTC), author, subject, short SHA, and link.
+3. Compare every noncanonical branch against `development`; record ahead/behind counts and whether its changes are already represented. Inspect changed files and relevant source/tests/docs/CI before assigning a disposition.
+4. Report the latest commit and verification state for both canonical branches. `master` is the last explicitly released baseline; `development` is the active integration candidate and is not presumed to work merely because it is current.
+5. Treat a branch with no open PR, no recent activity, or no clear owner as an explicit reconciliation item. Do not silently discard it, merge it, or delete it.
+6. Every status report must distinguish: latest activity, divergence from development, exact-head CI/build/test evidence, open PR/review state, and release authorization. A green check is evidence, not permission.
+
+The owner must be able to answer “what changed most recently?” without opening branch selectors. Keep the activity ledger sorted newest-first and include stale branches as well as active ones. Across repositories, the Workshop command center should aggregate this same report so the owner does not need to inspect 20+ repositories individually.
+
+### Canonical branch meaning and release gate
+
+- `master` is the last released, known-working source baseline. It changes only through an explicitly authorized release operation.
+- `development` is the current integration candidate. It may be incomplete or broken; always report its exact SHA and verification evidence.
+- At the publishing gate, bring `development` to release readiness, verify the exact candidate SHA, and ensure the release candidate represented by `master` and `development` is identical before package publication. Do not infer that package publication is authorized from branch equality.
+- Package publication remains a separately authorized final action. No package is published merely because CI is green or the branches match.
+
 ## Foundry owns execution lifecycle
 
 Foundry is the host-neutral execution and work-control boundary for the Workshop Hub.
