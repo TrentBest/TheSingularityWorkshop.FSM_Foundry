@@ -385,7 +385,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt)
         {
             var entry = _inner.Begin(operation, startedAt);
-            _tasks.Transition(_task.TaskId, _task.Lease!.LeaseId, WorkTaskStatus.CodeRed,
+            _tasks.Transition(_task.Request.TaskId, _task.Lease!.LeaseId, WorkTaskStatus.CodeRed,
                 Now.AddMinutes(1), "Capability revoked during audit reservation.");
             return entry;
         }
