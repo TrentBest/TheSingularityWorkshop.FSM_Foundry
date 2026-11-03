@@ -30,6 +30,15 @@ public abstract record RepositoryOperation
         return value;
     }
 
+    internal static string RequireRepositoryPath(string value, string parameterName)
+    {
+        var path = RequireText(value, parameterName, 512);
+        if (path.StartsWith('/') || path.Contains('\\\\') || path.Contains(':') || path.Contains('%') ||
+            path.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
+            throw new ArgumentException("Repository paths must be normalized relative paths without encoded or traversal segments.", parameterName);
+        return path;
+    }
+
     internal static string RequireSha(string value, string parameterName)
     {
         if (value is not { Length: 40 } || !value.All(Uri.IsHexDigit))
@@ -44,7 +53,7 @@ public sealed record ReadRepositoryFileOperation : RepositoryOperation
     public ReadRepositoryFileOperation(string taskId, string repository, string branch,
         string candidateSha, string path) : base(taskId, repository, branch, candidateSha)
     {
-        Path = RequireText(path, nameof(path), 512);
+        Path = RequireRepositoryPath(path, nameof(path));
     }
 
     public override WorkTaskAction Action => WorkTaskAction.ReadRepository;
