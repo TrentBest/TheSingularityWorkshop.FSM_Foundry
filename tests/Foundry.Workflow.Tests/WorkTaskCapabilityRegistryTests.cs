@@ -165,21 +165,21 @@ public sealed class WorkTaskCapabilityRegistryTests
         attempt = attempt with { CandidateSha = CandidateSha };
         var reviewReady = coordinator.ApplyRepairDecision("task-8", leaseId,
             Array.Empty<WorkTaskRepairAttempt>(), attempt, expectation,
-            TimeSpan.FromMinutes(30), Now.AddMinutes(3));
+            TimeSpan.FromMinutes(30), Now.AddMinutes(5));
         Assert.Equal(WorkTaskStatus.ReviewReady, reviewReady.Status);
         Assert.NotNull(reviewReady.Lease);
 
         var registry = new WorkTaskCapabilityRegistry();
         var capability = registry.Grant(reviewReady, "work/task-8", CandidateSha,
             new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.CreateDraftPullRequest },
-            Now.AddMinutes(3), TimeSpan.FromMinutes(5));
+            Now.AddMinutes(5), TimeSpan.FromMinutes(5));
 
         Demand(registry, capability, reviewReady, WorkTaskAction.CreateDraftPullRequest,
-            now: Now.AddMinutes(4));
+            now: Now.AddMinutes(6));
         Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
-            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(4)));
+            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(6)));
         Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
-            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(4)));
+            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(6)));
         Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(reviewReady, "work/task-8",
             CandidateSha, new[] { "src/Foundry.Workflow" },
             new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
