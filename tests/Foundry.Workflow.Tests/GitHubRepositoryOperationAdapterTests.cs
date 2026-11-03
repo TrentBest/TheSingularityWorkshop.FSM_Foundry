@@ -48,7 +48,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
         var handler = new StubGitHubHandler((request, _) =>
         {
             if (request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
-                return Json(HttpStatusCode.OK, $$"""{"ref":"refs/heads/agents/task-123","object":{"sha":"{{CandidateSha}}","type":"commit"}}""");
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { @ref = "refs/heads/agents/task-123", @object = new { sha = CandidateSha, type = "commit" } }));
             if (request.RequestUri.AbsolutePath.Contains("/contents/src%2FExample.cs", StringComparison.OrdinalIgnoreCase) ||
                 request.RequestUri.AbsolutePath.Contains("/contents/src/Example.cs", StringComparison.OrdinalIgnoreCase))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { type = "file", encoding = "base64", content = encoded }));
