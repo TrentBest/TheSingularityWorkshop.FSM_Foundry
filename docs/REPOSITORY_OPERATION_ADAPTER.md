@@ -15,7 +15,7 @@ The host adapter is a trusted boundary, not an agent-selected tool. It owns cred
 
 ## 2. Operation and result semantics
 
-The current closed operation set is:
+The current closed operation set contains five typed operations:
 
 | Operation | Capability action | Scope |
 |---|---|---|
@@ -24,12 +24,12 @@ The current closed operation set is:
 | Create commit | `CreateCommit` | Existing isolated candidate branch |
 | Request CI | `RequestCiRun` | Host-defined workflow key and exact candidate SHA |
 
-The operation carries the full 40-character candidate SHA against which its capability is checked. The adapter result distinguishes:
+The operation carries the full 40-character candidate SHA against which its capability is checked. For branch creation, this is the task's authorized base SHA and the target branch must not already exist; the operation creates a ref at that exact commit. The adapter result distinguishes:
 
 - `RequestedCandidateSha`: the exact commit authorized before the operation.
 - `ResultingCandidateSha`: the commit after the operation (which may differ for a mutation).
 
-That distinction matters because a successful write or commit normally advances the branch to a new commit. A read or CI dispatch must retain the exact requested SHA. For a mutation, the host adapter must verify that the resulting commit is based on the authorized candidate and return the exact resulting SHA from the repository authority. Foundry validates the returned SHA shape and requested-SHA correlation; it does not independently prove Git commit ancestry. A subsequent operation against the new SHA requires a new capability scoped to that SHA.
+That distinction matters because a successful write or commit normally advances the branch to a new commit. A branch creation, read, or CI dispatch must retain the exact requested SHA. For a mutation, the host adapter must verify that the resulting commit is based on the authorized candidate and return the exact resulting SHA from the repository authority. Foundry validates the returned SHA shape and requested-SHA correlation; it does not independently prove Git commit ancestry. A subsequent operation against the new SHA requires a new capability scoped to that SHA.
 
 All operation identities and paths are bounded and control-character-free; file content is limited to 64 KiB. This is a narrow typed API, not a generic process or tool runner.
 
@@ -37,7 +37,7 @@ All operation identities and paths are bounded and control-character-free; file 
 
 `RepositoryOperationWorkflowHandler.Register` registers the `repository.operation` key in the existing `WorkflowHandlerRegistry`. The workflow input is data-only and identifies a supported operation. The host supplies a capability resolver callback and clock when registering the handler.
 
-The request deliberately contains no capability ID. The resolver receives the task ID and retrieves host-owned capability state. The dispatcher then validates that capability against the current durable task snapshot. The handler runs inside the existing sequential `WorkflowRunner`; this feature does not introduce a second executor or scheduler.
+The request deliberately contains no capability ID. Its `create-branch` operation name can select only the closed branch-creation operation; it cannot select a branch name outside the branch already bound to the host-issued capability. The resolver receives the task ID and retrieves host-owned capability state. The dispatcher then validates that capability against the current durable task snapshot. The handler runs inside the existing sequential `WorkflowRunner`; this feature does not introduce a second executor or scheduler.
 
 ## 4. Host adapter obligations
 
@@ -45,7 +45,7 @@ A production adapter must independently enforce all policy that depends on the h
 
 1. Keep credentials in host-managed secret storage; never place them in workflow input, model context, logs, or artifacts.
 2. Bind the configured repository to the durable task repository and reject all other repositories.
-3. Operate only on an isolated, pre-authorized candidate branch. Branch creation and base-commit selection are not implemented by this boundary.
+3. For `CreateBranch`, create only the capability-bound isolated branch, only if it does not already exist, and point it at the exact authorized base SHA. For all later operations, operate only on that pre-authorized candidate branch.
 4. Enforce normalized path containment and the capability's allowed path scope. Reject traversal, encoded traversal, absolute paths, and paths outside the configured repository root.
 5. For file writes and commits, use the authorized candidate SHA as a concurrency precondition; verify the resulting commit's parent/ancestry and report its exact SHA.
 6. Map CI workflow keys through a host-owned allowlist. Dispatch only the exact authorized branch/ref and candidate SHA; never accept a model-supplied workflow file path, endpoint, or arbitrary dispatch payload.
@@ -58,7 +58,7 @@ The adapter must not implement arbitrary shell execution, merge, release, deploy
 
 The feature branch contains:
 
-- `RepositoryOperation` and the four closed operation types.
+- `RepositoryOperation` and the five closed operation types, including exact-base candidate branch creation.
 - `IRepositoryOperationAdapter` and `AuthorizedRepositoryOperationDispatcher`.
 - The workflow-registry handler and data-only request contract.
 - Fake-adapter tests for authorization failures, path scope, wrong task/repository/branch/SHA, CODE RED, lease expiry, provenance mismatch, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
@@ -68,7 +68,7 @@ Exact-head validation passed for PR #26 head `afa96ffc64d29aa2c7f448eca4e1b3ea37
 Not implemented by this boundary:
 
 - A concrete GitHub REST/GraphQL adapter or credential provider.
-- Candidate branch creation, base-SHA selection, or branch lifecycle management.
+- A concrete host/GitHub implementation for branch creation, base-SHA selection, or branch lifecycle management.
 - A host-enforced workflow-key allowlist implementation.
 - Durable per-operation request/response audit records.
 - Git ancestry verification inside Foundry (the host adapter owns that verification).
