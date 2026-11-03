@@ -99,6 +99,8 @@ public sealed class WorkTaskCoordinator
                 throw new InvalidOperationException($"Terminal task '{taskId}' cannot be claimed.");
             if (state.Lease is { } current && current.ExpiresAt > now)
                 throw new InvalidOperationException($"Task '{taskId}' is leased by '{current.AgentId}'.");
+            if (state.Status == WorkTaskStatus.CodeRed)
+                throw new InvalidOperationException($"Task '{taskId}' is in CODE RED and requires approved recovery before reclaim.");
             if (state.Status != WorkTaskStatus.Queued && state.Lease is null)
                 throw new InvalidOperationException($"Task '{taskId}' requires recovery before reclaim.");
             var previous = state.Status;
