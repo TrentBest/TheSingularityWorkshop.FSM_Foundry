@@ -84,9 +84,6 @@ internal sealed class FsmApiWorkflowLifecycle : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         var (handle, context) = GetRun(runId);
         var current = GetStatus(runId);
-        if (!IsAllowed(current, target))
-            throw new InvalidOperationException($"Workflow run '{runId}' cannot transition from '{current}' to '{target}'.");
-
         context.RequestedState = target.ToString();
         try
         {
@@ -132,14 +129,6 @@ internal sealed class FsmApiWorkflowLifecycle : IDisposable
         context is WorkflowRunLifecycleContext lifecycle &&
         StringComparer.Ordinal.Equals(lifecycle.RequestedState, target.ToString());
 
-    private static bool IsAllowed(WorkflowRunStatus current, WorkflowRunStatus target) =>
-        (current, target) switch
-        {
-            (WorkflowRunStatus.Accepted, WorkflowRunStatus.Running or WorkflowRunStatus.Cancelled) => true,
-            (WorkflowRunStatus.Running, WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or
-                WorkflowRunStatus.Cancelled or WorkflowRunStatus.TimedOut or WorkflowRunStatus.Invalid) => true,
-            _ => false
-        };
 }
 
 internal sealed class WorkflowRunLifecycleContext(Guid runId) : IStateContext
