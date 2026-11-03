@@ -14,6 +14,7 @@ public sealed record GitHubActionsDispatchRecord(
     int SchemaVersion,
     long Sequence,
     string RequestId,
+    string TaskId,
     string Repository,
     string WorkflowFile,
     string WorkflowPath,
@@ -32,7 +33,7 @@ public sealed record GitHubActionsDispatchRecord(
 public interface IGitHubActionsDispatchJournal
 {
     GitHubActionsDispatchRecord Begin(
-        string requestId, string repository, string workflowFile, string workflowPath,
+        string requestId, string taskId, string repository, string workflowFile, string workflowPath,
         string branch, string candidateSha, DateTimeOffset createdAt);
     GitHubActionsDispatchRecord Acknowledge(string requestId, DateTimeOffset acknowledgedAt);
     GitHubActionsDispatchRecord Correlate(string requestId, long runId, int runAttempt);
@@ -65,10 +66,10 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
     }
 
     public GitHubActionsDispatchRecord Begin(
-        string requestId, string repository, string workflowFile, string workflowPath,
+        string requestId, string taskId, string repository, string workflowFile, string workflowPath,
         string branch, string candidateSha, DateTimeOffset createdAt)
     {
-        ValidateIdentity(requestId, repository, workflowFile, workflowPath, branch, candidateSha, createdAt);
+        ValidateIdentity(requestId, taskId, repository, workflowFile, workflowPath, branch, candidateSha, createdAt);
         lock (_gate)
         {
             using var fileLock = AcquireLock();
@@ -82,7 +83,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                 throw new InvalidOperationException("An unresolved dispatch already exists for this workflow, branch, and candidate SHA; reconcile it before creating another dispatch.");
             if (_records.ContainsKey(requestId))
                 throw new InvalidOperationException("Dispatch request ID already exists.");
-            var record = new GitHubActionsDispatchRecord(1, _sequence + 1, requestId, repository,
+            var record = new GitHubActionsDispatchRecord(1, _sequence + 1, requestId, taskId, repository,
                 workflowFile, workflowPath, branch, candidateSha, createdAt,
                 GitHubActionsDispatchState.Dispatching, null, null, null);
             Append(record);
@@ -190,7 +191,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             }
             if (record.SchemaVersion != 1 || record.Sequence != _sequence + 1)
                 throw new InvalidDataException("Dispatch journal schema or sequence is invalid.");
-            ValidateIdentity(record.RequestId, record.Repository, record.WorkflowFile,
+            ValidateIdentity(record.RequestId, record.TaskId, record.Repository, record.WorkflowFile,
                 record.WorkflowPath, record.Branch, record.CandidateSha, record.CreatedAt);
             if (!_records.TryGetValue(record.RequestId, out var previous))
             {
@@ -200,7 +201,8 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             }
             else
             {
-                if (!string.Equals(record.Repository, previous.Repository, StringComparison.OrdinalIgnoreCase) ||
+                if (!string.Equals(record.TaskId, previous.TaskId, StringComparison.Ordinal) ||
+                    !string.Equals(record.Repository, previous.Repository, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(record.WorkflowFile, previous.WorkflowFile, StringComparison.Ordinal) ||
                     !string.Equals(record.WorkflowPath, previous.WorkflowPath, StringComparison.Ordinal) ||
                     !string.Equals(record.Branch, previous.Branch, StringComparison.Ordinal) ||
@@ -262,10 +264,11 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
     }
 
     private static void ValidateIdentity(
-        string requestId, string repository, string workflowFile, string workflowPath,
+        string requestId, string taskId, string repository, string workflowFile, string workflowPath,
         string branch, string candidateSha, DateTimeOffset createdAt)
     {
         if (requestId is not { Length: 32 } || !requestId.All(Uri.IsHexDigit) ||
+            string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl) ||
             string.IsNullOrWhiteSpace(repository) || repository.Length > 200 || repository.Any(char.IsControl) ||
             string.IsNullOrWhiteSpace(workflowFile) || workflowFile.Length > 128 ||
             string.IsNullOrWhiteSpace(workflowPath) || workflowPath.Length > 256 ||
