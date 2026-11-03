@@ -66,6 +66,38 @@ public sealed class GitHubRepositoryOperationAdapterTests
     }
 
     [Fact]
+    public async Task WriteStagesImmutableBlobAndPersistsOnlyItsDigest()
+    {
+        const string content = "public sealed class StagedFile {}";
+        const string blobSha = "abcdef0123456789abcdef0123456789abcdef01";
+        var stagingPath = Path.Combine(Path.GetTempPath(), "FoundryGitHubHostTests",
+            Guid.NewGuid().ToString("N") + ".jsonl");
+        var store = new JsonlGitHubRepositoryStagingStore(stagingPath);
+        var handler = new StubGitHubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { @ref = "refs/heads/agents/task-123", @object = new { sha = CandidateSha, type = "commit" } }));
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/git/blobs", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = blobSha }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var adapter = CreateAdapter(handler, store);
+        var operation = new WriteRepositoryFileOperation(
+            "task-123", Repository, "agents/task-123", CandidateSha, "src/Staged.cs", content);
+
+        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+
+        Assert.Equal(CandidateSha, result.RequestedCandidateSha);
+        Assert.Equal(CandidateSha, result.ResultingCandidateSha);
+        var staged = Assert.Single(new JsonlGitHubRepositoryStagingStore(stagingPath)
+            .GetStaged(Repository, "agents/task-123", CandidateSha));
+        Assert.Equal(blobSha, staged.BlobSha);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant(),
+            staged.ContentSha256);
+        Assert.DoesNotContain(content, File.ReadAllText(stagingPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReadRejectsBranchWhoseTipDiffersFromAuthorizedCandidate()
     {
         var handler = new StubGitHubHandler((_, _) =>
@@ -103,12 +135,15 @@ public sealed class GitHubRepositoryOperationAdapterTests
             () => GitHubRepositoryOperationPolicy.DemandCandidateBranch("agents//task"));
     }
 
-    private static GitHubRepositoryOperationAdapter CreateAdapter(StubGitHubHandler handler)
+    private static GitHubRepositoryOperationAdapter CreateAdapter(
+        StubGitHubHandler handler, IGitHubRepositoryStagingStore? stagingStore = null)
     {
         var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
+        stagingStore ??= new JsonlGitHubRepositoryStagingStore(Path.Combine(
+            Path.GetTempPath(), "FoundryGitHubHostTests", Guid.NewGuid().ToString("N") + ".jsonl"));
         return new GitHubRepositoryOperationAdapter(
             client, new TestTokenProvider(),
-            new GitHubRepositoryOperationPolicy([Repository]));
+            new GitHubRepositoryOperationPolicy([Repository]), stagingStore);
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string content) =>
