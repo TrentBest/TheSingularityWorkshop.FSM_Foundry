@@ -160,7 +160,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
-        _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _clock = clock ?? (() => _clock());
     }
 
     public async ValueTask<RepositoryOperationResult> ExecuteAsync(
@@ -209,12 +209,12 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         }
         catch (Exception exception)
         {
-            _journal.Fail(audit.OperationId, exception, DateTimeOffset.UtcNow);
+            _journal.Fail(audit.OperationId, exception, _clock());
             throw;
         }
 
         // Do not persist adapter Detail: it is host-controlled text and may contain secrets.
-        _journal.Complete(audit.OperationId, result, DateTimeOffset.UtcNow);
+        _journal.Complete(audit.OperationId, result, _clock());
         return result;
     }
 }
