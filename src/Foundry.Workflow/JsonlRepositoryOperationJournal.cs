@@ -39,13 +39,21 @@ public sealed record RepositoryOperationAuditEntry(
     public const int CurrentSchemaVersion = 1;
 }
 
+/// <summary>Storage port for durable repository-operation audit records.</summary>
+public interface IRepositoryOperationAuditJournal
+{
+    RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt);
+    RepositoryOperationAuditEntry Complete(string operationId, RepositoryOperationResult result, DateTimeOffset completedAt);
+    RepositoryOperationAuditEntry Fail(string operationId, Exception exception, DateTimeOffset failedAt);
+}
+
 /// <summary>
 /// Append-only JSONL audit for host repository operations. A Pending record is flushed before
 /// transport invocation; a terminal record follows a validated result or a caught failure.
 /// A pending record after process loss is indeterminate and must be reconciled, never replayed
 /// automatically. File locking coordinates cooperating local processes, not distributed hosts.
 /// </summary>
-public sealed class JsonlRepositoryOperationJournal
+public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJournal
 {
     private const int MaximumRecordCharacters = 64 * 1024;
     private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(30);
@@ -315,7 +323,7 @@ public sealed class JsonlRepositoryOperationJournal
     private static void ValidateRecord(RepositoryOperationAuditEntry entry)
     {
         if (entry.SchemaVersion != RepositoryOperationAuditEntry.CurrentSchemaVersion ||
-            entry.Sequence < 1 || entry.OperationId.Length != 32 ||
+            entry.Sequence < 1 || string.IsNullOrEmpty(entry.OperationId) || entry.OperationId.Length != 32 ||
             !Guid.TryParseExact(entry.OperationId, "N", out _) ||
             entry.StartedAt == default ||
             !Enum.TryParse<WorkTaskAction>(entry.Action, out _) ||
@@ -331,8 +339,23 @@ public sealed class JsonlRepositoryOperationJournal
         if (entry.RequestPayloadSha256 is not null &&
             (entry.RequestPayloadSha256.Length != 64 || !entry.RequestPayloadSha256.All(Uri.IsHexDigit)))
             throw new ArgumentException("Repository operation payload digest is invalid.");
-        if (entry.CompletedAt == default)
+        if (entry.CompletedAt.HasValue && entry.CompletedAt.Value == default)
             throw new ArgumentException("Repository operation completion timestamp is invalid.");
+        if (entry.Status == RepositoryOperationAuditStatus.Pending &&
+            (entry.CompletedAt.HasValue || entry.OperationReference is not null ||
+             entry.ResultingCandidateSha is not null || entry.FailureType is not null))
+            throw new ArgumentException("Pending repository operation audit records cannot contain terminal fields.");
+        if (entry.Status == RepositoryOperationAuditStatus.Completed &&
+            (!entry.CompletedAt.HasValue || string.IsNullOrWhiteSpace(entry.OperationReference) ||
+             entry.OperationReference.Length > 512 || entry.OperationReference.Any(char.IsControl) ||
+             entry.ResultingCandidateSha is not { Length: 40 } ||
+             !entry.ResultingCandidateSha.All(Uri.IsHexDigit) || entry.FailureType is not null))
+            throw new ArgumentException("Completed repository operation audit records require valid result provenance.");
+        if (entry.Status == RepositoryOperationAuditStatus.Failed &&
+            (!entry.CompletedAt.HasValue || string.IsNullOrWhiteSpace(entry.FailureType) ||
+             entry.FailureType.Length > 256 || entry.OperationReference is not null ||
+             entry.ResultingCandidateSha is not null))
+            throw new ArgumentException("Failed repository operation audit records require a bounded failure type.");
     }
 
     private static bool SameIdentity(RepositoryOperationAuditEntry left, RepositoryOperationAuditEntry right) =>
