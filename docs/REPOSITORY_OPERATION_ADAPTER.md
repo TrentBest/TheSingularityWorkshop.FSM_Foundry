@@ -36,7 +36,7 @@ All operation identities and paths are bounded and control-character-free; file 
 
 ## 3. Durable operation audit
 
-The dispatcher requires an `IRepositoryOperationAuditJournal`. Before calling the adapter it appends and flushes a `Pending` record containing task/repository/branch identity, operation kind, action, candidate SHA, optional path, timestamp, and a SHA-256 digest for write content or other bounded request payload. It never stores file contents, commit messages, credentials, or adapter detail text.
+The dispatcher requires an `IRepositoryOperationAuditJournal`. After the initial authorization, it appends and flushes a `Pending` record, then re-reads the durable task snapshot and re-demands the capability immediately before transport. This closes the time-of-check window introduced by audit I/O. The record contains task/repository/branch identity, operation kind, action, candidate SHA, optional path, timestamp, and a SHA-256 digest for write content or other bounded request payload. It never stores file contents, commit messages, credentials, or adapter detail text.
 
 After the adapter returns, Foundry validates result provenance and appends either `Completed` with the stable operation reference and resulting SHA, or `Failed` with only the exception type. Failure messages are deliberately excluded because host/provider exceptions can contain secrets or request data.
 
@@ -73,7 +73,7 @@ The feature branch contains:
 - `IRepositoryOperationAdapter` and `AuthorizedRepositoryOperationDispatcher`.
 - The workflow-registry handler and data-only request contract.
 - `IRepositoryOperationAuditJournal`, `JsonlRepositoryOperationJournal`, and dispatcher integration that flushes Pending before transport and a terminal record after result validation.
-- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, candidate advancement after a mutation, durable replay, pending crash state, and payload redaction.
+- Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, candidate advancement after a mutation, durable replay, pending crash state, payload redaction, and capability revocation during audit reservation.
 
 The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full proof workflow in [GitHub Actions run #41582975207](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41582975207). Workflow tests, project builds, the separate-process FSM_API probe, the repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
 
