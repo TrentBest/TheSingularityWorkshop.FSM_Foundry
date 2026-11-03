@@ -103,7 +103,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
 
         var entry = Assert.Single(fixture.Journal.GetAll());
         Assert.Equal(RepositoryOperationAuditStatus.Failed, entry.Status);
-        Assert.Equal(nameof(InvalidOperationException), entry.FailureType);
+        Assert.Equal(typeof(InvalidOperationException).FullName, entry.FailureType);
         Assert.Null(entry.OperationReference);
         Assert.Null(entry.ResultingCandidateSha);
     }
