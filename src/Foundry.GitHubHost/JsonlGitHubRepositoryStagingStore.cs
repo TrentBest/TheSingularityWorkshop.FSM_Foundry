@@ -181,7 +181,7 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
         ValidateIdentity(record.Repository, record.Branch, record.CandidateSha);
         ValidatePath(record.Path);
         RequireSha(record.BlobSha, nameof(record.BlobSha));
-        RequireSha(record.ContentSha256, nameof(record.ContentSha256));
+        RequireDigest(record.ContentSha256, nameof(record.ContentSha256));
     }
 
     private static void Validate(GitHubStagedBlob stagedBlob)
@@ -189,7 +189,7 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
         ValidateIdentity(stagedBlob.Repository, stagedBlob.Branch, stagedBlob.CandidateSha);
         ValidatePath(stagedBlob.Path);
         RequireSha(stagedBlob.BlobSha, nameof(stagedBlob.BlobSha));
-        RequireSha(stagedBlob.ContentSha256, nameof(stagedBlob.ContentSha256));
+        RequireDigest(stagedBlob.ContentSha256, nameof(stagedBlob.ContentSha256));
         if (stagedBlob.StagedAt == default)
             throw new ArgumentException("A staging timestamp is required.", nameof(stagedBlob));
     }
@@ -216,6 +216,12 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
     {
         if (value is not { Length: 40 } || !value.All(Uri.IsHexDigit))
             throw new ArgumentException("A full 40-character hexadecimal SHA is required.", parameterName);
+    }
+
+    private static void RequireDigest(string value, string parameterName)
+    {
+        if (value is not { Length: 64 } || !value.All(Uri.IsHexDigit))
+            throw new ArgumentException("A full 64-character hexadecimal SHA-256 digest is required.", parameterName);
     }
 
     private static string Key(string repository, string branch, string candidateSha, string path) =>
