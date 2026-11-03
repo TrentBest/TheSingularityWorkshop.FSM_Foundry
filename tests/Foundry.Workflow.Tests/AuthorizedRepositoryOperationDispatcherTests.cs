@@ -65,6 +65,31 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public void EncodedAndTraversalPathsAreRejectedBeforeTheyReachAnAdapter()
+    {
+        Assert.Throws<ArgumentException>(() => new ReadRepositoryFileOperation(
+            "task-8", Repository, "work/task-8", CandidateSha,
+            "src/Foundry.Workflow/%2e%2e/secrets.txt"));
+        Assert.Throws<ArgumentException>(() => new WriteRepositoryFileOperation(
+            "task-8", Repository, "work/task-8", CandidateSha,
+            "src/Foundry.Workflow/../secrets.txt", "content"));
+    }
+
+    [Fact]
+    public async Task CiAdapterMustPreserveTheExactRequestedCandidateSha()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.RequestCiRun);
+        fixture.Adapter.ResultingCandidateSha = new string('c', 40);
+        var operation = new RequestRepositoryCiOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "trusted-workflow");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+        Assert.Equal(1, fixture.Adapter.Calls);
+    }
+
+    [Fact]
     public async Task WrongTaskRepositoryBranchAndCandidateAreRejectedBeforeTransport()
     {
         using var fixture = new Fixture();
