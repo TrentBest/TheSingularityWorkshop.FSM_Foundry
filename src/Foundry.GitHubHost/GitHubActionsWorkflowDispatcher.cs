@@ -54,6 +54,16 @@ public sealed class GitHubActionsWorkflowAllowlist
         _definitions.TryGetValue(key, out var definition)
             ? definition
             : throw new UnauthorizedAccessException("The workflow key is not in the host allowlist.");
+
+    public GitHubActionsWorkflowDefinition DemandByFileAndPath(string workflowFile, string expectedPath)
+    {
+        var matches = _definitions.Values.Where(definition =>
+            string.Equals(definition.WorkflowFile, workflowFile, StringComparison.Ordinal) &&
+            string.Equals(definition.ExpectedPath, expectedPath, StringComparison.Ordinal)).ToArray();
+        return matches.Length == 1
+            ? matches[0]
+            : throw new UnauthorizedAccessException("Dispatch receipt does not identify one allowlisted workflow.");
+    }
 }
 
 /// <summary>Durable correlation data returned after GitHub accepts a workflow dispatch.</summary>
@@ -118,7 +128,8 @@ public sealed class GitHubActionsWorkflowDispatcher
     {
         _repositoryPolicy.DemandRepository(repository);
         GitHubRepositoryOperationPolicy.DemandCandidateBranch(branch);
-        _ = TheSingularityWorkshop.Foundry.RepositoryOperation.RequireTextForHost(workflowKey);
+        if (string.IsNullOrWhiteSpace(workflowKey) || workflowKey.Length > 128 || workflowKey.Any(char.IsControl))
+            throw new ArgumentException("Workflow key must be bounded and control-free.", nameof(workflowKey));
         if (candidateSha is not { Length: 40 } || !candidateSha.All(Uri.IsHexDigit))
             throw new ArgumentException("A full candidate SHA is required.", nameof(candidateSha));
 
