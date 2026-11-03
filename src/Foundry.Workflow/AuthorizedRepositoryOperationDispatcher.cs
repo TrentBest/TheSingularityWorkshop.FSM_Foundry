@@ -183,6 +183,14 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         RepositoryOperationResult result;
         try
         {
+            // Recheck after the durable write to close the journal-I/O time-of-check window.
+            var latestTask = _tasks.GetSnapshot(operation.TaskId);
+            if (!string.Equals(latestTask.Request.Repository, operation.Repository, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Operation repository no longer matches the durable task.");
+            _capabilities.Demand(capabilityId, latestTask, operation.Branch, operation.CandidateSha,
+                operation.Action, operation.Path, DateTimeOffset.UtcNow);
+            cancellationToken.ThrowIfCancellationRequested();
+
             result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
             ArgumentNullException.ThrowIfNull(result);
             if (string.IsNullOrWhiteSpace(result.OperationReference) ||
