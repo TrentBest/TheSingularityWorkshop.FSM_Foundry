@@ -79,7 +79,7 @@ public sealed record WriteRepositoryFileOperation : RepositoryOperation
     public WriteRepositoryFileOperation(string taskId, string repository, string branch,
         string candidateSha, string path, string content) : base(taskId, repository, branch, candidateSha)
     {
-        Path = RequireText(path, nameof(path), 512);
+        Path = RequireRepositoryPath(path, nameof(path));
         Content = content ?? throw new ArgumentNullException(nameof(content));
         if (Content.Length > MaximumContentCharacters)
             throw new ArgumentException("File content exceeds the operation size limit.", nameof(content));
