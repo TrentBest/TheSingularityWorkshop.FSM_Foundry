@@ -46,6 +46,65 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task SuccessfulOperationIsDurablyAuditedWithoutPersistingFileContent()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        const string privateContent = "private source payload that must not be copied into the audit";
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/Example.cs", privateContent);
+
+        await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1));
+
+        var entries = fixture.Journal.GetAll();
+        var entry = Assert.Single(entries);
+        Assert.Equal(RepositoryOperationAuditStatus.Completed, entry.Status);
+        Assert.Equal(CandidateSha, entry.CandidateSha);
+        Assert.Equal(CandidateSha, entry.ResultingCandidateSha);
+        Assert.NotNull(entry.RequestPayloadSha256);
+        Assert.Equal(64, entry.RequestPayloadSha256!.Length);
+        var journalText = File.ReadAllText(Path.Combine(fixture.Directory, "operations.jsonl"));
+        Assert.DoesNotContain(privateContent, journalText, StringComparison.Ordinal);
+        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.Directory, "operations.jsonl"));
+        Assert.Equal(RepositoryOperationAuditStatus.Completed, Assert.Single(reopened.GetAll()).Status);
+    }
+
+    [Fact]
+    public async Task InvalidAdapterProvenanceIsRecordedAsFailure()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.ReadRepository);
+        fixture.Adapter.ResultingCandidateSha = new string('c', 40);
+        var operation = new ReadRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+
+        var entry = Assert.Single(fixture.Journal.GetAll());
+        Assert.Equal(RepositoryOperationAuditStatus.Failed, entry.Status);
+        Assert.Equal(nameof(InvalidOperationException), entry.FailureType);
+        Assert.Null(entry.OperationReference);
+        Assert.Null(entry.ResultingCandidateSha);
+    }
+
+    [Fact]
+    public void PendingOperationSurvivesReopenForExplicitReconciliation()
+    {
+        using var fixture = new Fixture();
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/Example.cs", "content");
+        var pending = fixture.Journal.Begin(operation, Now.AddMinutes(1));
+
+        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.Directory, "operations.jsonl"));
+
+        var entry = Assert.Single(reopened.GetAll());
+        Assert.Equal(pending.OperationId, entry.OperationId);
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, entry.Status);
+        Assert.Null(entry.CompletedAt);
+    }
+
+    [Fact]
     public async Task UnauthorizedActionAndOutOfScopePathNeverReachAdapter()
     {
         using var fixture = new Fixture();
@@ -254,10 +313,12 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     private sealed class Fixture : IDisposable
     {
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "foundry-operation-tests", Guid.NewGuid().ToString("N"));
+        public string Directory => _directory;
         public PersistentWorkTaskCoordinator Tasks { get; }
         public WorkTaskSnapshot Task { get; }
         public WorkTaskCapabilityRegistry Capabilities { get; } = new();
         public FakeAdapter Adapter { get; } = new();
+        public JsonlRepositoryOperationJournal Journal { get; }
         public AuthorizedRepositoryOperationDispatcher Dispatcher { get; }
 
         public Fixture(TimeSpan? leaseDuration = null)
@@ -268,7 +329,8 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
                 "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/8",
                 BaseSha, new[] { "src/Foundry.Workflow" }, 3));
             Task = Tasks.Claim("task-8", "agent-a", leaseDuration ?? TimeSpan.FromMinutes(20), Now);
-            Dispatcher = new AuthorizedRepositoryOperationDispatcher(Tasks, Capabilities, Adapter);
+            Journal = new JsonlRepositoryOperationJournal(Path.Combine(_directory, "operations.jsonl"));
+            Dispatcher = new AuthorizedRepositoryOperationDispatcher(Tasks, Capabilities, Adapter, Journal);
         }
 
         public WorkTaskCapability Grant(params WorkTaskAction[] actions) =>
