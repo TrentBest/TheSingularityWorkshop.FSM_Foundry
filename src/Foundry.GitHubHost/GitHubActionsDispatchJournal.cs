@@ -198,30 +198,34 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                     record.AcknowledgedAt is not null || record.RunId is not null || record.RunAttempt is not null)
                     throw new InvalidDataException("Dispatch journal must begin with a Dispatching intent.");
             }
-            else if (!string.Equals(record.Repository, previous.Repository, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(record.WorkflowFile, previous.WorkflowFile, StringComparison.Ordinal) ||
-                !string.Equals(record.WorkflowPath, previous.WorkflowPath, StringComparison.Ordinal) ||
-                !string.Equals(record.Branch, previous.Branch, StringComparison.Ordinal) ||
-                !string.Equals(record.CandidateSha, previous.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
-                record.CreatedAt != previous.CreatedAt ||
-                record.State switch
+            else
             {
-                GitHubActionsDispatchState.Acknowledged =>
-                    previous.State == GitHubActionsDispatchState.Dispatching &&
-                    record.AcknowledgedAt is { } acknowledged && acknowledged >= previous.CreatedAt &&
-                    record.RunId is null && record.RunAttempt is null,
-                GitHubActionsDispatchState.Correlated =>
-                    (previous.State is GitHubActionsDispatchState.Dispatching or GitHubActionsDispatchState.Acknowledged) &&
-                    record.RunId is > 0 && record.RunAttempt is > 0 &&
-                    record.AcknowledgedAt == previous.AcknowledgedAt,
-                GitHubActionsDispatchState.Verified =>
-                    previous.State == GitHubActionsDispatchState.Correlated &&
-                    record.RunId == previous.RunId && record.RunAttempt == previous.RunAttempt &&
-                    record.AcknowledgedAt == previous.AcknowledgedAt,
-                _ => false
-            } is false)
-            {
-                throw new InvalidDataException("Dispatch journal state transition is invalid.");
+                if (!string.Equals(record.Repository, previous.Repository, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(record.WorkflowFile, previous.WorkflowFile, StringComparison.Ordinal) ||
+                    !string.Equals(record.WorkflowPath, previous.WorkflowPath, StringComparison.Ordinal) ||
+                    !string.Equals(record.Branch, previous.Branch, StringComparison.Ordinal) ||
+                    !string.Equals(record.CandidateSha, previous.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                    record.CreatedAt != previous.CreatedAt)
+                    throw new InvalidDataException("Dispatch journal identity changed within one request.");
+
+                var validTransition = record.State switch
+                {
+                    GitHubActionsDispatchState.Acknowledged =>
+                        previous.State == GitHubActionsDispatchState.Dispatching &&
+                        record.AcknowledgedAt is { } acknowledged && acknowledged >= previous.CreatedAt &&
+                        record.RunId is null && record.RunAttempt is null,
+                    GitHubActionsDispatchState.Correlated =>
+                        (previous.State is GitHubActionsDispatchState.Dispatching or GitHubActionsDispatchState.Acknowledged) &&
+                        record.RunId is > 0 && record.RunAttempt is > 0 &&
+                        record.AcknowledgedAt == previous.AcknowledgedAt,
+                    GitHubActionsDispatchState.Verified =>
+                        previous.State == GitHubActionsDispatchState.Correlated &&
+                        record.RunId == previous.RunId && record.RunAttempt == previous.RunAttempt &&
+                        record.AcknowledgedAt == previous.AcknowledgedAt,
+                    _ => false
+                };
+                if (!validTransition)
+                    throw new InvalidDataException("Dispatch journal state transition is invalid.");
             }
             _records[record.RequestId] = record;
             _sequence = record.Sequence;
