@@ -197,9 +197,9 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
             }
             else
             {
-                if (!_entries.Values.Any(entry => SameBatch(entry, record)))
-                    throw new InvalidDataException($"Staging journal freezes an empty batch at record {lineNumber}.");
-                _frozenBatches.Add(batchKey);
+                if (!_entries.Values.Any(entry => SameBatch(entry, record)) ||
+                    !_frozenBatches.Add(batchKey))
+                    throw new InvalidDataException($"Staging journal contains an empty or duplicate frozen batch at record {lineNumber}.");
             }
             _sequence = record.Sequence;
         }
