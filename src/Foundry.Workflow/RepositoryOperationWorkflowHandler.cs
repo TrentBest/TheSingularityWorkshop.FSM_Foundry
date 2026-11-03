@@ -59,6 +59,9 @@ public static class RepositoryOperationWorkflowHandler
         ArgumentNullException.ThrowIfNull(request);
         return request.Operation switch
         {
+            "create-branch" =>
+                new CreateRepositoryBranchOperation(request.TaskId, request.Repository, request.Branch,
+                    request.CandidateSha),
             "read-file" when request.Path is not null =>
                 new ReadRepositoryFileOperation(request.TaskId, request.Repository, request.Branch,
                     request.CandidateSha, request.Path),
