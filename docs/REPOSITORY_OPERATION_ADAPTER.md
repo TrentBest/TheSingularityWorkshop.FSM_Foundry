@@ -3,7 +3,7 @@
 
 # Host Repository Operation Boundary
 
-**Status:** Implemented as a host-neutral authorization and adapter contract on the isolated feature branch for PR #26. No concrete GitHub transport is included.
+**Status:** The host-neutral authorization boundary is implemented. An optional `Foundry.GitHubHost` project now contains the first concrete GitHub REST increment: exact-base candidate branch creation and bounded immutable-SHA text reads. Staged writes, commits, CI dispatch, production token provisioning, and durable host staging remain incomplete.
 
 ## 1. Theory: proposals are not permissions
 
@@ -87,7 +87,7 @@ Not implemented by this boundary:
 - End-to-end connection to the ReviewReady draft-PR handoff in PR #25.
 - A complete autonomous issue-to-draft-PR loop.
 
-The current tests prove the Foundry authorization seam with a fake adapter; they do not prove live GitHub mutation or a production host's credential, network, branch, or workflow policies.
+The new `Foundry.GitHubHost` tests use a fake HTTP handler to verify exact-SHA branch creation, immutable-SHA reads, bounded response handling, repository allowlisting, branch namespace restrictions, and credential-header placement. They do not contact GitHub or prove a production token provider, installation permissions, network egress policy, staged writes, commit ancestry, CI dispatch, or the full autonomous loop. The latest adapter-inclusive exact-head CI run is pending and must pass before this revision is described as verified.
 
 ## 7. Verification
 
