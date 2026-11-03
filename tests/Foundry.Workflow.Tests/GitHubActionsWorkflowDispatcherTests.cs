@@ -52,6 +52,62 @@ public sealed class GitHubActionsWorkflowDispatcherTests
     }
 
     [Fact]
+    public async Task AmbiguousDispatchResponseRecoversByRequestIdWithoutResending()
+    {
+        var journalPath = NewJournalPath();
+        var capturedRequestId = string.Empty;
+        var firstHandler = new StubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return CandidateRef();
+            if (request.Method == HttpMethod.Post && path.EndsWith("/dispatches", StringComparison.Ordinal))
+            {
+                using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+                capturedRequestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                // Simulate GitHub accepting the dispatch while the response is lost in transit.
+                return Json(HttpStatusCode.InternalServerError, "{}");
+            }
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var firstDispatcher = CreateDispatcher(firstHandler, journalPath);
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            async () => await firstDispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha));
+        Assert.False(string.IsNullOrWhiteSpace(capturedRequestId));
+        Assert.Equal(GitHubActionsDispatchState.Dispatching,
+            new JsonlGitHubActionsDispatchJournal(journalPath).Get(capturedRequestId).State);
+
+        var recoveryHandler = new StubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    workflow_runs = new[] { new
+                    {
+                        id = 765432L, run_attempt = 1,
+                        html_url = "https://github.com/TrentBest/Sample/actions/runs/765432",
+                        status = "completed", conclusion = "success",
+                        head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
+                        @event = "workflow_dispatch", display_title = "Foundry CI " + capturedRequestId
+                    }}
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var recoveryDispatcher = CreateDispatcher(recoveryHandler, journalPath);
+        var recoveredReceipt = recoveryDispatcher.GetDispatchReceipt(capturedRequestId);
+
+        var correlation = await recoveryDispatcher.FindCorrelatedRunAsync(recoveredReceipt);
+
+        Assert.NotNull(correlation);
+        Assert.Equal(765432L, correlation.RunId);
+        Assert.Equal(GitHubActionsDispatchState.Correlated,
+            new JsonlGitHubActionsDispatchJournal(journalPath).Get(capturedRequestId).State);
+        Assert.DoesNotContain(recoveryHandler.Requests, item => item.Method == HttpMethod.Post);
+    }
+
+    [Fact]
     public async Task DispatchRejectsBranchThatNoLongerPointsAtAuthorizedSha()
     {
         var handler = new StubHandler((_, _) => Json(HttpStatusCode.OK, """
