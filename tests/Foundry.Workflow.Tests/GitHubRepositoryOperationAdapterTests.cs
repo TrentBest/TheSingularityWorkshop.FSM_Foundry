@@ -112,6 +112,119 @@ public sealed class GitHubRepositoryOperationAdapterTests
     }
 
     [Fact]
+    public async Task CommitAdvancesCandidateRefOnlyAfterBuildingSingleParentCommit()
+    {
+        const string baseTree = "1111111111111111111111111111111111111111";
+        const string newTree = "2222222222222222222222222222222222222222";
+        const string commitSha = "3333333333333333333333333333333333333333";
+        const string message = "Implement staged change";
+        var store = new InMemoryStagingStore();
+        store.Stage(new GitHubStagedBlob(
+            Repository, "agents/task-123", CandidateSha, "src/Example.cs",
+            "abcdef0123456789abcdef0123456789abcdef01",
+            new string('a', 64), DateTimeOffset.UtcNow));
+        var handler = new StubGitHubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/git/commits/" + CandidateSha, StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    sha = CandidateSha,
+                    tree = new { sha = baseTree },
+                    parents = Array.Empty<object>(),
+                    message = "base",
+                    author = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" },
+                    committer = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" }
+                }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/trees", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = newTree }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/commits", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = commitSha }));
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    @ref = "refs/heads/agents/task-123",
+                    @object = new { sha = commitSha, type = "commit" }
+                }));
+            if (request.Method == HttpMethod.Patch && path.Contains("/git/refs/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    @ref = "refs/heads/agents/task-123",
+                    @object = new { sha = commitSha, type = "commit" }
+                }));
+            if (request.Method == HttpMethod.Get && path.EndsWith("/git/commits/" + commitSha, StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    sha = commitSha,
+                    tree = new { sha = newTree },
+                    parents = new[] { new { sha = CandidateSha } },
+                    message
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var adapter = CreateAdapter(handler, store);
+        var operation = new CreateRepositoryCommitOperation(
+            "task-123", Repository, "agents/task-123", CandidateSha, message);
+
+        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+
+        Assert.Equal(CandidateSha, result.RequestedCandidateSha);
+        Assert.Equal(commitSha, result.ResultingCandidateSha);
+        var patch = Assert.Single(handler.Requests.Where(request => request.Method == HttpMethod.Patch));
+        using var patchBody = JsonDocument.Parse(patch.Body!);
+        Assert.False(patchBody.RootElement.GetProperty("force").GetBoolean());
+        Assert.Equal(commitSha, patchBody.RootElement.GetProperty("sha").GetString());
+        var commitPost = Assert.Single(handler.Requests.Where(request =>
+            request.Method == HttpMethod.Post && request.Path.EndsWith("/git/commits", StringComparison.Ordinal)));
+        using var commitBody = JsonDocument.Parse(commitPost.Body!);
+        Assert.Equal(CandidateSha, commitBody.RootElement.GetProperty("parents")[0].GetString());
+        Assert.Equal(message, commitBody.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task CommitRefusesToAdvanceWhenCandidateBranchMoved()
+    {
+        const string baseTree = "1111111111111111111111111111111111111111";
+        const string newTree = "2222222222222222222222222222222222222222";
+        const string commitSha = "3333333333333333333333333333333333333333";
+        var otherSha = new string('4', 40);
+        var store = new InMemoryStagingStore();
+        store.Stage(new GitHubStagedBlob(
+            Repository, "agents/task-123", CandidateSha, "src/Example.cs",
+            "abcdef0123456789abcdef0123456789abcdef01",
+            new string('a', 64), DateTimeOffset.UtcNow));
+        var handler = new StubGitHubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/git/commits/" + CandidateSha, StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    sha = CandidateSha, tree = new { sha = baseTree },
+                    author = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" },
+                    committer = new { name = "Workshop", email = "workshop@example.test", date = "2026-11-01T00:00:00Z" }
+                }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/trees", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = newTree }));
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/commits", StringComparison.Ordinal))
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { sha = commitSha }));
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    @ref = "refs/heads/agents/task-123",
+                    @object = new { sha = otherSha, type = "commit" }
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var adapter = CreateAdapter(handler, store);
+        var operation = new CreateRepositoryCommitOperation(
+            "task-123", Repository, "agents/task-123", CandidateSha, "Do not overwrite moved branch");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await adapter.ExecuteAsync(operation, CancellationToken.None));
+        Assert.Empty(handler.Requests.Where(request => request.Method == HttpMethod.Patch));
+    }
+
+    [Fact]
     public async Task RejectsRepositoriesOutsideHostAllowlist()
     {
         var handler = new StubGitHubHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
@@ -148,6 +261,25 @@ public sealed class GitHubRepositoryOperationAdapterTests
 
     private static HttpResponseMessage Json(HttpStatusCode status, string content) =>
         new(status) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
+
+    private sealed class InMemoryStagingStore : IGitHubRepositoryStagingStore
+    {
+        private readonly Dictionary<string, GitHubStagedBlob> _entries = new(StringComparer.Ordinal);
+
+        public GitHubStagedBlob Stage(GitHubStagedBlob stagedBlob)
+        {
+            var key = stagedBlob.Repository + "|" + stagedBlob.Branch + "|" +
+                stagedBlob.CandidateSha + "|" + stagedBlob.Path;
+            _entries[key] = stagedBlob;
+            return stagedBlob;
+        }
+
+        public IReadOnlyList<GitHubStagedBlob> GetStaged(
+            string repository, string branch, string candidateSha) =>
+            _entries.Values.Where(entry =>
+                entry.Repository == repository && entry.Branch == branch &&
+                entry.CandidateSha == candidateSha).ToArray();
+    }
 
     private sealed class TestTokenProvider : IGitHubAccessTokenProvider
     {
