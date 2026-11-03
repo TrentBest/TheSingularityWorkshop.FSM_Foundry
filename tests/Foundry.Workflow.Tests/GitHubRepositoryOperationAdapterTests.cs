@@ -51,7 +51,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { @ref = "refs/heads/agents/task-123", @object = new { sha = CandidateSha, type = "commit" } }));
             if (request.RequestUri.AbsolutePath.Contains("/contents/src%2FExample.cs", StringComparison.OrdinalIgnoreCase) ||
                 request.RequestUri.AbsolutePath.Contains("/contents/src/Example.cs", StringComparison.OrdinalIgnoreCase))
-                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { type = "file", encoding = "base64", content = encoded }));
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { path = "src/Example.cs", type = "file", encoding = "base64", content = encoded }));
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var adapter = CreateAdapter(handler);
