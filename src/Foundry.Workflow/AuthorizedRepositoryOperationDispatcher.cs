@@ -160,7 +160,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
-        _clock = clock ?? (() => _clock());
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
     public async ValueTask<RepositoryOperationResult> ExecuteAsync(
