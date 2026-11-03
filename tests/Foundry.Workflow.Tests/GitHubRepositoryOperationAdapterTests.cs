@@ -340,7 +340,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
 
         Assert.Equal(CandidateSha, result.RequestedCandidateSha);
         Assert.Equal(CandidateSha, result.ResultingCandidateSha);
-        Assert.StartsWith("github:actions-dispatch:", result.OperationReference, StringComparison.Ordinal);
+        Assert.StartsWith("github:actions-dispatch:", result.OperationReference);
         var dispatch = Assert.Single(handler.Requests.Where(request => request.Method == HttpMethod.Post));
         using var payload = JsonDocument.Parse(dispatch.Body!);
         var requestId = payload.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
