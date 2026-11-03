@@ -20,9 +20,9 @@ public sealed class GitHubRepositoryOperationAdapterTests
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
                 return Json(HttpStatusCode.NotFound, "{}");
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.EndsWith("/git/commits/" + CandidateSha, StringComparison.Ordinal))
-                return Json(HttpStatusCode.OK, $$"""{"sha":"{{CandidateSha}}"}""");
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { sha = CandidateSha }));
             if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/git/refs", StringComparison.Ordinal))
-                return Json(HttpStatusCode.Created, $$"""{"ref":"refs/heads/agents/task-123","object":{"sha":"{{CandidateSha}}","type":"commit"}}""");
+                return Json(HttpStatusCode.Created, JsonSerializer.Serialize(new { @ref = "refs/heads/agents/task-123", @object = new { sha = CandidateSha, type = "commit" } }));
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var adapter = CreateAdapter(handler);
@@ -51,7 +51,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
                 return Json(HttpStatusCode.OK, $$"""{"ref":"refs/heads/agents/task-123","object":{"sha":"{{CandidateSha}}","type":"commit"}}""");
             if (request.RequestUri.AbsolutePath.Contains("/contents/src%2FExample.cs", StringComparison.OrdinalIgnoreCase) ||
                 request.RequestUri.AbsolutePath.Contains("/contents/src/Example.cs", StringComparison.OrdinalIgnoreCase))
-                return Json(HttpStatusCode.OK, $$"""{"type":"file","encoding":"base64","content":"{{encoded}}"}""");
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new { type = "file", encoding = "base64", content = encoded }));
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var adapter = CreateAdapter(handler);
