@@ -132,7 +132,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     {
         if (_actionsDispatcher is null)
             throw new NotSupportedException("GitHub Actions dispatch is not configured by this host.");
-        var receipt = await _actionsDispatcher.DispatchAsync(operation.Repository, operation.WorkflowKey,
+        var receipt = await _actionsDispatcher.DispatchAsync(operation.TaskId, operation.Repository, operation.WorkflowKey,
             operation.Branch, operation.CandidateSha, cancellationToken).ConfigureAwait(false);
         return new RepositoryOperationResult(
             "github:actions-dispatch:" + receipt.RequestId,
