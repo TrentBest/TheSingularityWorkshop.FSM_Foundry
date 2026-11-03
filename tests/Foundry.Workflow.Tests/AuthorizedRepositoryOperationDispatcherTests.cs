@@ -332,7 +332,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
                 BaseSha, new[] { "src/Foundry.Workflow" }, 3));
             Task = Tasks.Claim("task-8", "agent-a", leaseDuration ?? TimeSpan.FromMinutes(20), Now);
             Journal = new JsonlRepositoryOperationJournal(Path.Combine(_directory, "operations.jsonl"));
-            Dispatcher = new AuthorizedRepositoryOperationDispatcher(Tasks, Capabilities, Adapter, Journal);
+            Dispatcher = new AuthorizedRepositoryOperationDispatcher(Tasks, Capabilities, Adapter, Journal, () => Now.AddMinutes(1));
         }
 
         public WorkTaskCapability Grant(params WorkTaskAction[] actions) =>
