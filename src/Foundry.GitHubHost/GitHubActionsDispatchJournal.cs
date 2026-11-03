@@ -75,7 +75,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             using var fileLock = AcquireLock();
             Replay();
             if (_records.Values.Any(record =>
-                record.State != GitHubActionsDispatchState.Correlated &&
+                record.State != GitHubActionsDispatchState.Verified &&
                 string.Equals(record.Repository, repository, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(record.WorkflowFile, workflowFile, StringComparison.Ordinal) &&
                 string.Equals(record.Branch, branch, StringComparison.Ordinal) &&
@@ -144,7 +144,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
         {
             using var fileLock = AcquireLock();
             Replay();
-            return _records.Values.Where(record => record.State != GitHubActionsDispatchState.Correlated)
+            return _records.Values.Where(record => record.State != GitHubActionsDispatchState.Verified)
                 .OrderBy(record => record.Sequence).ToArray();
         }
     }
