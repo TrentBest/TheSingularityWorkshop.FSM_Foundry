@@ -68,6 +68,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
     public async Task ExactRunAttemptAndRequiredJobsAreCorrelatedAndDurablyVerified()
     {
         var journalPath = NewJournalPath();
+        var correlationRequestId = new string('0', 32);
         var handler = new StubHandler((request, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -86,7 +87,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                             html_url = "https://github.com/TrentBest/Sample/actions/runs/123456",
                             status = "completed", conclusion = "success",
                             head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
-                            @event = "workflow_dispatch", display_title = "Foundry CI " + handler.RequestId
+                            @event = "workflow_dispatch", display_title = "Foundry CI " + correlationRequestId
                         },
                         new
                         {
@@ -112,7 +113,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
         var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
-        handler.RequestId = receipt.RequestId;
+        correlationRequestId = receipt.RequestId;
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -156,7 +157,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                         html_url = "https://github.com/TrentBest/Sample/actions/runs/123456",
                         status = "completed", conclusion = "failure",
                         head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
-                        @event = "workflow_dispatch", display_title = "Foundry CI " + handler.RequestId
+                        @event = "workflow_dispatch", display_title = "Foundry CI " + correlationRequestId
                     }}
                 }));
             if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/1/jobs", StringComparison.Ordinal))
