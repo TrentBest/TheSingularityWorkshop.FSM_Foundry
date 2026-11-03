@@ -157,7 +157,7 @@ public sealed class WorkTaskCapabilityRegistryTests
             "TrentBest/TheSingularityWorkshop.Foundry", "work/task-8",
             ".github/workflows/build.yml", Now, 1, BaseSha, 1001, 1,
             new string('f', 64), true, true, false, null,
-            Now.AddMinutes(1), Now.AddMinutes(2));
+            Now.AddMinutes(1), Now.AddMinutes(4));
         var expectation = new WorkTaskRepairEvidenceExpectation("task-8", "correlation-8",
             "TrentBest/TheSingularityWorkshop.Foundry", "work/task-8",
             ".github/workflows/build.yml", CandidateSha, Now, 1001, 1);
@@ -175,11 +175,11 @@ public sealed class WorkTaskCapabilityRegistryTests
             Now.AddMinutes(3), TimeSpan.FromMinutes(5));
 
         Demand(registry, capability, reviewReady, WorkTaskAction.CreateDraftPullRequest,
-            now: Now.AddMinutes(2));
+            now: Now.AddMinutes(4));
         Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
-            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(2)));
+            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(4)));
         Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
-            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(2)));
+            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(4)));
         Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(reviewReady, "work/task-8",
             CandidateSha, new[] { "src/Foundry.Workflow" },
             new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
