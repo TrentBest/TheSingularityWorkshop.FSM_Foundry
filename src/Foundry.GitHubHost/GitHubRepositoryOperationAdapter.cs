@@ -197,7 +197,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         CreateRepositoryCommitOperation operation, CancellationToken cancellationToken)
     {
         var token = await GetTokenAsync(operation.Repository, cancellationToken).ConfigureAwait(false);
-        var staged = _stagingStore.GetStaged(operation.Repository, operation.Branch, operation.CandidateSha);
+        var staged = _stagingStore.FreezeBatch(operation.Repository, operation.Branch, operation.CandidateSha);
         if (staged.Count == 0)
             throw new InvalidOperationException("No staged file changes exist for this exact candidate SHA.");
 
