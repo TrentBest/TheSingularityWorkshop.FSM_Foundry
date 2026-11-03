@@ -47,7 +47,7 @@ public sealed class WorkTaskCapabilityRegistry
         ArgumentNullException.ThrowIfNull(task.Events);
         var request = task.Request.Validate();
         if (task.Lease is not { } lease || lease.ExpiresAt <= now ||
-            task.Status is WorkTaskStatus.Queued or WorkTaskStatus.Blocked or WorkTaskStatus.ReviewReady or
+            task.Status is WorkTaskStatus.Queued or WorkTaskStatus.Blocked or
                 WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)
             throw new UnauthorizedAccessException("A live agent lease on an active task is required to issue capabilities.");
         if (string.IsNullOrWhiteSpace(lease.AgentId) || lease.LeaseId == Guid.Empty)
@@ -68,6 +68,12 @@ public sealed class WorkTaskCapabilityRegistry
         if (allowedActions.Count == 0 || allowedActions.Any(action => !Enum.IsDefined(action)))
             throw new ArgumentException("At least one recognized action is required.", nameof(allowedActions));
         var normalizedActions = allowedActions.Distinct().Order().ToArray();
+        if (task.Status == WorkTaskStatus.ReviewReady &&
+            normalizedActions.Any(action => action != WorkTaskAction.CreateDraftPullRequest))
+            throw new UnauthorizedAccessException("A review-ready task permits only the draft pull-request handoff action.");
+        if (task.Status != WorkTaskStatus.ReviewReady &&
+            normalizedActions.Contains(WorkTaskAction.CreateDraftPullRequest))
+            throw new UnauthorizedAccessException("Draft pull-request handoff requires exact CI evidence to place the task in ReviewReady.");
         if (task.Status == WorkTaskStatus.CodeRed &&
             normalizedActions.Any(action => action != WorkTaskAction.ReadRepository))
             throw new UnauthorizedAccessException("CODE RED permits read-only repository access; mutating capabilities are suspended.");
@@ -96,7 +102,7 @@ public sealed class WorkTaskCapabilityRegistry
                 throw new UnauthorizedAccessException("Capability is not currently valid.");
             if (currentTask.Request is null || currentTask.Lease is not { } currentLease ||
                 currentLease.ExpiresAt <= now ||
-                currentTask.Status is WorkTaskStatus.Queued or WorkTaskStatus.Blocked or WorkTaskStatus.ReviewReady or
+                currentTask.Status is WorkTaskStatus.Queued or WorkTaskStatus.Blocked or
                     WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)
                 throw new UnauthorizedAccessException("The task no longer has an active agent lease.");
             if (currentTask.Events.Any(item => item.Sequence > capability.TaskEventSequence &&
@@ -104,6 +110,10 @@ public sealed class WorkTaskCapabilityRegistry
                 throw new UnauthorizedAccessException("Capability was invalidated by a CODE RED transition; host-approved recovery requires a fresh grant.");
             if (currentTask.Status == WorkTaskStatus.CodeRed && action != WorkTaskAction.ReadRepository)
                 throw new UnauthorizedAccessException("CODE RED permits read-only repository access; mutating operations are suspended.");
+            if (currentTask.Status == WorkTaskStatus.ReviewReady && action != WorkTaskAction.CreateDraftPullRequest)
+                throw new UnauthorizedAccessException("A review-ready task permits only the draft pull-request handoff action.");
+            if (currentTask.Status != WorkTaskStatus.ReviewReady && action == WorkTaskAction.CreateDraftPullRequest)
+                throw new UnauthorizedAccessException("Draft pull-request handoff requires exact CI evidence to place the task in ReviewReady.");
             if (!string.Equals(currentTask.Request.TaskId, capability.TaskId, StringComparison.Ordinal) ||
                 !string.Equals(currentTask.Request.Repository, capability.Repository, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(currentLease.AgentId, capability.AgentId, StringComparison.Ordinal) ||
