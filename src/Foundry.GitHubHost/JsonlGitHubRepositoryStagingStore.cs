@@ -289,6 +289,11 @@ public sealed class JsonlGitHubRepositoryStagingStore : IGitHubRepositoryStaging
         string.Equals(left.Branch, right.Branch, StringComparison.Ordinal) &&
         string.Equals(left.CandidateSha, right.CandidateSha, StringComparison.OrdinalIgnoreCase);
 
+    private static bool SameBatch(GitHubStagedBlob left, JournalRecord right) =>
+        string.Equals(left.Repository, right.Repository, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(left.Branch, right.Branch, StringComparison.Ordinal) &&
+        string.Equals(left.CandidateSha, right.CandidateSha, StringComparison.OrdinalIgnoreCase);
+
     private sealed record JournalRecord(
         int SchemaVersion,
         long Sequence,
