@@ -47,6 +47,17 @@ public abstract record RepositoryOperation
     }
 }
 
+/// <summary>Creates an isolated candidate branch at the exact authorized base commit.</summary>
+public sealed record CreateRepositoryBranchOperation : RepositoryOperation
+{
+    public CreateRepositoryBranchOperation(string taskId, string repository, string branch,
+        string baseSha) : base(taskId, repository, branch, baseSha)
+    {
+    }
+
+    public override WorkTaskAction Action => WorkTaskAction.CreateBranch;
+}
+
 /// <summary>A bounded repository file read.</summary>
 public sealed record ReadRepositoryFileOperation : RepositoryOperation
 {
@@ -170,9 +181,9 @@ public sealed class AuthorizedRepositoryOperationDispatcher
             !result.ResultingCandidateSha.All(Uri.IsHexDigit))
             throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
-        if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation) &&
+        if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation or CreateRepositoryBranchOperation) &&
             !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Read and CI operations must retain the exact authorized candidate SHA.");
+            throw new InvalidOperationException("Read, CI, and branch-creation operations must retain the exact authorized candidate SHA.");
 
         return result;
     }
