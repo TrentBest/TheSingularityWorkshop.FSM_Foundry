@@ -40,7 +40,7 @@ The proposed adapter therefore uses Git's object model directly:
 6. It re-reads the branch ref and commit metadata, verifies the new commit is the branch tip and has the authorized candidate as its parent, and returns the new candidate SHA.
 7. The host durably records the commit operation result and closes the staging batch.
 
-This gives the two operations distinct semantics: write stages content; commit advances the candidate. The dispatcher should eventually enforce that write results retain the input candidate SHA and only commit operations may advance it. That tightening is a source change and is not part of this design-only change.
+This gives the two operations distinct semantics: write stages content; commit advances the candidate. The dispatcher contract now enforces this invariant in the separate open PR #26 source change: write results must retain the input candidate SHA, and only explicit commit operations may advance it. The concrete GitHub adapter must implement the corresponding staging and commit behavior.
 
 ## 4. Operation mapping
 
