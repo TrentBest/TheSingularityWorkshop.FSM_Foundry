@@ -29,6 +29,23 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task MutationMayAdvanceCandidateWhilePreservingAuthorizedInputProvenance()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var nextCandidateSha = new string('d', 40);
+        fixture.Adapter.ResultingCandidateSha = nextCandidateSha;
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/Example.cs", "namespace Example;");
+
+        var result = await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation,
+            Now.AddMinutes(1));
+
+        Assert.Equal(CandidateSha, result.RequestedCandidateSha);
+        Assert.Equal(nextCandidateSha, result.ResultingCandidateSha);
+    }
+
+    [Fact]
     public async Task UnauthorizedActionAndOutOfScopePathNeverReachAdapter()
     {
         using var fixture = new Fixture();
