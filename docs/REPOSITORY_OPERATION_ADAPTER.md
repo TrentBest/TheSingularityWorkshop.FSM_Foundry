@@ -71,7 +71,7 @@ The adapter must not implement arbitrary shell execution, merge, release, deploy
 
 Before dispatch, the component rechecks that the candidate branch tip equals the exact authorized 40-character SHA. It sends only the branch ref and two fixed inputs: a host-generated 32-character request ID and the candidate SHA. The proof workflow exposes those inputs only for `workflow_dispatch`, gives the run a deterministic display title (`Foundry CI <request-id>`), checks out the requested ref, and verifies that the checked-out commit equals the supplied candidate SHA before running the proof.
 
-GitHub's dispatch endpoint returns an acknowledgment rather than a run ID. Before sending the request, the dispatcher appends and flushes a `Dispatching` intent containing the host-generated request ID and immutable workflow/repository/branch/SHA identity. It appends `Acknowledged` after a successful response. If the process loses the response or crashes after GitHub accepts the request, the unresolved intent remains available for reconciliation; a second dispatch for the same workflow, branch, and candidate SHA is refused until the first is resolved. A host can rehydrate the receipt from the journal and query GitHub without resending. The journal is append-only JSONL with replay validation and a local exclusive lock; like the other JSONL stores, it is a single-host implementation rather than distributed storage.
+GitHub's dispatch endpoint returns an acknowledgment rather than a run ID. Before sending the request, the dispatcher appends and flushes a `Dispatching` intent containing the host-generated request ID and immutable task/workflow/repository/branch/SHA identity. It appends `Acknowledged` after a successful response. If the process loses the response or crashes after GitHub accepts the request, the unresolved intent remains available for reconciliation; a second dispatch for the same workflow, branch, and candidate SHA is refused until the first is resolved. A host can rehydrate the receipt from the journal and query GitHub without resending. The journal is append-only JSONL with replay validation and a local exclusive lock; like the other JSONL stores, it is a single-host implementation rather than distributed storage.
 
 A run is accepted as correlated only when all of these match the receipt: exact workflow path, `workflow_dispatch` event, branch, candidate SHA, and display title containing the unique request ID. The run listing must be complete within the bounded 100-result limit; multiple matches are rejected as ambiguous. A correlated result includes the exact GitHub run ID and `run_attempt`, which is persisted in the journal.
 
@@ -93,11 +93,9 @@ The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full pro
 Not implemented by this boundary:
 
 - A production GitHub App credential provider and installation-permission verification.
-- A concrete host/GitHub implementation for branch creation, base-SHA selection, or branch lifecycle management.
-- Conversion of a verified exact run attempt into durable task evidence and the `ReviewReady` draft-PR handoff.
-- Exact-attempt required-job verification and conversion into durable task evidence.
+- Conversion of a verified exact run attempt into `WorkTaskRepairAttempt` / durable task evidence and the `ReviewReady` draft-PR handoff.
 - A production/distributed audit backend; the current JSONL implementation is local-filesystem storage and not a distributed ledger.
-- Git ancestry verification inside Foundry (the host adapter owns that verification).
+- Foundry does not independently prove Git ancestry; the host adapter is responsible for the single-parent and exact-base verification.
 - End-to-end connection to the ReviewReady draft-PR handoff in PR #25.
 - A complete autonomous issue-to-draft-PR loop.
 
