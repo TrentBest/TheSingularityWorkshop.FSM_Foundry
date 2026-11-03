@@ -235,7 +235,7 @@ public sealed class GitHubActionsWorkflowDispatcher
         if (matches.Count > 1)
             throw new InvalidDataException("Multiple GitHub Actions runs claim the same Foundry dispatch request ID.");
         var correlated = matches[0];
-        if (durable.State == GitHubActionsDispatchState.Correlated)
+        if (durable.State is GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified)
         {
             if (durable.RunId != correlated.RunId || durable.RunAttempt != correlated.RunAttempt)
                 throw new InvalidDataException("GitHub run correlation conflicts with the durable correlated attempt.");
@@ -314,8 +314,18 @@ public sealed class GitHubActionsWorkflowDispatcher
             results.Add(new GitHubActionsRequiredJobResult(requiredName,
                 found.Length == 0 ? "missing" : job.Status, found.Length == 0 ? null : job.Conclusion, succeeded));
         }
+        var allSucceeded = results.All(result => result.Succeeded);
+        if (allSucceeded)
+        {
+            var durable = _journal.Get(receipt.RequestId);
+            if (durable.State == GitHubActionsDispatchState.Correlated)
+                _journal.Verify(receipt.RequestId, correlation.RunId, correlation.RunAttempt);
+            else if (durable.State != GitHubActionsDispatchState.Verified ||
+                durable.RunId != correlation.RunId || durable.RunAttempt != correlation.RunAttempt)
+                throw new InvalidOperationException("Durable dispatch state does not match the verified workflow attempt.");
+        }
         return new GitHubActionsAttemptEvidence(correlation.RunId, correlation.RunAttempt,
-            receipt.CandidateSha, results, results.All(result => result.Succeeded));
+            receipt.CandidateSha, results, allSucceeded);
     }
 
     private async ValueTask DemandExactCandidateTipAsync(
