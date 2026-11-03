@@ -158,6 +158,14 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                         }
                     }
                 }));
+            if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/2", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    id = 123456L, run_attempt = 2, path = WorkflowPath,
+                    @event = "workflow_dispatch", head_branch = Branch, head_sha = CandidateSha,
+                    display_title = "Foundry CI " + correlationRequestId,
+                    status = "completed", conclusion = "success"
+                }));
             if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/2/jobs", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
@@ -220,6 +228,14 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                         head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
                         @event = "workflow_dispatch", display_title = "Foundry CI " + correlationRequestId
                     }}
+                }));
+            if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/1", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    id = 123456L, run_attempt = 1, path = WorkflowPath,
+                    @event = "workflow_dispatch", head_branch = Branch, head_sha = CandidateSha,
+                    display_title = "Foundry CI " + correlationRequestId,
+                    status = "completed", conclusion = "failure"
                 }));
             if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/1/jobs", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, """
