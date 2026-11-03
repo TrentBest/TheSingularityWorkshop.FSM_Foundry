@@ -1,0 +1,282 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+
+namespace TheSingularityWorkshop.Foundry.GitHubHost;
+
+/// <summary>A host-owned workflow entry in the GitHub Actions allowlist.</summary>
+public sealed record GitHubActionsWorkflowDefinition
+{
+    public GitHubActionsWorkflowDefinition(string key, string workflowFile, string expectedPath)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 128 || key.Any(char.IsControl))
+            throw new ArgumentException("Workflow key must be bounded and control-free.", nameof(key));
+        if (string.IsNullOrWhiteSpace(workflowFile) || workflowFile.Length > 128 ||
+            workflowFile.Contains('/') || workflowFile.Contains('\\') || workflowFile.Contains("..", StringComparison.Ordinal))
+            throw new ArgumentException("Workflow identifier must be a workflow file name or numeric ID.", nameof(workflowFile));
+        if (string.IsNullOrWhiteSpace(expectedPath) || expectedPath.Length > 256 ||
+            expectedPath.StartsWith('/') || expectedPath.Contains('\\') ||
+            expectedPath.Split('/').Any(part => part is "" or "." or "..") ||
+            !expectedPath.StartsWith(".github/workflows/", StringComparison.Ordinal))
+            throw new ArgumentException("Expected workflow path must be a normalized workflow path.", nameof(expectedPath));
+        Key = key;
+        WorkflowFile = workflowFile;
+        ExpectedPath = expectedPath;
+    }
+
+    public string Key { get; }
+    public string WorkflowFile { get; }
+    public string ExpectedPath { get; }
+}
+
+/// <summary>Immutable host-owned mapping from workflow keys to exact GitHub workflow definitions.</summary>
+public sealed class GitHubActionsWorkflowAllowlist
+{
+    private readonly IReadOnlyDictionary<string, GitHubActionsWorkflowDefinition> _definitions;
+
+    public GitHubActionsWorkflowAllowlist(IEnumerable<GitHubActionsWorkflowDefinition> definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        var map = new Dictionary<string, GitHubActionsWorkflowDefinition>(StringComparer.Ordinal);
+        foreach (var definition in definitions)
+        {
+            ArgumentNullException.ThrowIfNull(definition);
+            if (!map.TryAdd(definition.Key, definition))
+                throw new ArgumentException("Workflow keys must be unique.", nameof(definitions));
+        }
+        if (map.Count == 0)
+            throw new ArgumentException("At least one workflow must be allowlisted.", nameof(definitions));
+        _definitions = map;
+    }
+
+    public GitHubActionsWorkflowDefinition Demand(string key) =>
+        _definitions.TryGetValue(key, out var definition)
+            ? definition
+            : throw new UnauthorizedAccessException("The workflow key is not in the host allowlist.");
+}
+
+/// <summary>Durable correlation data returned after GitHub accepts a workflow dispatch.</summary>
+public sealed record GitHubActionsDispatchReceipt(
+    string RequestId,
+    string Repository,
+    string WorkflowFile,
+    string WorkflowPath,
+    string Branch,
+    string CandidateSha,
+    DateTimeOffset DispatchedAt);
+
+/// <summary>An exact workflow run and attempt correlated to one host dispatch receipt.</summary>
+public sealed record GitHubActionsRunCorrelation(
+    long RunId,
+    int RunAttempt,
+    string HtmlUrl,
+    string Status,
+    string? Conclusion,
+    string HeadBranch,
+    string HeadSha,
+    string WorkflowPath,
+    string DisplayTitle);
+
+/// <summary>
+/// Dispatches only host-allowlisted workflows and correlates the resulting run by an unguessable
+/// request ID plus exact workflow path, event, branch, and candidate SHA. Dispatch acceptance
+/// is not CI success; callers must inspect the exact run attempt and required jobs separately.
+/// </summary>
+public sealed class GitHubActionsWorkflowDispatcher
+{
+    private const string ApiVersion = "2022-11-28";
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly HttpClient _http;
+    private readonly IGitHubAccessTokenProvider _tokens;
+    private readonly GitHubRepositoryOperationPolicy _repositoryPolicy;
+    private readonly GitHubActionsWorkflowAllowlist _workflows;
+    private readonly Func<DateTimeOffset> _clock;
+
+    public GitHubActionsWorkflowDispatcher(
+        HttpClient http,
+        IGitHubAccessTokenProvider tokens,
+        GitHubRepositoryOperationPolicy repositoryPolicy,
+        GitHubActionsWorkflowAllowlist workflows,
+        Func<DateTimeOffset>? clock = null)
+    {
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        _repositoryPolicy = repositoryPolicy ?? throw new ArgumentNullException(nameof(repositoryPolicy));
+        _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        if (_http.BaseAddress is null ||
+            !string.Equals(_http.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(_http.BaseAddress.Host, "api.github.com", StringComparison.OrdinalIgnoreCase) ||
+            _http.BaseAddress.Port != 443)
+            throw new ArgumentException("The GitHub API client must use the fixed https://api.github.com origin.", nameof(http));
+    }
+
+    public async ValueTask<GitHubActionsDispatchReceipt> DispatchAsync(
+        string repository, string workflowKey, string branch, string candidateSha,
+        CancellationToken cancellationToken = default)
+    {
+        _repositoryPolicy.DemandRepository(repository);
+        GitHubRepositoryOperationPolicy.DemandCandidateBranch(branch);
+        _ = TheSingularityWorkshop.Foundry.RepositoryOperation.RequireTextForHost(workflowKey);
+        if (candidateSha is not { Length: 40 } || !candidateSha.All(Uri.IsHexDigit))
+            throw new ArgumentException("A full candidate SHA is required.", nameof(candidateSha));
+
+        var workflow = _workflows.Demand(workflowKey);
+        var token = await GetTokenAsync(repository, cancellationToken).ConfigureAwait(false);
+        await DemandExactCandidateTipAsync(repository, branch, candidateSha, token, cancellationToken).ConfigureAwait(false);
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var payload = JsonSerializer.Serialize(new
+        {
+            @ref = branch,
+            inputs = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["foundry_request_id"] = requestId,
+                ["candidate_sha"] = candidateSha
+            }
+        }, JsonOptions);
+        using var response = await SendAsync(HttpMethod.Post,
+            $"repos/{repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/dispatches",
+            token, payload, cancellationToken).ConfigureAwait(false);
+
+        return new GitHubActionsDispatchReceipt(
+            requestId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
+            branch, candidateSha, _clock());
+    }
+
+    /// <summary>
+    /// Returns null until GitHub exposes the matching run. A result is accepted only when
+    /// every correlation field matches; ambiguous duplicate matches are rejected.
+    /// </summary>
+    public async ValueTask<GitHubActionsRunCorrelation?> FindCorrelatedRunAsync(
+        GitHubActionsDispatchReceipt receipt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        _repositoryPolicy.DemandRepository(receipt.Repository);
+        GitHubRepositoryOperationPolicy.DemandCandidateBranch(receipt.Branch);
+        if (receipt.RequestId is not { Length: 32 } || !receipt.RequestId.All(Uri.IsAsciiHexDigit) ||
+            receipt.CandidateSha is not { Length: 40 } || !receipt.CandidateSha.All(Uri.IsHexDigit))
+            throw new ArgumentException("Dispatch receipt identity is invalid.", nameof(receipt));
+
+        var workflow = _workflows.DemandByFileAndPath(receipt.WorkflowFile, receipt.WorkflowPath);
+        var token = await GetTokenAsync(receipt.Repository, cancellationToken).ConfigureAwait(false);
+        var query = $"repos/{receipt.Repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/runs?event=workflow_dispatch&branch={Uri.EscapeDataString(receipt.Branch)}&head_sha={receipt.CandidateSha}&per_page=100";
+        using var response = await SendAsync(HttpMethod.Get, query, token, null, cancellationToken).ConfigureAwait(false);
+        using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
+        if (!document.RootElement.TryGetProperty("workflow_runs", out var runs) ||
+            runs.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("GitHub workflow-runs response is malformed.");
+
+        var matches = new List<GitHubActionsRunCorrelation>();
+        foreach (var run in runs.EnumerateArray())
+        {
+            var path = GetString(run, "path");
+            var eventName = GetString(run, "event");
+            var branch = GetString(run, "head_branch");
+            var sha = GetString(run, "head_sha");
+            var title = GetString(run, "display_title");
+            if (!string.Equals(path, receipt.WorkflowPath, StringComparison.Ordinal) ||
+                !string.Equals(eventName, "workflow_dispatch", StringComparison.Ordinal) ||
+                !string.Equals(branch, receipt.Branch, StringComparison.Ordinal) ||
+                !string.Equals(sha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(title, "Foundry CI " + receipt.RequestId, StringComparison.Ordinal))
+                continue;
+
+            if (!run.TryGetProperty("id", out var id) || !id.TryGetInt64(out var runId) || runId <= 0 ||
+                !run.TryGetProperty("run_attempt", out var attempt) || !attempt.TryGetInt32(out var runAttempt) || runAttempt <= 0)
+                throw new InvalidDataException("GitHub returned a correlated run without a valid run ID or attempt.");
+            var htmlUrl = GetString(run, "html_url");
+            var status = GetString(run, "status");
+            var conclusion = GetNullableString(run, "conclusion");
+            if (!Uri.TryCreate(htmlUrl, UriKind.Absolute, out var parsedUrl) ||
+                parsedUrl.Scheme != Uri.UriSchemeHttps || parsedUrl.Host != "github.com" ||
+                string.IsNullOrWhiteSpace(status))
+                throw new InvalidDataException("GitHub returned invalid workflow run metadata.");
+
+            matches.Add(new GitHubActionsRunCorrelation(
+                runId, runAttempt, htmlUrl, status, conclusion, branch, sha, path, title));
+        }
+
+        return matches.Count switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidDataException("Multiple GitHub Actions runs claim the same Foundry dispatch request ID.")
+        };
+    }
+
+    private async ValueTask DemandExactCandidateTipAsync(
+        string repository, string branch, string candidateSha, string token, CancellationToken cancellationToken)
+    {
+        var relative = $"repos/{repository}/git/ref/{Uri.EscapeDataString("heads/" + branch)}";
+        using var response = await SendAsync(HttpMethod.Get, relative, token, null, cancellationToken).ConfigureAwait(false);
+        using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
+        var root = document.RootElement;
+        if (GetString(root, "ref") != "refs/heads/" + branch ||
+            !root.TryGetProperty("object", out var obj) ||
+            !string.Equals(GetString(obj, "type"), "commit", StringComparison.Ordinal) ||
+            !string.Equals(GetString(obj, "sha"), candidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Candidate branch is not at the exact authorized SHA; CI dispatch was refused.");
+    }
+
+    private async ValueTask<string> GetTokenAsync(string repository, CancellationToken cancellationToken)
+    {
+        var token = await _tokens.GetTokenAsync(repository, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 4096 || token.Any(char.IsControl))
+            throw new UnauthorizedAccessException("The host token provider did not return a valid access token.");
+        return token;
+    }
+
+    private async ValueTask<HttpResponseMessage> SendAsync(
+        HttpMethod method, string path, string token, string? json, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.UserAgent.ParseAdd("TheSingularityWorkshop-Foundry/1.0");
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        if (json is not null)
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var status = (int)response.StatusCode;
+            response.Dispose();
+            throw new HttpRequestException($"GitHub Actions operation failed with HTTP {status}.");
+        }
+        return response;
+    }
+
+    private static async ValueTask<JsonDocument> ReadJsonAsync(
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        const int maximumBytes = 512 * 1024;
+        if (response.Content.Headers.ContentLength is > maximumBytes)
+            throw new InvalidDataException("GitHub Actions response exceeds the host response limit.");
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var buffer = new MemoryStream();
+        var bytes = new byte[8192];
+        while (true)
+        {
+            var count = await stream.ReadAsync(bytes, cancellationToken).ConfigureAwait(false);
+            if (count == 0) break;
+            if (buffer.Length + count > maximumBytes)
+                throw new InvalidDataException("GitHub Actions response exceeds the host response limit.");
+            await buffer.WriteAsync(bytes.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+        }
+        buffer.Position = 0;
+        return await JsonDocument.ParseAsync(buffer, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string GetString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
+
+    private static string? GetNullableString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+}
