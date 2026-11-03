@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TheSingularityWorkshop.Foundry;
 using Xunit;
 
@@ -115,6 +116,65 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
         Assert.Equal(1, fixture.Adapter.Calls);
+    }
+
+
+    [Fact]
+    public async Task ExistingWorkflowRunnerDispatchesOnlyHostResolvedRepositoryCapabilities()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var handlers = new WorkflowHandlerRegistry();
+        RepositoryOperationWorkflowHandler.Register(handlers, fixture.Dispatcher,
+            taskId => taskId == "task-8" ? capability.CapabilityId : Guid.Empty,
+            () => Now.AddMinutes(1));
+        var runner = new WorkflowRunner(handlers);
+        var context = Context(new RepositoryOperationWorkflowRequest(
+            "write-file", "task-8", Repository, "work/task-8", CandidateSha,
+            "src/Foundry.Workflow/WorkflowExample.cs", "namespace WorkflowExample;"));
+
+        var result = await runner.RunWithContextAsync(Definition(), context);
+
+        Assert.Equal(WorkflowStatus.Succeeded, result.Status);
+        Assert.Equal(1, fixture.Adapter.Calls);
+        Assert.True(context.TryGetOutput<RepositoryOperationResult>(
+            RepositoryOperationWorkflowHandler.OutputKey, out var operationResult));
+        Assert.Equal(CandidateSha, operationResult!.CandidateSha);
+    }
+
+    [Fact]
+    public async Task WorkflowDataCannotSelectArbitraryToolsOrSupplyItsOwnCapability()
+    {
+        using var fixture = new Fixture();
+        var handlers = new WorkflowHandlerRegistry();
+        var capabilityResolverCalls = 0;
+        RepositoryOperationWorkflowHandler.Register(handlers, fixture.Dispatcher,
+            _ => { capabilityResolverCalls++; return Guid.NewGuid(); },
+            () => Now.AddMinutes(1));
+        var runner = new WorkflowRunner(handlers);
+        var context = Context(new RepositoryOperationWorkflowRequest(
+            "run-shell", "task-8", Repository, "work/task-8", CandidateSha,
+            Message: "echo unsafe"));
+
+        var result = await runner.RunWithContextAsync(Definition(), context);
+
+        Assert.Equal(WorkflowStatus.Failed, result.Status);
+        Assert.Equal(0, capabilityResolverCalls);
+        Assert.Equal(0, fixture.Adapter.Calls);
+    }
+
+    private static WorkflowDefinition Definition() =>
+        new("repository-operation-proof", "Repository operation proof",
+            WorkflowDefinition.SupportedSchemaVersion,
+            new[] { new WorkflowStep("dispatch-repository-operation", RepositoryOperationWorkflowHandler.HandlerKey) });
+
+    private static WorkflowExecutionContext Context(RepositoryOperationWorkflowRequest request)
+    {
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(request));
+        return new WorkflowExecutionContext(new Dictionary<string, JsonElement>
+        {
+            [RepositoryOperationWorkflowHandler.InputKey] = document.RootElement
+        });
     }
 
     private sealed class Fixture : IDisposable
