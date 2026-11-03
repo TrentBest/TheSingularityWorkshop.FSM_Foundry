@@ -88,6 +88,13 @@ public sealed record GitHubActionsRunCorrelation(
     string WorkflowPath,
     string DisplayTitle);
 
+public sealed record GitHubActionsRequiredJobResult(
+    string Name, string Status, string? Conclusion, bool Succeeded);
+
+public sealed record GitHubActionsAttemptEvidence(
+    long RunId, int RunAttempt, string CandidateSha,
+    IReadOnlyList<GitHubActionsRequiredJobResult> RequiredJobs, bool AllRequiredJobsSucceeded);
+
 /// <summary>
 /// Dispatches only host-allowlisted workflows and correlates the resulting run by an unguessable
 /// request ID plus exact workflow path, event, branch, and candidate SHA. Dispatch acceptance
@@ -101,6 +108,7 @@ public sealed class GitHubActionsWorkflowDispatcher
     private readonly IGitHubAccessTokenProvider _tokens;
     private readonly GitHubRepositoryOperationPolicy _repositoryPolicy;
     private readonly GitHubActionsWorkflowAllowlist _workflows;
+    private readonly IGitHubActionsDispatchJournal _journal;
     private readonly Func<DateTimeOffset> _clock;
 
     public GitHubActionsWorkflowDispatcher(
@@ -108,12 +116,14 @@ public sealed class GitHubActionsWorkflowDispatcher
         IGitHubAccessTokenProvider tokens,
         GitHubRepositoryOperationPolicy repositoryPolicy,
         GitHubActionsWorkflowAllowlist workflows,
+        IGitHubActionsDispatchJournal journal,
         Func<DateTimeOffset>? clock = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _repositoryPolicy = repositoryPolicy ?? throw new ArgumentNullException(nameof(repositoryPolicy));
         _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         if (_http.BaseAddress is null ||
             !string.Equals(_http.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
@@ -138,6 +148,9 @@ public sealed class GitHubActionsWorkflowDispatcher
         await DemandExactCandidateTipAsync(repository, branch, candidateSha, token, cancellationToken).ConfigureAwait(false);
 
         var requestId = Guid.NewGuid().ToString("N");
+        var dispatchTime = _clock();
+        _journal.Begin(requestId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
+            branch, candidateSha, dispatchTime);
         var payload = JsonSerializer.Serialize(new
         {
             @ref = branch,
@@ -150,10 +163,12 @@ public sealed class GitHubActionsWorkflowDispatcher
         using var response = await SendAsync(HttpMethod.Post,
             $"repos/{repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/dispatches",
             token, payload, cancellationToken).ConfigureAwait(false);
+        var acknowledgedAt = _clock();
+        _journal.Acknowledge(requestId, acknowledgedAt);
 
         return new GitHubActionsDispatchReceipt(
             requestId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
-            branch, candidateSha, _clock());
+            branch, candidateSha, acknowledgedAt);
     }
 
     /// <summary>
@@ -171,6 +186,13 @@ public sealed class GitHubActionsWorkflowDispatcher
             throw new ArgumentException("Dispatch receipt identity is invalid.", nameof(receipt));
 
         var workflow = _workflows.DemandByFileAndPath(receipt.WorkflowFile, receipt.WorkflowPath);
+        var durable = _journal.Get(receipt.RequestId);
+        if (!string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(durable.WorkflowFile, receipt.WorkflowFile, StringComparison.Ordinal) ||
+            !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
+            !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
+            !string.Equals(durable.CandidateSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Dispatch receipt does not match the durable dispatch intent.");
         var token = await GetTokenAsync(receipt.Repository, cancellationToken).ConfigureAwait(false);
         var query = $"repos/{receipt.Repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/runs?event=workflow_dispatch&branch={Uri.EscapeDataString(receipt.Branch)}&head_sha={receipt.CandidateSha}&per_page=100";
         using var response = await SendAsync(HttpMethod.Get, query, token, null, cancellationToken).ConfigureAwait(false);
@@ -209,12 +231,91 @@ public sealed class GitHubActionsWorkflowDispatcher
                 runId, runAttempt, htmlUrl, status, conclusion, branch, sha, path, title));
         }
 
-        return matches.Count switch
+        if (matches.Count == 0) return null;
+        if (matches.Count > 1)
+            throw new InvalidDataException("Multiple GitHub Actions runs claim the same Foundry dispatch request ID.");
+        var correlated = matches[0];
+        if (durable.State == GitHubActionsDispatchState.Correlated)
         {
-            0 => null,
-            1 => matches[0],
-            _ => throw new InvalidDataException("Multiple GitHub Actions runs claim the same Foundry dispatch request ID.")
-        };
+            if (durable.RunId != correlated.RunId || durable.RunAttempt != correlated.RunAttempt)
+                throw new InvalidDataException("GitHub run correlation conflicts with the durable correlated attempt.");
+        }
+        else
+        {
+            _journal.Correlate(receipt.RequestId, correlated.RunId, correlated.RunAttempt);
+        }
+        return correlated;
+    }
+
+    /// <summary>Rehydrates a receipt after process restart without issuing another dispatch.</summary>
+    public GitHubActionsDispatchReceipt GetDispatchReceipt(string requestId)
+    {
+        var record = _journal.Get(requestId);
+        return new GitHubActionsDispatchReceipt(record.RequestId, record.Repository,
+            record.WorkflowFile, record.WorkflowPath, record.Branch, record.CandidateSha,
+            record.AcknowledgedAt ?? record.CreatedAt);
+    }
+
+    /// <summary>
+    /// Reads the exact run attempt's jobs endpoint and verifies every configured required job.
+    /// More than 100 jobs is rejected rather than silently accepting a truncated result.
+    /// </summary>
+    public async ValueTask<GitHubActionsAttemptEvidence> VerifyRequiredJobsAsync(
+        GitHubActionsDispatchReceipt receipt, GitHubActionsRunCorrelation correlation,
+        IReadOnlyCollection<string> requiredJobNames, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        ArgumentNullException.ThrowIfNull(correlation);
+        ArgumentNullException.ThrowIfNull(requiredJobNames);
+        if (correlation.RunId <= 0 || correlation.RunAttempt <= 0 ||
+            !string.Equals(correlation.HeadSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(correlation.HeadBranch, receipt.Branch, StringComparison.Ordinal) ||
+            !string.Equals(correlation.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Run correlation does not match the dispatch receipt.");
+        var required = requiredJobNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToArray();
+        if (required.Length == 0 || required.Length != requiredJobNames.Count ||
+            required.Distinct(StringComparer.Ordinal).Count() != required.Length ||
+            required.Any(name => name.Length > 256 || name.Any(char.IsControl)))
+            throw new ArgumentException("At least one unique, bounded required job name is required.", nameof(requiredJobNames));
+
+        var token = await GetTokenAsync(receipt.Repository, cancellationToken).ConfigureAwait(false);
+        var path = $"repos/{receipt.Repository}/actions/runs/{correlation.RunId}/attempts/{correlation.RunAttempt}/jobs?per_page=100";
+        using var response = await SendAsync(HttpMethod.Get, path, token, null, cancellationToken).ConfigureAwait(false);
+        using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
+        var root = document.RootElement;
+        if (!root.TryGetProperty("total_count", out var totalCount) || !totalCount.TryGetInt32(out var total) ||
+            total < 0 || total > 100 ||
+            !root.TryGetProperty("jobs", out var jobs) || jobs.ValueKind != JsonValueKind.Array ||
+            jobs.GetArrayLength() != total)
+            throw new InvalidDataException("GitHub job response is incomplete or exceeds the verification limit.");
+
+        var parsed = new List<(string Name, string Status, string? Conclusion)>();
+        foreach (var job in jobs.EnumerateArray())
+        {
+            if (job.TryGetProperty("run_id", out var runId) && runId.TryGetInt64(out var actualRunId) &&
+                actualRunId != correlation.RunId)
+                throw new InvalidDataException("A job belongs to a different workflow run.");
+            if (job.TryGetProperty("run_attempt", out var runAttempt) && runAttempt.TryGetInt32(out var actualAttempt) &&
+                actualAttempt != correlation.RunAttempt)
+                throw new InvalidDataException("A job belongs to a different workflow run attempt.");
+            parsed.Add((GetString(job, "name"), GetString(job, "status"), GetNullableString(job, "conclusion")));
+        }
+
+        var results = new List<GitHubActionsRequiredJobResult>();
+        foreach (var requiredName in required)
+        {
+            var found = parsed.Where(job => string.Equals(job.Name, requiredName, StringComparison.Ordinal)).ToArray();
+            if (found.Length > 1)
+                throw new InvalidDataException("A required job name appears more than once in the exact run attempt.");
+            var job = found.SingleOrDefault();
+            var succeeded = found.Length == 1 &&
+                string.Equals(job.Status, "completed", StringComparison.Ordinal) &&
+                string.Equals(job.Conclusion, "success", StringComparison.Ordinal);
+            results.Add(new GitHubActionsRequiredJobResult(requiredName,
+                found.Length == 0 ? "missing" : job.Status, found.Length == 0 ? null : job.Conclusion, succeeded));
+        }
+        return new GitHubActionsAttemptEvidence(correlation.RunId, correlation.RunAttempt,
+            receipt.CandidateSha, results, results.All(result => result.Succeeded));
     }
 
     private async ValueTask DemandExactCandidateTipAsync(
