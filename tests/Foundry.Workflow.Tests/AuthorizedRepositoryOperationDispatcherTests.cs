@@ -96,7 +96,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     public async Task BranchCreationCannotMoveTheAuthorizedBaseCommit()
     {
         using var fixture = new Fixture();
-        var capability = fixture.Grant(WorkTaskAction.CreateBranch);
+        var capability = fixture.GrantAt(BaseSha, WorkTaskAction.CreateBranch);
         fixture.Adapter.ResultingCandidateSha = new string('c', 40);
         var operation = new CreateRepositoryBranchOperation("task-8", Repository,
             "work/task-8", BaseSha);
