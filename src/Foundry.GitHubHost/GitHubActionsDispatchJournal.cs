@@ -158,7 +158,10 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             Replay();
             if (!_records.TryGetValue(requestId, out var current))
                 throw new KeyNotFoundException("Dispatch request ID was not found in the durable journal.");
-            var updated = update(current) with { Sequence = _sequence + 1 };
+            var proposed = update(current);
+            if (ReferenceEquals(proposed, current))
+                return current;
+            var updated = proposed with { Sequence = _sequence + 1 };
             Append(updated);
             _records[requestId] = updated;
             _sequence = updated.Sequence;
