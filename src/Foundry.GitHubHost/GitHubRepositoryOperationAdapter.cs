@@ -42,7 +42,7 @@ public sealed class GitHubRepositoryOperationPolicy
         if (string.IsNullOrWhiteSpace(branch) || branch.Length > 200 ||
             !BranchPattern.IsMatch(branch) || branch.Contains("//", StringComparison.Ordinal) ||
             branch.Split('/').Any(part => part is "." or "..") ||
-            branch.EndsWith('.', StringComparison.Ordinal) || branch.EndsWith('/', StringComparison.Ordinal))
+            branch.EndsWith(".", StringComparison.Ordinal) || branch.EndsWith("/", StringComparison.Ordinal))
             throw new UnauthorizedAccessException("The branch is outside the host candidate-branch namespace.");
     }
 
