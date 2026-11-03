@@ -129,7 +129,7 @@ public interface IRepositoryOperationAdapter
 
 /// <summary>
 /// Non-secret adapter result. RequestedCandidateSha identifies the authorized input commit;
-/// ResultingCandidateSha identifies the commit after the operation (which may differ for writes).
+/// ResultingCandidateSha identifies the commit after the operation (which may differ only for an explicit commit operation).
 /// </summary>
 public sealed record RepositoryOperationResult(
     string OperationReference,
@@ -203,9 +203,9 @@ public sealed class AuthorizedRepositoryOperationDispatcher
                 !result.ResultingCandidateSha.All(Uri.IsHexDigit))
                 throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
-            if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation or CreateRepositoryBranchOperation) &&
+            if (operation is not CreateRepositoryCommitOperation &&
                 !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Read, CI, and branch-creation operations must retain the exact authorized candidate SHA.");
+                throw new InvalidOperationException("Only an explicit commit operation may advance the authorized candidate SHA.");
         }
         catch (Exception exception)
         {
