@@ -45,6 +45,7 @@ public interface IRepositoryOperationAuditJournal
     RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt);
     RepositoryOperationAuditEntry Complete(string operationId, RepositoryOperationResult result, DateTimeOffset completedAt);
     RepositoryOperationAuditEntry Fail(string operationId, Exception exception, DateTimeOffset failedAt);
+    IReadOnlyList<RepositoryOperationAuditEntry> GetAll();
 }
 
 /// <summary>
