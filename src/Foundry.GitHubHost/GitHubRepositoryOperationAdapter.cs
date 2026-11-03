@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using TheSingularityWorkshop.Foundry;
 
@@ -114,8 +115,10 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
                 await ReadFileAsync(read, cancellationToken).ConfigureAwait(false),
             WriteRepositoryFileOperation write =>
                 await WriteFileAsync(write, cancellationToken).ConfigureAwait(false),
+            CreateRepositoryCommitOperation commit =>
+                await CreateCommitAsync(commit, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException(
-                "This adapter increment supports branch creation, immutable text reads, and durable staged writes only.")
+                "This adapter increment supports branch creation, immutable text reads, staged writes, and explicit commits only.")
         };
     }
 
@@ -124,7 +127,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     {
         var token = await GetTokenAsync(operation.Repository, cancellationToken).ConfigureAwait(false);
         var branchRef = "refs/heads/" + operation.Branch;
-        var encodedRef = Uri.EscapeDataString(branchRef);
+        var encodedRef = Uri.EscapeDataString("heads/" + operation.Branch);
 
         using (var existing = await SendAsync(HttpMethod.Get,
             $"repos/{operation.Repository}/git/ref/{encodedRef}", token, null, cancellationToken,
@@ -190,6 +193,139 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
             operation.CandidateSha, operation.CandidateSha, text);
     }
 
+    private async ValueTask<RepositoryOperationResult> CreateCommitAsync(
+        CreateRepositoryCommitOperation operation, CancellationToken cancellationToken)
+    {
+        var token = await GetTokenAsync(operation.Repository, cancellationToken).ConfigureAwait(false);
+        var staged = _stagingStore.GetStaged(operation.Repository, operation.Branch, operation.CandidateSha);
+        if (staged.Count == 0)
+            throw new InvalidOperationException("No staged file changes exist for this exact candidate SHA.");
+
+        using var baseResponse = await SendAsync(HttpMethod.Get,
+            $"repos/{operation.Repository}/git/commits/{operation.CandidateSha}",
+            token, null, cancellationToken).ConfigureAwait(false);
+        var baseCommit = await ReadJsonAsync<GitCommitResponse>(baseResponse!, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(baseCommit.Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(baseCommit.Tree?.Sha))
+            throw new InvalidDataException("GitHub did not return the exact candidate commit and tree.");
+        RequireSha(baseCommit.Tree.Sha, nameof(baseCommit.Tree.Sha));
+
+        var author = RequireSignature(baseCommit.Author, "author");
+        var committer = RequireSignature(baseCommit.Committer, "committer");
+        var entries = staged.Select(entry => new GitTreeEntry(entry.Path, "100644", "blob", entry.BlobSha)).ToArray();
+        var treeBody = JsonSerializer.Serialize(
+            new CreateTreeRequest(baseCommit.Tree.Sha, entries), JsonOptions);
+        using var treeResponse = await SendAsync(HttpMethod.Post,
+            $"repos/{operation.Repository}/git/trees", token, treeBody, cancellationToken).ConfigureAwait(false);
+        var tree = await ReadJsonAsync<GitTreeResponse>(treeResponse!, cancellationToken).ConfigureAwait(false);
+        RequireSha(tree.Sha, nameof(tree.Sha));
+
+        // Reusing the base commit's author/committer identities and timestamps makes the
+        // Git object deterministic for this exact message, parent, and tree. A retry after
+        // a lost response therefore creates/retrieves the same immutable commit object.
+        var commitBody = JsonSerializer.Serialize(new CreateCommitRequest(
+            operation.Message, tree.Sha, [operation.CandidateSha], author, committer), JsonOptions);
+        using var commitResponse = await SendAsync(HttpMethod.Post,
+            $"repos/{operation.Repository}/git/commits", token, commitBody, cancellationToken).ConfigureAwait(false);
+        var commit = await ReadJsonAsync<GitCommitResponse>(commitResponse!, cancellationToken).ConfigureAwait(false);
+        RequireSha(commit.Sha, nameof(commit.Sha));
+        return await AdvanceAndVerifyCandidateRefAsync(
+            operation, commit.Sha, tree.Sha, token, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<RepositoryOperationResult> AdvanceAndVerifyCandidateRefAsync(
+        CreateRepositoryCommitOperation operation, string commitSha, string treeSha, string token,
+        CancellationToken cancellationToken)
+    {
+        var branchRef = "refs/heads/" + operation.Branch;
+        var lookupRef = "heads/" + operation.Branch;
+        var refUrl = $"repos/{operation.Repository}/git/ref/{Uri.EscapeDataString(lookupRef)}";
+
+        using (var currentResponse = await SendAsync(HttpMethod.Get, refUrl, token, null,
+            cancellationToken).ConfigureAwait(false))
+        {
+            var current = await ReadJsonAsync<GitRefResponse>(currentResponse!, cancellationToken).ConfigureAwait(false);
+            if (string.Equals(current.Object?.Sha, commitSha, StringComparison.OrdinalIgnoreCase))
+                return await VerifyCommittedCandidateAsync(operation, branchRef, commitSha, treeSha,
+                    token, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(current.Object?.Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Candidate branch moved to an unrelated commit; refusing to force-update it.");
+        }
+
+        var updateBody = JsonSerializer.Serialize(new UpdateRefRequest(commitSha, false), JsonOptions);
+        try
+        {
+            using var updateResponse = await SendAsync(HttpMethod.Patch,
+                $"repos/{operation.Repository}/git/refs/{Uri.EscapeDataString(lookupRef)}",
+                token, updateBody, cancellationToken).ConfigureAwait(false);
+            var updated = await ReadJsonAsync<GitRefResponse>(updateResponse!, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(updated.Ref, branchRef, StringComparison.Ordinal) ||
+                !string.Equals(updated.Object?.Sha, commitSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GitHub ref update response does not identify the requested commit.");
+        }
+        catch (HttpRequestException)
+        {
+            // A lost response is indeterminate. Re-read the ref; if it is still at the
+            // authorized parent, the same deterministic commit may be safely submitted again.
+            using var afterFailure = await SendAsync(HttpMethod.Get, refUrl, token, null,
+                cancellationToken).ConfigureAwait(false);
+            var current = await ReadJsonAsync<GitRefResponse>(afterFailure!, cancellationToken).ConfigureAwait(false);
+            if (string.Equals(current.Object?.Sha, commitSha, StringComparison.OrdinalIgnoreCase))
+                return await VerifyCommittedCandidateAsync(operation, branchRef, commitSha, treeSha,
+                    token, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(current.Object?.Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Candidate ref update outcome is ambiguous and the branch no longer has the authorized parent.");
+            using var retryResponse = await SendAsync(HttpMethod.Patch,
+                $"repos/{operation.Repository}/git/refs/{Uri.EscapeDataString(lookupRef)}",
+                token, updateBody, cancellationToken).ConfigureAwait(false);
+            var retried = await ReadJsonAsync<GitRefResponse>(retryResponse!, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(retried.Object?.Sha, commitSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GitHub did not confirm the retried candidate ref update.");
+        }
+
+        return await VerifyCommittedCandidateAsync(operation, branchRef, commitSha, treeSha,
+            token, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<RepositoryOperationResult> VerifyCommittedCandidateAsync(
+        CreateRepositoryCommitOperation operation, string branchRef, string commitSha, string treeSha,
+        string token, CancellationToken cancellationToken)
+    {
+        using var refResponse = await SendAsync(HttpMethod.Get,
+            $"repos/{operation.Repository}/git/ref/{Uri.EscapeDataString("heads/" + operation.Branch)}",
+            token, null, cancellationToken).ConfigureAwait(false);
+        var branch = await ReadJsonAsync<GitRefResponse>(refResponse!, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(branch.Ref, branchRef, StringComparison.Ordinal) ||
+            !string.Equals(branch.Object?.Sha, commitSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Candidate branch does not point to the newly created commit.");
+
+        using var commitResponse = await SendAsync(HttpMethod.Get,
+            $"repos/{operation.Repository}/git/commits/{commitSha}",
+            token, null, cancellationToken).ConfigureAwait(false);
+        var commit = await ReadJsonAsync<GitCommitResponse>(commitResponse!, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(commit.Sha, commitSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(commit.Tree?.Sha, treeSha, StringComparison.OrdinalIgnoreCase) ||
+            commit.Parents is not { Length: 1 } ||
+            !string.Equals(commit.Parents[0].Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(commit.Message, operation.Message, StringComparison.Ordinal))
+            throw new InvalidDataException("The resulting commit does not preserve the exact authorized parent, tree, and message.");
+
+        return new RepositoryOperationResult(
+            $"github:commit:{commitSha}", operation.CandidateSha, commitSha);
+    }
+
+    private static GitSignatureResponse RequireSignature(
+        GitSignatureResponse? signature, string name)
+    {
+        if (signature is null || string.IsNullOrWhiteSpace(signature.Name) ||
+            string.IsNullOrWhiteSpace(signature.Email) || string.IsNullOrWhiteSpace(signature.Date) ||
+            signature.Name.Length > 256 || signature.Email.Length > 320 || signature.Date.Length > 64 ||
+            signature.Name.Any(char.IsControl) || signature.Email.Any(char.IsControl) ||
+            signature.Date.Any(char.IsControl))
+            throw new InvalidDataException($"The candidate commit has no valid {name} identity for deterministic commit creation.");
+        return signature;
+    }
+
     private async ValueTask<RepositoryOperationResult> WriteFileAsync(
         WriteRepositoryFileOperation operation, CancellationToken cancellationToken)
     {
@@ -220,7 +356,7 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     {
         var branchRef = "refs/heads/" + branch;
         using var response = await SendAsync(HttpMethod.Get,
-            $"repos/{repository}/git/ref/{Uri.EscapeDataString(branchRef)}",
+            $"repos/{repository}/git/ref/{Uri.EscapeDataString("heads/" + branch)}",
             token, null, cancellationToken).ConfigureAwait(false);
         var branchPayload = await ReadJsonAsync<GitRefResponse>(response!, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(branchPayload.Ref, branchRef, StringComparison.Ordinal) ||
@@ -298,8 +434,21 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     private sealed record CreateRefRequest(string Ref, string Sha);
     private sealed record CreateBlobRequest(string Content, string Encoding);
     private sealed record GitBlobResponse(string Sha);
-    private sealed record GitCommitResponse(string Sha);
+    private sealed record GitCommitResponse(
+        string Sha, GitTreeResponse? Tree, GitParentResponse[]? Parents, string? Message,
+        GitSignatureResponse? Author, GitSignatureResponse? Committer);
+    private sealed record GitTreeResponse(string Sha);
+    private sealed record GitParentResponse(string Sha);
+    private sealed record GitSignatureResponse(string? Name, string? Email, string? Date);
     private sealed record GitRefResponse(string Ref, GitObjectResponse? Object);
     private sealed record GitObjectResponse(string Sha, string Type);
     private sealed record GitContentResponse(string Path, string Type, string Encoding, string Content);
+    private sealed record GitTreeEntry(string Path, string Mode, string Type, string Sha);
+    private sealed record CreateTreeRequest(
+        [property: JsonPropertyName("base_tree")] string BaseTree,
+        IReadOnlyList<GitTreeEntry> Tree);
+    private sealed record CreateCommitRequest(
+        string Message, string Tree, IReadOnlyList<string> Parents,
+        GitSignatureResponse Author, GitSignatureResponse Committer);
+    private sealed record UpdateRefRequest(string Sha, bool Force);
 }
