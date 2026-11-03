@@ -3,13 +3,13 @@
 
 # Workflow Semantics — Version 1
 
-**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and retained run lifecycle passed development CI run #84; the optional timeout extension and its cancellation-precedence tests passed feature-branch [Foundry CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768). This feature-branch extension is not yet part of `development`. This does not describe persisted manifests, distributed execution, or a general automation engine.
+**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and timeout semantics have prior CI evidence; PR #29 changes the production coordinator so FSM_API owns workflow-run lifecycle transitions. The FSM_API-backed implementation and its integration tests await exact-head CI verification. This does not describe persisted manifests, distributed execution, or a general automation engine.
 
 ## The execution model
 
 A workflow definition is data. It identifies the workflow, declares schema version 1, and lists ordered steps. Each step names a handler key; it does not contain code. The host registers the operations it is willing to expose through a WorkflowHandlerRegistry.
 
-The existing `WorkflowRunner` remains the single authority for validating and executing sequential steps. `WorkflowExecutionCoordinator` adds the retained Hub-facing lifecycle around that runner: accept a definition, start it once, query an immutable status snapshot, request cancellation, and dispose the coordinator. It does not implement another step runner.
+The existing `WorkflowRunner` remains the single authority for validating and executing sequential steps. `WorkflowExecutionCoordinator` adds the retained Hub-facing lifecycle around that runner: accept a definition, start it once, query an immutable status snapshot, request cancellation, and dispose the coordinator. Its lifecycle states are backed by real FSM_API definitions and handles through `FsmApiWorkflowLifecycle`; it does not implement a parallel lifecycle FSM, another step runner, or another scheduler.
 
 ```mermaid
 flowchart TD
@@ -43,7 +43,7 @@ flowchart TD
 
 ## Retained execution lifecycle
 
-`WorkflowExecutionCoordinator` exposes a host-neutral lifecycle without moving step execution out of `WorkflowRunner`:
+`WorkflowExecutionCoordinator` exposes a host-neutral lifecycle without moving step execution out of `WorkflowRunner`. FSM_API owns the `Accepted`, `Running`, and terminal-state transitions; Foundry owns higher-level workflow meaning and asynchronous execution:
 
 - `Submit(definition)` accepts a definition but does not execute it. The returned snapshot starts in `Accepted`.
 - `StartAsync(runId)` starts an accepted run exactly once without a workflow-level timeout.
@@ -52,9 +52,9 @@ flowchart TD
 - `Cancel(runId)` requests cooperative cancellation for a running run, or marks an accepted-but-not-started run cancelled. It returns false for an already terminal run.
 - `DisposeAsync()` cancels accepted/running work and waits for running handlers to finish. Handlers must honor cancellation for disposal to finish promptly.
 
-Lifecycle statuses are `Accepted`, `Running`, `Succeeded`, `Failed`, `Cancelled`, `TimedOut`, and `Invalid`. The final workflow status remains the existing `WorkflowStatus`; the lifecycle enum does not replace or reinterpret step/workflow outcomes. Snapshots are observations, not mutable control objects. A presentation layer may display snapshots and send commands, but it does not own the authoritative state.
+Lifecycle statuses are `Accepted`, `Running`, `Succeeded`, `Failed`, `Cancelled`, `TimedOut`, and `Invalid`. The FSM_API handle's `CurrentState` is the authoritative lifecycle state read by snapshots. The final workflow status remains the existing `WorkflowStatus`; it does not replace or reinterpret step/workflow outcomes. Foundry validates legal transition requests and FSM_API evaluates the registered transition guards. Snapshots are observations, not mutable control objects. A presentation layer may display snapshots and send commands, but it does not own the authoritative state.
 
-This is an in-process coordinator, not a durable queue or cross-process service. Run snapshots are retained only for the coordinator's lifetime.
+This is an in-process coordinator, not a durable queue or cross-process service. Run snapshots are retained only for the coordinator's lifetime. Each coordinator owns a unique FSM_API processing group and definition; each run owns a distinct FSM_API handle/context. The adapter serializes access to FSM_API's static registry and explicitly destroys only its own handles and definition. See [FSM_API Runtime Integration](FSM_API_RUNTIME_INTEGRATION.md) for the transition graph, context ownership, source dependency, and local build setup.
 
 ## Bounded per-run execution context
 
@@ -107,10 +107,12 @@ Context is in-memory only and is not part of durable task or workflow journals. 
 - [Context bounds and cloning tests](../tests/Foundry.Workflow.Tests/WorkflowExecutionContextTests.cs)
 - [Sequential runner and outcome mapping](../src/Foundry.Workflow/WorkflowRunner.cs)
 - [Retained lifecycle coordinator](../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [FSM_API lifecycle adapter](../src/Foundry.Workflow/FsmApiWorkflowLifecycle.cs)
+- [FSM_API runtime integration theory](FSM_API_RUNTIME_INTEGRATION.md)
 - [Runner tests](../tests/Foundry.Workflow.Tests/WorkflowRunnerTests.cs)
 - [Lifecycle tests](../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 
-Development CI run #84 passed the original runner/lifecycle tests. Feature-branch [CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768) passed the timeout/cancellation tests, full workflow test suite, build, separate-process FSM_API probe, repeatable fox/sheepdog scenario, and evidence artifact upload. This document must be revised if the contract or tests change.
+Prior CI runs verified the original runner and timeout semantics. PR #29 adds the direct FSM_API source dependency and tests the production lifecycle through real FSM_API handles; the exact PR head must pass the full workflow test suite, build, probe, Fox/Sheepdog scenario, and evidence artifact upload before this integration is marked verified.
 
 ---
 
