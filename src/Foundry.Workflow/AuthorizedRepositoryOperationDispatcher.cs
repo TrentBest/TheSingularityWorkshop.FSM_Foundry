@@ -33,7 +33,7 @@ public abstract record RepositoryOperation
     internal static string RequireRepositoryPath(string value, string parameterName)
     {
         var path = RequireText(value, parameterName, 512);
-        if (path.StartsWith('/') || path.Contains('\\\\') || path.Contains(':') || path.Contains('%') ||
+        if (path.StartsWith('/') || path.Contains('\\') || path.Contains(':') || path.Contains('%') ||
             path.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
             throw new ArgumentException("Repository paths must be normalized relative paths without encoded or traversal segments.", parameterName);
         return path;
