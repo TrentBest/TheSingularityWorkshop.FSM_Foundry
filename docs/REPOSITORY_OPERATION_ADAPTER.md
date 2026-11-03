@@ -3,7 +3,7 @@
 
 # Host Repository Operation Boundary
 
-**Status:** The host-neutral authorization boundary is implemented. An optional `Foundry.GitHubHost` project now contains the first concrete GitHub REST increment: exact-base candidate branch creation and bounded immutable-SHA text reads. Staged writes, commits, CI dispatch, production token provisioning, and durable host staging remain incomplete.
+**Status:** The host-neutral authorization boundary is implemented. The optional `Foundry.GitHubHost` project now supports exact-base candidate branch creation, bounded immutable-SHA text reads, Git blob staging, and append-only local staging metadata. Explicit commit advancement, CI dispatch, production token provisioning, and distributed staging remain incomplete.
 
 ## 1. Theory: proposals are not permissions
 
@@ -87,7 +87,7 @@ Not implemented by this boundary:
 - End-to-end connection to the ReviewReady draft-PR handoff in PR #25.
 - A complete autonomous issue-to-draft-PR loop.
 
-The new `Foundry.GitHubHost` tests use a fake HTTP handler to verify exact-SHA branch creation, immutable-SHA reads, bounded response handling, repository allowlisting, branch namespace restrictions, and credential-header placement. They do not contact GitHub or prove a production token provider, installation permissions, network egress policy, staged writes, commit ancestry, CI dispatch, or the full autonomous loop. The adapter-inclusive exact-head proof passed in [GitHub Actions run #41589082922](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589082922) on commit `01bbd0dc75ce345df5bff6b5e722b0db2520f8f7`: 163 tests passed, all projects built, the separate-process FSM_API probe and repeated fox/sheepdog scenario passed, and the evidence artifact was uploaded.
+The new `Foundry.GitHubHost` tests use a fake HTTP handler and temporary JSONL store to verify exact-SHA branch creation, immutable-SHA reads, bounded response handling, repository allowlisting, branch namespace restrictions, staged Git blobs, durable metadata replay, payload redaction, and credential-header placement. They do not contact GitHub or prove a production token provider, installation permissions, network egress policy, commit ancestry/ref updates, CI dispatch, or the full autonomous loop. The branch/read adapter proof passed in [GitHub Actions run #41589082922](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589082922) on commit `01bbd0dc75ce345df5bff6b5e722b0db2520f8f7`: 163 tests passed and all proof stages succeeded. The staged-blob implementation proof passed in [run #41589857412](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589857412) on commit `29e23af7b7e7cd46865acb9c35368ecd2eb77178`: 164 tests passed, all projects built, the separate-process FSM_API probe and repeated fox/sheepdog scenario passed, and the evidence artifact was uploaded.
 
 ## 7. Verification
 
