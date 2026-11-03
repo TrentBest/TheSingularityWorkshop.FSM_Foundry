@@ -21,7 +21,7 @@ Workflow meaning should not be buried in a desktop window, browser component, or
 - **GUI presents:** renders the Hub workbench and maps explicit user intents to supported commands. It does not own execution state or the authoritative loop.
 - **FSM_COS composes:** resolves MicroBundles and returns a `RuntimeAssembly`. Composition is not workflow execution.
 - **Hosts provide capabilities:** AnyApp (WPF), WebApp (web), The (workshop/Hub surface), WebPage, and headless/CI hosts adapt their environment and register permitted handlers. The shared-runtime requirement applies to all four application hosts; listing a host here describes the intended ownership boundary, not proof that its adapter is already implemented.
-- **FSM_API supplies FSM mechanics** where a concrete integration consumes it. Foundry does not reimplement FSM_API.
+- **FSM_API drives workflow-run lifecycle:** `WorkflowExecutionCoordinator` creates real FSM_API definitions and handles for accepted runs. FSM_API owns lifecycle state transitions; Foundry owns workflow meaning, asynchronous step execution, cancellation policy, task authorization, audit, and outcomes. Foundry does not recreate FSM_API mechanics.
 
 Foundry deliberately does not force workflow steps, WebPage process-group ticks, and FSM_COS `RuntimeAssembly` into one abstraction. They remain distinct until a source-backed, tested integration demonstrates the correct seam.
 
@@ -32,13 +32,13 @@ Start with the [version-1 workflow definition](src/Foundry.Workflow/WorkflowDefi
 A host can:
 1. Register allowed operations in `WorkflowHandlerRegistry`.
 2. Submit a typed workflow definition and receive an `Accepted` run snapshot.
-3. Start that run once and observe its lifecycle through `GetSnapshot`.
+3. Start that run once and observe its FSM_API-backed lifecycle through `GetSnapshot`.
 4. Request cancellation through `Cancel`.
 5. Read the terminal `WorkflowResult` and per-step outcomes; an optional workflow timeout reports `TimedOut` separately from caller-requested `Cancelled`.
 
 The first version executes named handlers sequentially. It validates the complete definition before invoking any handler, stops after failure, distinguishes cancellation from failure and timeout, and records remaining steps as skipped. Cancellation and timeout are cooperative: a handler that ignores its token cannot be forcibly stopped. The coordinator retains snapshots only in memory.
 
-The [production workflow coordinator](src/Foundry.Workflow/WorkflowExecutionCoordinator.cs) now delegates retained run-lifecycle state transitions to FSM_API through [FsmApiWorkflowLifecycle](src/Foundry.Workflow/FsmApiWorkflowLifecycle.cs), using the FSM_API development source pinned by CI. Foundry still owns workflow meaning, cancellation, results, and host lifecycle; `WorkflowRunner` remains the sequential handler executor. The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs) remain deterministic state-execution demonstrations and reproducible evidence, not Hub workflow definitions.
+The [production workflow coordinator](src/Foundry.Workflow/WorkflowExecutionCoordinator.cs) delegates retained run-lifecycle state transitions to FSM_API through [FsmApiWorkflowLifecycle](src/Foundry.Workflow/FsmApiWorkflowLifecycle.cs). The integration is implemented on PR #29 and awaits exact-head CI verification. CI checks out FSM_API development source at the exact commit pinned in the workflow; local builds must provide the matching source checkout under `fsm-api`. Foundry still owns workflow meaning, cancellation, results, and host lifecycle; `WorkflowRunner` remains the sequential handler executor. The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs) remain deterministic state-execution demonstrations and reproducible evidence, not Hub workflow definitions.
 
 ## 04 — Contracts, tests, and boundaries
 
