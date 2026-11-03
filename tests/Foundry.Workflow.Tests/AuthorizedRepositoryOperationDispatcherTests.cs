@@ -75,13 +75,26 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
-    public async Task ExpiredLeaseAndCodeRedInvalidatePreviouslyGrantedMutation()
+    public async Task CodeRedInvalidatesPreviouslyGrantedMutation()
     {
-        using var fixture = new Fixture(leaseDuration: TimeSpan.FromMinutes(2));
+        using var fixture = new Fixture();
         var capability = fixture.Grant(WorkTaskAction.WriteFiles);
         fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
             WorkTaskStatus.CodeRed, Now.AddMinutes(1), "Human review required.");
 
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+        Assert.Equal(0, fixture.Adapter.Calls);
+    }
+
+    [Fact]
+    public async Task ExpiredLeaseInvalidatesPreviouslyGrantedMutation()
+    {
+        using var fixture = new Fixture(leaseDuration: TimeSpan.FromMinutes(2));
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
         var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
             CandidateSha, "src/Foundry.Workflow/file.cs", "content");
 
