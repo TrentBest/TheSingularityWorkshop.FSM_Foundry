@@ -95,6 +95,8 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
     public GitHubActionsDispatchRecord Acknowledge(string requestId, DateTimeOffset acknowledgedAt) =>
         Transition(requestId, current =>
         {
+            if (current.State is GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified)
+                return current;
             if (current.State != GitHubActionsDispatchState.Dispatching || acknowledgedAt < current.CreatedAt)
                 throw new InvalidOperationException("Dispatch acknowledgment does not follow a pending dispatch intent.");
             return current with { State = GitHubActionsDispatchState.Acknowledged, AcknowledgedAt = acknowledgedAt };
