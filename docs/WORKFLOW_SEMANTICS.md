@@ -3,7 +3,7 @@
 
 # Workflow Semantics — Version 1
 
-**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and timeout semantics have prior CI evidence; PR #29 changes the production coordinator so FSM_API owns workflow-run lifecycle transitions. The FSM_API-backed implementation and its integration tests await exact-head CI verification. This does not describe persisted manifests, distributed execution, or a general automation engine.
+**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and timeout semantics have prior CI evidence; the FSM_API-backed production lifecycle and integration tests passed exact-head CI run [#41713120380](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41713120380) on head `8041e76e088d8d7f8965a3443a685ddcc7c0a3f3`.
 
 ## The execution model
 
@@ -112,7 +112,7 @@ Context is in-memory only and is not part of durable task or workflow journals. 
 - [Runner tests](../tests/Foundry.Workflow.Tests/WorkflowRunnerTests.cs)
 - [Lifecycle tests](../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 
-Prior CI runs verified the original runner and timeout semantics. PR #29 adds the direct FSM_API source dependency and tests the production lifecycle through real FSM_API handles; the exact PR head must pass the full workflow test suite, build, probe, Fox/Sheepdog scenario, and evidence artifact upload before this integration is marked verified.
+Prior CI runs verified the original runner and timeout semantics. The direct FSM_API source dependency and production lifecycle passed exact-head [CI run #41713120380](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41713120380), including the full workflow test suite, project builds, separate-process FSM_API probe, repeatable Fox/Sheepdog scenario, and evidence artifact upload.
 
 ---
 
