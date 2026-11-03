@@ -59,13 +59,24 @@ A production adapter must independently enforce all policy that depends on the h
 3. For `CreateBranch`, create only the capability-bound isolated branch, only if it does not already exist, and point it at the exact authorized base SHA. For all later operations, operate only on that pre-authorized candidate branch.
 4. Enforce normalized path containment and the capability's allowed path scope. Reject traversal, encoded traversal, absolute paths, and paths outside the configured repository root.
 5. Stage file writes as immutable blobs while retaining the candidate SHA. For commit, construct a new commit from the staged tree with the authorized candidate as parent; update the candidate ref without force and verify its exact resulting SHA.
-6. Map CI workflow keys through a host-owned allowlist. Dispatch only the exact authorized branch/ref and candidate SHA; never accept a model-supplied workflow file path, endpoint, or arbitrary dispatch payload.
+6. Map CI workflow keys through a host-owned allowlist. Dispatch only the exact authorized branch/ref and candidate SHA; never accept a model-supplied workflow file path, endpoint, or arbitrary dispatch payload. Correlate the resulting run using a host-generated request ID carried in the workflow run name, and verify the exact workflow path, `workflow_dispatch` event, branch, candidate SHA, run ID, and run attempt. A dispatch acknowledgment is not CI evidence.
 7. Return a stable, non-secret operation reference and truthful result provenance. Do not treat a successful HTTP response alone as evidence that the requested repository state exists.
 8. Apply bounded request sizes, timeouts, retries, rate limits, cancellation, and safe error redaction.
 
 The adapter must not implement arbitrary shell execution, merge, release, deployment, branch deletion, or package publication through this interface.
 
-## 6. Implemented evidence and remaining limits
+## 6. GitHub Actions dispatch and correlation
+
+`GitHubActionsWorkflowDispatcher` is a separate host-owned component. Its immutable `GitHubActionsWorkflowAllowlist` maps a host-selected key to one workflow file and one expected `.github/workflows/...` path. Model/workflow data cannot provide an endpoint, workflow path, or arbitrary input map.
+
+Before dispatch, the component rechecks that the candidate branch tip equals the exact authorized 40-character SHA. It sends only the branch ref and two fixed inputs: a host-generated 32-character request ID and the candidate SHA. The proof workflow exposes those inputs only for `workflow_dispatch`, gives the run a deterministic display title (`Foundry CI <request-id>`), checks out the requested ref, and verifies that the checked-out commit equals the supplied candidate SHA before running the proof.
+
+GitHub's dispatch endpoint returns an acknowledgment rather than a run ID. The dispatcher therefore returns a receipt and later queries the allowlisted workflow's run collection. A run is accepted as correlated only when all of these match the receipt: exact workflow path, `workflow_dispatch` event, branch, candidate SHA, and display title containing the unique request ID. Zero matches means correlation is still pending; multiple matches are rejected as ambiguous. A correlated result includes the exact GitHub run ID and `run_attempt`.
+
+This component deliberately does not mark a CI operation successful. The host must still inspect the jobs for that exact run attempt, require every configured proof job to succeed, and bind the resulting evidence to the durable task/correlation/repository/branch/candidate SHA. The current `RequestRepositoryCiOperation` route remains fail-closed because the receipt and later run correlation are not yet journaled through `AuthorizedRepositoryOperationDispatcher`; an interrupted dispatch must never be blindly repeated.
+
+## 7. Implemented evidence and remaining limits
+
 
 The feature branch contains:
 
@@ -79,17 +90,18 @@ The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full pro
 
 Not implemented by this boundary:
 
-- A concrete GitHub REST/GraphQL adapter or credential provider.
+- A production GitHub App credential provider and installation-permission verification.
 - A concrete host/GitHub implementation for branch creation, base-SHA selection, or branch lifecycle management.
-- A host-enforced workflow-key allowlist implementation.
+- Integration of GitHub Actions dispatch receipts and correlated run attempts into the repository-operation audit journal.
+- Exact-attempt required-job verification and conversion into durable task evidence.
 - A production/distributed audit backend; the current JSONL implementation is local-filesystem storage and not a distributed ledger.
 - Git ancestry verification inside Foundry (the host adapter owns that verification).
 - End-to-end connection to the ReviewReady draft-PR handoff in PR #25.
 - A complete autonomous issue-to-draft-PR loop.
 
-The new `Foundry.GitHubHost` tests use a fake HTTP handler and temporary JSONL store to verify exact-SHA branch creation, immutable-SHA reads, bounded response handling, repository allowlisting, branch namespace restrictions, staged Git blobs, durable metadata replay, payload redaction, batch freezing across restart, idempotent retry after freeze, single-parent commit construction, non-force ref advancement, deterministic retry reconciliation, and refusal to overwrite a moved branch. They do not contact GitHub or prove a production token provider, installation permissions, network egress policy, live GitHub commit/ref behavior, CI dispatch, or the full autonomous loop. The branch/read adapter proof passed in [GitHub Actions run #41589082922](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589082922) on commit `01bbd0dc75ce345df5bff6b5e722b0db2520f8f7`: 163 tests passed and all proof stages succeeded. The staged-blob implementation proof passed in [run #41589857412](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589857412) on commit `29e23af7b7e7cd46865acb9c35368ecd2eb77178`: 164 tests passed and all proof stages succeeded. The explicit-commit implementation proof passed in [run #41590353590](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41590353590) on commit `858e7d457ed6e1f204ac7e7d50da5b617f49e424`: 166 tests passed and all proof stages succeeded. The durable batch-freeze and retry-safety proof passed in [run #41591073648](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41591073648) on commit `55544ebb00ef8df24b0fb5f4d38e11866de25ef4`: 168 tests passed, all projects built, runtime probes passed, and the evidence artifact was uploaded.
+The new `Foundry.GitHubHost` tests use fake HTTP handlers and temporary JSONL stores to verify exact-SHA branch creation, immutable-SHA reads, bounded response handling, repository allowlisting, branch namespace restrictions, staged Git blobs, durable metadata replay, payload redaction, batch freezing across restart, idempotent retry after freeze, single-parent commit construction, non-force ref advancement, deterministic retry reconciliation, refusal to overwrite a moved branch, allowlisted Actions dispatch, exact-SHA preflight, and request-ID-bound run correlation. They do not contact GitHub or prove a production token provider, installation permissions, network egress policy, live GitHub commit/ref behavior, CI dispatch, or the full autonomous loop. The branch/read adapter proof passed in [GitHub Actions run #41589082922](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589082922) on commit `01bbd0dc75ce345df5bff6b5e722b0db2520f8f7`: 163 tests passed and all proof stages succeeded. The staged-blob implementation proof passed in [run #41589857412](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41589857412) on commit `29e23af7b7e7cd46865acb9c35368ecd2eb77178`: 164 tests passed and all proof stages succeeded. The explicit-commit implementation proof passed in [run #41590353590](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41590353590) on commit `858e7d457ed6e1f204ac7e7d50da5b617f49e424`: 166 tests passed and all proof stages succeeded. The durable batch-freeze and retry-safety proof passed in [run #41591073648](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41591073648) on commit `55544ebb00ef8df24b0fb5f4d38e11866de25ef4`: 168 tests passed, all projects built, runtime probes passed, and the evidence artifact was uploaded.
 
-## 7. Verification
+## 8. Verification
 
 Run the focused workflow tests and the repository's full proof workflow on the exact candidate commit. Evidence must identify the exact repository, full candidate SHA, workflow, run, attempt, and required job outcomes. A green run is evidence, not permission to merge or publish.
 
