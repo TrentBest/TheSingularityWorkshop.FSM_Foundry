@@ -76,15 +76,21 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     private readonly HttpClient _httpClient;
     private readonly IGitHubAccessTokenProvider _tokens;
     private readonly GitHubRepositoryOperationPolicy _policy;
+    private readonly IGitHubRepositoryStagingStore _stagingStore;
+    private readonly Func<DateTimeOffset> _clock;
 
     public GitHubRepositoryOperationAdapter(
         HttpClient httpClient,
         IGitHubAccessTokenProvider tokens,
-        GitHubRepositoryOperationPolicy policy)
+        GitHubRepositoryOperationPolicy policy,
+        IGitHubRepositoryStagingStore stagingStore,
+        Func<DateTimeOffset>? clock = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        _stagingStore = stagingStore ?? throw new ArgumentNullException(nameof(stagingStore));
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
         if (_httpClient.BaseAddress is null ||
             !string.Equals(_httpClient.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(_httpClient.BaseAddress.Host, "api.github.com", StringComparison.OrdinalIgnoreCase) ||
@@ -105,8 +111,10 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
                 await CreateBranchAsync(create, cancellationToken).ConfigureAwait(false),
             ReadRepositoryFileOperation read =>
                 await ReadFileAsync(read, cancellationToken).ConfigureAwait(false),
+            WriteRepositoryFileOperation write =>
+                await WriteFileAsync(write, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException(
-                "This adapter increment supports branch creation and immutable text reads only.")
+                "This adapter increment supports branch creation, immutable text reads, and durable staged writes only.")
         };
     }
 
@@ -148,13 +156,8 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         ReadRepositoryFileOperation operation, CancellationToken cancellationToken)
     {
         var token = await GetTokenAsync(operation.Repository, cancellationToken).ConfigureAwait(false);
-        var branchRef = "refs/heads/" + operation.Branch;
-        using var branch = await SendAsync(HttpMethod.Get,
-            $"repos/{operation.Repository}/git/ref/{Uri.EscapeDataString(branchRef)}",
-            token, null, cancellationToken).ConfigureAwait(false);
-        var branchPayload = await ReadJsonAsync<GitRefResponse>(branch!, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(branchPayload.Object?.Sha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Candidate branch moved; the requested SHA is no longer its authorized tip.");
+        await DemandCandidateTipAsync(operation.Repository, operation.Branch,
+            operation.CandidateSha, token, cancellationToken).ConfigureAwait(false);
 
         var encodedPath = string.Join("/", operation.Path!.Split('/').Select(Uri.EscapeDataString));
         using var file = await SendAsync(HttpMethod.Get,
@@ -182,6 +185,43 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
         return new RepositoryOperationResult(
             $"github:file:{operation.CandidateSha}:{operation.Path}",
             operation.CandidateSha, operation.CandidateSha, text);
+    }
+
+    private async ValueTask<RepositoryOperationResult> WriteFileAsync(
+        WriteRepositoryFileOperation operation, CancellationToken cancellationToken)
+    {
+        var token = await GetTokenAsync(operation.Repository, cancellationToken).ConfigureAwait(false);
+        await DemandCandidateTipAsync(operation.Repository, operation.Branch,
+            operation.CandidateSha, token, cancellationToken).ConfigureAwait(false);
+
+        var bytes = new UTF8Encoding(false, true).GetBytes(operation.Content);
+        if (bytes.Length > MaximumFileBytes)
+            throw new ArgumentException("UTF-8 file content exceeds the host 64 KiB byte limit.", nameof(operation));
+        var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var body = JsonSerializer.Serialize(new CreateBlobRequest(operation.Content, "utf-8"), JsonOptions);
+        using var response = await SendAsync(HttpMethod.Post,
+            $"repos/{operation.Repository}/git/blobs", token, body, cancellationToken).ConfigureAwait(false);
+        var blob = await ReadJsonAsync<GitBlobResponse>(response!, cancellationToken).ConfigureAwait(false);
+        RepositoryOperation.RequireSha(blob.Sha, nameof(blob.Sha));
+
+        var staged = _stagingStore.Stage(new GitHubStagedBlob(
+            operation.Repository, operation.Branch, operation.CandidateSha, operation.Path!,
+            blob.Sha, digest, _clock()));
+        return new RepositoryOperationResult(
+            $"github:staged-blob:{staged.BlobSha}", operation.CandidateSha, operation.CandidateSha);
+    }
+
+    private async ValueTask DemandCandidateTipAsync(
+        string repository, string branch, string candidateSha, string token,
+        CancellationToken cancellationToken)
+    {
+        var branchRef = "refs/heads/" + branch;
+        using var response = await SendAsync(HttpMethod.Get,
+            $"repos/{repository}/git/ref/{Uri.EscapeDataString(branchRef)}",
+            token, null, cancellationToken).ConfigureAwait(false);
+        var branchPayload = await ReadJsonAsync<GitRefResponse>(response!, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(branchPayload.Object?.Sha, candidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Candidate branch moved; the requested SHA is no longer its authorized tip.");
     }
 
     private async ValueTask<string> GetTokenAsync(string repository, CancellationToken cancellationToken)
@@ -245,6 +285,8 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     }
 
     private sealed record CreateRefRequest(string Ref, string Sha);
+    private sealed record CreateBlobRequest(string Content, string Encoding);
+    private sealed record GitBlobResponse(string Sha);
     private sealed record GitCommitResponse(string Sha);
     private sealed record GitRefResponse(string Ref, GitObjectResponse? Object);
     private sealed record GitObjectResponse(string Sha, string Type);
