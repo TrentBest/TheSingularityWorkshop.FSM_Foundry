@@ -297,6 +297,27 @@ public sealed class GitHubActionsWorkflowDispatcher
             throw new ArgumentException("At least one unique, bounded required job name is required.", nameof(requiredJobNames));
 
         var token = await GetTokenAsync(receipt.Repository, cancellationToken).ConfigureAwait(false);
+        var attemptPath = $"repos/{receipt.Repository}/actions/runs/{correlation.RunId}/attempts/{correlation.RunAttempt}";
+        using (var attemptResponse = await SendAsync(HttpMethod.Get, attemptPath, token, null, cancellationToken).ConfigureAwait(false))
+        using (var attemptDocument = await ReadJsonAsync(attemptResponse!, cancellationToken).ConfigureAwait(false))
+        {
+            var run = attemptDocument.RootElement;
+            if (!run.TryGetProperty("id", out var runId) || !runId.TryGetInt64(out var actualRunId) ||
+                actualRunId != correlation.RunId ||
+                !run.TryGetProperty("run_attempt", out var attempt) || !attempt.TryGetInt32(out var actualAttempt) ||
+                actualAttempt != correlation.RunAttempt ||
+                !string.Equals(GetString(run, "path"), receipt.WorkflowPath, StringComparison.Ordinal) ||
+                !string.Equals(GetString(run, "event"), "workflow_dispatch", StringComparison.Ordinal) ||
+                !string.Equals(GetString(run, "head_branch"), receipt.Branch, StringComparison.Ordinal) ||
+                !string.Equals(GetString(run, "head_sha"), receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(GetString(run, "display_title"), "Foundry CI " + receipt.RequestId, StringComparison.Ordinal))
+                throw new InvalidDataException("GitHub's exact run-attempt metadata does not match the durable dispatch receipt.");
+            correlation = correlation with
+            {
+                Status = GetString(run, "status"),
+                Conclusion = GetNullableString(run, "conclusion")
+            };
+        }
         var path = $"repos/{receipt.Repository}/actions/runs/{correlation.RunId}/attempts/{correlation.RunAttempt}/jobs?per_page=100";
         using var response = await SendAsync(HttpMethod.Get, path, token, null, cancellationToken).ConfigureAwait(false);
         using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
