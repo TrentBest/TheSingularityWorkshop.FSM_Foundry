@@ -166,7 +166,7 @@ public sealed class GitHubActionsWorkflowDispatcher
         ArgumentNullException.ThrowIfNull(receipt);
         _repositoryPolicy.DemandRepository(receipt.Repository);
         GitHubRepositoryOperationPolicy.DemandCandidateBranch(receipt.Branch);
-        if (receipt.RequestId is not { Length: 32 } || !receipt.RequestId.All(Uri.IsAsciiHexDigit) ||
+        if (receipt.RequestId is not { Length: 32 } || !receipt.RequestId.All(Uri.IsHexDigit) ||
             receipt.CandidateSha is not { Length: 40 } || !receipt.CandidateSha.All(Uri.IsHexDigit))
             throw new ArgumentException("Dispatch receipt identity is invalid.", nameof(receipt));
 
