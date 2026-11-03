@@ -6,7 +6,8 @@ public enum GitHubActionsDispatchState
 {
     Dispatching,
     Acknowledged,
-    Correlated
+    Correlated,
+    Verified
 }
 
 public sealed record GitHubActionsDispatchRecord(
@@ -35,6 +36,7 @@ public interface IGitHubActionsDispatchJournal
         string branch, string candidateSha, DateTimeOffset createdAt);
     GitHubActionsDispatchRecord Acknowledge(string requestId, DateTimeOffset acknowledgedAt);
     GitHubActionsDispatchRecord Correlate(string requestId, long runId, int runAttempt);
+    GitHubActionsDispatchRecord Verify(string requestId, long runId, int runAttempt);
     GitHubActionsDispatchRecord Get(string requestId);
     IReadOnlyList<GitHubActionsDispatchRecord> GetUnresolved();
 }
@@ -112,6 +114,15 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             };
         });
 
+    public GitHubActionsDispatchRecord Verify(string requestId, long runId, int runAttempt) =>
+        Transition(requestId, current =>
+        {
+            if (current.State != GitHubActionsDispatchState.Correlated ||
+                current.RunId != runId || current.RunAttempt != runAttempt)
+                throw new InvalidOperationException("Only the exact correlated run attempt can be verified.");
+            return current with { State = GitHubActionsDispatchState.Verified };
+        });
+
     public GitHubActionsDispatchRecord Get(string requestId)
     {
         lock (_gate)
@@ -186,10 +197,14 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             {
                 GitHubActionsDispatchState.Acknowledged =>
                     previous.State == GitHubActionsDispatchState.Dispatching &&
-                    record.AcknowledgedAt >= previous.CreatedAt && record.RunId is null && record.RunAttempt is null,
+                    record.AcknowledgedAt is { } acknowledged && acknowledged >= previous.CreatedAt &&
+                    record.RunId is null && record.RunAttempt is null,
                 GitHubActionsDispatchState.Correlated =>
-                    previous.State is GitHubActionsDispatchState.Dispatching or GitHubActionsDispatchState.Acknowledged &&
+                    (previous.State is GitHubActionsDispatchState.Dispatching or GitHubActionsDispatchState.Acknowledged) &&
                     record.RunId is > 0 && record.RunAttempt is > 0,
+                GitHubActionsDispatchState.Verified =>
+                    previous.State == GitHubActionsDispatchState.Correlated &&
+                    record.RunId == previous.RunId && record.RunAttempt == previous.RunAttempt,
                 _ => false
             } is false)
             {
