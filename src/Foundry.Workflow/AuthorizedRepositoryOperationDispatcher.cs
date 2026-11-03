@@ -146,15 +146,18 @@ public sealed class AuthorizedRepositoryOperationDispatcher
     private readonly PersistentWorkTaskCoordinator _tasks;
     private readonly WorkTaskCapabilityRegistry _capabilities;
     private readonly IRepositoryOperationAdapter _adapter;
+    private readonly JsonlRepositoryOperationJournal _journal;
 
     public AuthorizedRepositoryOperationDispatcher(
         PersistentWorkTaskCoordinator tasks,
         WorkTaskCapabilityRegistry capabilities,
-        IRepositoryOperationAdapter adapter)
+        IRepositoryOperationAdapter adapter,
+        JsonlRepositoryOperationJournal journal)
     {
         _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+        _journal = journal ?? throw new ArgumentNullException(nameof(journal));
     }
 
     public async ValueTask<RepositoryOperationResult> ExecuteAsync(
@@ -173,18 +176,33 @@ public sealed class AuthorizedRepositoryOperationDispatcher
             operation.Action, operation.Path, now);
 
         cancellationToken.ThrowIfCancellationRequested();
-        var result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
-        ArgumentNullException.ThrowIfNull(result);
-        if (string.IsNullOrWhiteSpace(result.OperationReference) ||
-            !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
-            result.ResultingCandidateSha is not { Length: 40 } ||
-            !result.ResultingCandidateSha.All(Uri.IsHexDigit))
-            throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
-        if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation or CreateRepositoryBranchOperation) &&
-            !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Read, CI, and branch-creation operations must retain the exact authorized candidate SHA.");
+        // Persist intent before invoking the host: a crash after the external side effect leaves
+        // a Pending record that must be reconciled, not replayed automatically.
+        var audit = _journal.Begin(operation, now);
+        RepositoryOperationResult result;
+        try
+        {
+            result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(result);
+            if (string.IsNullOrWhiteSpace(result.OperationReference) ||
+                !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                result.ResultingCandidateSha is not { Length: 40 } ||
+                !result.ResultingCandidateSha.All(Uri.IsHexDigit))
+                throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
+            if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation or CreateRepositoryBranchOperation) &&
+                !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Read, CI, and branch-creation operations must retain the exact authorized candidate SHA.");
+        }
+        catch (Exception exception)
+        {
+            _journal.Fail(audit.OperationId, exception, DateTimeOffset.UtcNow);
+            throw;
+        }
+
+        // Do not persist adapter Detail: it is host-controlled text and may contain secrets.
+        _journal.Complete(audit.OperationId, result, DateTimeOffset.UtcNow);
         return result;
     }
 }
