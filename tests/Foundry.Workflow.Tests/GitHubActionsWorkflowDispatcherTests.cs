@@ -141,6 +141,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
     public async Task FailedOrMissingRequiredJobDoesNotVerifyDispatch()
     {
         var journalPath = NewJournalPath();
+        var correlationRequestId = new string('0', 32);
         var handler = new StubHandler((request, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -170,7 +171,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
         var receipt = await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
-        handler.RequestId = receipt.RequestId;
+        correlationRequestId = receipt.RequestId;
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
         var evidence = await dispatcher.VerifyRequiredJobsAsync(receipt, correlation!, [RequiredJob]);
@@ -274,7 +275,6 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Func<HttpRequestMessage, CancellationToken, HttpResponseMessage> responseFactory) : HttpMessageHandler
     {
         public List<RequestSnapshot> Requests { get; } = [];
-        public string RequestId { get; set; } = new string('0', 32);
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
