@@ -46,6 +46,25 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task CapabilityIsRecheckedAfterAuditReservationBeforeTransport()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var invalidatingJournal = new InvalidatingJournal(fixture.Journal, fixture.Tasks, fixture.Task);
+        var dispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, fixture.Adapter, invalidatingJournal,
+            () => Now.AddMinutes(1));
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/Example.cs", "content");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+            await dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+
+        Assert.Equal(0, fixture.Adapter.Calls);
+        Assert.Equal(RepositoryOperationAuditStatus.Failed, Assert.Single(invalidatingJournal.GetAll()).Status);
+    }
+
+    [Fact]
     public async Task SuccessfulOperationIsDurablyAuditedWithoutPersistingFileContent()
     {
         using var fixture = new Fixture();
@@ -347,6 +366,38 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             if (Directory.Exists(_directory))
                 Directory.Delete(_directory, recursive: true);
         }
+    }
+
+    private sealed class InvalidatingJournal : IRepositoryOperationAuditJournal
+    {
+        private readonly JsonlRepositoryOperationJournal _inner;
+        private readonly PersistentWorkTaskCoordinator _tasks;
+        private readonly WorkTaskSnapshot _task;
+
+        public InvalidatingJournal(JsonlRepositoryOperationJournal inner,
+            PersistentWorkTaskCoordinator tasks, WorkTaskSnapshot task)
+        {
+            _inner = inner;
+            _tasks = tasks;
+            _task = task;
+        }
+
+        public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt)
+        {
+            var entry = _inner.Begin(operation, startedAt);
+            _tasks.Transition(_task.TaskId, _task.Lease!.LeaseId, WorkTaskStatus.CodeRed,
+                Now.AddMinutes(1), "Capability revoked during audit reservation.");
+            return entry;
+        }
+
+        public RepositoryOperationAuditEntry Complete(string operationId,
+            RepositoryOperationResult result, DateTimeOffset completedAt) =>
+            _inner.Complete(operationId, result, completedAt);
+
+        public RepositoryOperationAuditEntry Fail(string operationId, Exception exception,
+            DateTimeOffset failedAt) => _inner.Fail(operationId, exception, failedAt);
+
+        public IReadOnlyList<RepositoryOperationAuditEntry> GetAll() => _inner.GetAll();
     }
 
     private sealed class FakeAdapter : IRepositoryOperationAdapter
