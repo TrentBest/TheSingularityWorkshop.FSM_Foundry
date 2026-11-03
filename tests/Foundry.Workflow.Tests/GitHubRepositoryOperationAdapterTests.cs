@@ -304,6 +304,53 @@ public sealed class GitHubRepositoryOperationAdapterTests
     }
 
     [Fact]
+    public async Task RequestCiOperationUsesHostAllowlistedDispatcherAndReturnsDurableRequestReference()
+    {
+        var handler = new StubGitHubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    @ref = "refs/heads/agents/task-123",
+                    @object = new { sha = CandidateSha, type = "commit" }
+                }));
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith(
+                "/actions/workflows/foundry-fsm-api-probe.yml/dispatches", StringComparison.Ordinal))
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
+        var policy = new GitHubRepositoryOperationPolicy([Repository]);
+        var dispatchJournal = new JsonlGitHubActionsDispatchJournal(Path.Combine(
+            Path.GetTempPath(), "FoundryGitHubHostTests", Guid.NewGuid().ToString("N") + ".dispatch.jsonl"));
+        var allowlist = new GitHubActionsWorkflowAllowlist([
+            new GitHubActionsWorkflowDefinition("proof", "foundry-fsm-api-probe.yml",
+                ".github/workflows/foundry-fsm-api-probe.yml")
+        ]);
+        var actions = new GitHubActionsWorkflowDispatcher(client, new TestTokenProvider(),
+            policy, allowlist, dispatchJournal);
+        var adapter = new GitHubRepositoryOperationAdapter(client, new TestTokenProvider(), policy,
+            new JsonlGitHubRepositoryStagingStore(Path.Combine(
+                Path.GetTempPath(), "FoundryGitHubHostTests", Guid.NewGuid().ToString("N") + ".stage.jsonl")),
+            actionsDispatcher: actions);
+        var operation = new RequestRepositoryCiOperation(
+            "task-123", Repository, "agents/task-123", CandidateSha, "proof");
+
+        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+
+        Assert.Equal(CandidateSha, result.RequestedCandidateSha);
+        Assert.Equal(CandidateSha, result.ResultingCandidateSha);
+        Assert.StartsWith("github:actions-dispatch:", result.OperationReference, StringComparison.Ordinal);
+        var dispatch = Assert.Single(handler.Requests.Where(request => request.Method == HttpMethod.Post));
+        using var payload = JsonDocument.Parse(dispatch.Body!);
+        var requestId = payload.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+        Assert.Equal("github:actions-dispatch:" + requestId, result.OperationReference);
+        var journalRecord = dispatchJournal.Get(requestId);
+        Assert.Equal("task-123", journalRecord.TaskId);
+        Assert.Equal(GitHubActionsDispatchState.Acknowledged, journalRecord.State);
+    }
+
+    [Fact]
     public async Task RejectsRepositoriesOutsideHostAllowlist()
     {
         var handler = new StubGitHubHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
