@@ -109,3 +109,14 @@ Run the focused workflow tests and the repository's full proof workflow on the e
 ---
 
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="420" /></p>
+
+
+## Trusted workflow-source boundary — required before production dispatch
+
+The current Actions dispatcher correlates a dispatch to the candidate branch and candidate SHA, but its dispatch request currently selects that candidate branch as the workflow `ref`. That is not sufficient to establish that the workflow definition itself came from trusted code: a candidate may modify files under `.github/workflows/`.
+
+**This is a tracked security gap, not an accepted production design.** See [issue #28](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/28).
+
+The required design is to dispatch the allowlisted workflow from the trusted `development` ref and persist that ref plus its exact commit SHA as trusted-workflow provenance. The host must pass the candidate ref and candidate SHA as separate inputs. The trusted workflow must check out the exact candidate SHA, confirm that the candidate ref still points to that SHA, and only then execute candidate build/test steps. Run correlation must distinguish the trusted workflow SHA from the candidate SHA and re-fetch the exact run attempt.
+
+Until this correction is implemented and tested, the current fake-HTTP dispatcher tests establish request/run correlation behavior only; they do **not** establish that the workflow source is trusted. Production credentials and production host composition are also absent. A green job remains execution evidence, not a CiAi named verdict.
