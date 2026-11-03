@@ -161,7 +161,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
             !result.ResultingCandidateSha.All(Uri.IsHexDigit))
             throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
-        if (operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation &&
+        if ((operation is ReadRepositoryFileOperation or RequestRepositoryCiOperation) &&
             !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Read and CI operations must retain the exact authorized candidate SHA.");
 
