@@ -69,6 +69,7 @@ public sealed class GitHubActionsWorkflowAllowlist
 /// <summary>Durable correlation data returned after GitHub accepts a workflow dispatch.</summary>
 public sealed record GitHubActionsDispatchReceipt(
     string RequestId,
+    string TaskId,
     string Repository,
     string WorkflowFile,
     string WorkflowPath,
@@ -134,11 +135,13 @@ public sealed class GitHubActionsWorkflowDispatcher
     }
 
     public async ValueTask<GitHubActionsDispatchReceipt> DispatchAsync(
-        string repository, string workflowKey, string branch, string candidateSha,
+        string taskId, string repository, string workflowKey, string branch, string candidateSha,
         CancellationToken cancellationToken = default)
     {
         _repositoryPolicy.DemandRepository(repository);
         GitHubRepositoryOperationPolicy.DemandCandidateBranch(branch);
+        if (string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl))
+            throw new ArgumentException("Task identity must be bounded and control-free.", nameof(taskId));
         if (string.IsNullOrWhiteSpace(workflowKey) || workflowKey.Length > 128 || workflowKey.Any(char.IsControl))
             throw new ArgumentException("Workflow key must be bounded and control-free.", nameof(workflowKey));
         if (candidateSha is not { Length: 40 } || !candidateSha.All(Uri.IsHexDigit))
@@ -150,7 +153,7 @@ public sealed class GitHubActionsWorkflowDispatcher
 
         var requestId = Guid.NewGuid().ToString("N");
         var dispatchTime = _clock();
-        _journal.Begin(requestId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
+        _journal.Begin(requestId, taskId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
             branch, candidateSha, dispatchTime);
         var payload = JsonSerializer.Serialize(new
         {
@@ -168,7 +171,7 @@ public sealed class GitHubActionsWorkflowDispatcher
         _journal.Acknowledge(requestId, acknowledgedAt);
 
         return new GitHubActionsDispatchReceipt(
-            requestId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
+            requestId, taskId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
             branch, candidateSha, acknowledgedAt);
     }
 
@@ -188,7 +191,8 @@ public sealed class GitHubActionsWorkflowDispatcher
 
         var workflow = _workflows.DemandByFileAndPath(receipt.WorkflowFile, receipt.WorkflowPath);
         var durable = _journal.Get(receipt.RequestId);
-        if (!string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
+        if (!string.Equals(durable.TaskId, receipt.TaskId, StringComparison.Ordinal) ||
+            !string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(durable.WorkflowFile, receipt.WorkflowFile, StringComparison.Ordinal) ||
             !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
             !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
@@ -255,7 +259,7 @@ public sealed class GitHubActionsWorkflowDispatcher
     public GitHubActionsDispatchReceipt GetDispatchReceipt(string requestId)
     {
         var record = _journal.Get(requestId);
-        return new GitHubActionsDispatchReceipt(record.RequestId, record.Repository,
+        return new GitHubActionsDispatchReceipt(record.RequestId, record.TaskId, record.Repository,
             record.WorkflowFile, record.WorkflowPath, record.Branch, record.CandidateSha,
             record.AcknowledgedAt ?? record.CreatedAt);
     }
@@ -277,7 +281,8 @@ public sealed class GitHubActionsWorkflowDispatcher
             !string.Equals(correlation.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("Run correlation does not match the dispatch receipt.");
         var durable = _journal.Get(receipt.RequestId);
-        if (!string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
+        if (!string.Equals(durable.TaskId, receipt.TaskId, StringComparison.Ordinal) ||
+            !string.Equals(durable.Repository, receipt.Repository, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(durable.WorkflowFile, receipt.WorkflowFile, StringComparison.Ordinal) ||
             !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
             !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
