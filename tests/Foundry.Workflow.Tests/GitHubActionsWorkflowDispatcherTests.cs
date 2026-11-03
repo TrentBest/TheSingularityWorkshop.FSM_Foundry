@@ -84,6 +84,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
+                    total_count = 1,
                     workflow_runs = new[] { new
                     {
                         id = 765432L, run_attempt = 1,
@@ -135,6 +136,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
+                    total_count = 2,
                     workflow_runs = new[]
                     {
                         new
@@ -247,7 +249,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                 return CandidateRef();
             if (request.Method == HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
-            return Json(HttpStatusCode.OK, """{"workflow_runs":[]}""");
+            return Json(HttpStatusCode.OK, """{"total_count":1,"workflow_runs":[]}""");
         });
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
         await dispatcher.DispatchAsync(Repository, "proof", Branch, CandidateSha);
