@@ -147,7 +147,7 @@ public sealed class WorkTaskCapabilityRegistryTests
         var reviewReady = claimed with { Status = WorkTaskStatus.ReviewReady };
 
         var capability = registry.Grant(reviewReady, "work/task-8", CandidateSha,
-            Array.Empty<string>(), new[] { WorkTaskAction.CreateDraftPullRequest },
+            new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.CreateDraftPullRequest },
             Now.AddMinutes(1), TimeSpan.FromMinutes(5));
 
         Demand(registry, capability, reviewReady, WorkTaskAction.CreateDraftPullRequest,
@@ -168,7 +168,7 @@ public sealed class WorkTaskCapabilityRegistryTests
         var registry = new WorkTaskCapabilityRegistry();
         var claimed = ActiveTask();
         Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(claimed,
-            "work/task-8", CandidateSha, Array.Empty<string>(),
+            "work/task-8", CandidateSha, new[] { "src/Foundry.Workflow" },
             new[] { WorkTaskAction.CreateDraftPullRequest },
             Now, TimeSpan.FromMinutes(5)));
     }
