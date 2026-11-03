@@ -70,10 +70,13 @@ internal sealed class FsmApiWorkflowLifecycle : IDisposable
 
     public WorkflowRunStatus GetStatus(Guid runId)
     {
-        var handle = GetRun(runId).Handle;
-        return Enum.TryParse<WorkflowRunStatus>(handle.CurrentState, ignoreCase: false, out var status)
-            ? status
-            : throw new InvalidOperationException($"FSM_API returned unknown workflow lifecycle state '{handle.CurrentState}'.");
+        lock (RegistryGate)
+        {
+            var handle = GetRun(runId).Handle;
+            return Enum.TryParse<WorkflowRunStatus>(handle.CurrentState, ignoreCase: false, out var status)
+                ? status
+                : throw new InvalidOperationException($"FSM_API returned unknown workflow lifecycle state '{handle.CurrentState}'.");
+        }
     }
 
     public void Transition(Guid runId, WorkflowRunStatus target)
