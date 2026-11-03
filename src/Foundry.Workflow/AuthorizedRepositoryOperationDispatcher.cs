@@ -147,17 +147,20 @@ public sealed class AuthorizedRepositoryOperationDispatcher
     private readonly WorkTaskCapabilityRegistry _capabilities;
     private readonly IRepositoryOperationAdapter _adapter;
     private readonly IRepositoryOperationAuditJournal _journal;
+    private readonly Func<DateTimeOffset> _clock;
 
     public AuthorizedRepositoryOperationDispatcher(
         PersistentWorkTaskCoordinator tasks,
         WorkTaskCapabilityRegistry capabilities,
         IRepositoryOperationAdapter adapter,
-        IRepositoryOperationAuditJournal journal)
+        IRepositoryOperationAuditJournal journal,
+        Func<DateTimeOffset>? clock = null)
     {
         _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
     public async ValueTask<RepositoryOperationResult> ExecuteAsync(
@@ -188,7 +191,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
             if (!string.Equals(latestTask.Request.Repository, operation.Repository, StringComparison.OrdinalIgnoreCase))
                 throw new UnauthorizedAccessException("Operation repository no longer matches the durable task.");
             _capabilities.Demand(capabilityId, latestTask, operation.Branch, operation.CandidateSha,
-                operation.Action, operation.Path, DateTimeOffset.UtcNow);
+                operation.Action, operation.Path, _clock());
             cancellationToken.ThrowIfCancellationRequested();
 
             result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
