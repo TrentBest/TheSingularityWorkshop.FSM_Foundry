@@ -9,7 +9,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     private static readonly DateTimeOffset Now = new(2026, 10, 30, 20, 0, 0, TimeSpan.Zero);
     private static readonly string BaseSha = new('a', 40);
     private static readonly string CandidateSha = new('b', 40);
-    private const string Repository = "TrentBest/TheSingularityWorkshop.Foundry";
+    private const string Repository = "TrentBest/TheSingularityWorkshop.FSM_Foundry";
 
     [Fact]
     public async Task AuthorizedWriteReachesHostAdapterWithExactProvenance()
@@ -22,7 +22,8 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         var result = await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation,
             Now.AddMinutes(1));
 
-        Assert.Equal(CandidateSha, result.CandidateSha);
+        Assert.Equal(CandidateSha, result.RequestedCandidateSha);
+        Assert.Equal(CandidateSha, result.ResultingCandidateSha);
         Assert.Equal(1, fixture.Adapter.Calls);
         Assert.Same(operation, fixture.Adapter.LastOperation);
     }
@@ -109,7 +110,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     {
         using var fixture = new Fixture();
         var capability = fixture.Grant(WorkTaskAction.ReadRepository);
-        fixture.Adapter.ResultCandidateSha = new string('c', 40);
+        fixture.Adapter.ResultingCandidateSha = new string('c', 40);
         var operation = new ReadRepositoryFileOperation("task-8", Repository, "work/task-8",
             CandidateSha, "src/Foundry.Workflow/file.cs");
 
@@ -139,7 +140,8 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         Assert.Equal(1, fixture.Adapter.Calls);
         Assert.True(context.TryGetOutput<RepositoryOperationResult>(
             RepositoryOperationWorkflowHandler.OutputKey, out var operationResult));
-        Assert.Equal(CandidateSha, operationResult!.CandidateSha);
+        Assert.Equal(CandidateSha, operationResult!.RequestedCandidateSha);
+        Assert.Equal(CandidateSha, operationResult.ResultingCandidateSha);
     }
 
     [Fact]
@@ -191,7 +193,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             var store = new JsonlWorkTaskStore(Path.Combine(_directory, "tasks.jsonl"));
             Tasks = new PersistentWorkTaskCoordinator(store);
             Tasks.Submit(new WorkTaskRequest(1, "task-8", "correlation-8", Repository, 8,
-                "https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/8",
+                "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/8",
                 BaseSha, new[] { "src/Foundry.Workflow" }, 3));
             Task = Tasks.Claim("task-8", "agent-a", leaseDuration ?? TimeSpan.FromMinutes(20), Now);
             Dispatcher = new AuthorizedRepositoryOperationDispatcher(Tasks, Capabilities, Adapter);
@@ -212,7 +214,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     {
         public int Calls { get; private set; }
         public RepositoryOperation? LastOperation { get; private set; }
-        public string? ResultCandidateSha { get; set; }
+        public string? ResultingCandidateSha { get; set; }
 
         public ValueTask<RepositoryOperationResult> ExecuteAsync(
             RepositoryOperation operation, CancellationToken cancellationToken)
@@ -221,7 +223,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             Calls++;
             LastOperation = operation;
             return ValueTask.FromResult(new RepositoryOperationResult(
-                "fake-operation-1", ResultCandidateSha ?? operation.CandidateSha));
+                "fake-operation-1", operation.CandidateSha, ResultingCandidateSha ?? operation.CandidateSha));
         }
     }
 }
