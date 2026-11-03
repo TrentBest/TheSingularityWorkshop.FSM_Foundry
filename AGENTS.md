@@ -50,9 +50,9 @@ Foundry is the host-neutral execution and work-control boundary for the Workshop
 - **CiAi evaluates CI:** it owns deterministic CI policy and exact-run evidence contracts. It is not the general agent coordinator and does not grant repository permissions.
 - **GitHub is the durable repository authority:** issues, branches, commits, workflow runs, evidence links, reviews, and pull requests remain source-of-truth artifacts.
 - **Hosts own concrete capabilities:** credentials, secure re-authentication, repository operations, provider configuration, network dispatch, and external notification transports stay behind explicit host adapters.
-- **FSM_API supplies FSM mechanics** where Foundry directly consumes them. Do not recreate FSM_API behavior in Foundry.
+- **FSM_API drives operational state transitions:** the production `WorkflowExecutionCoordinator` uses real FSM_API definitions and handles for workflow-run lifecycle. Foundry retains higher-level workflow/task semantics, asynchronous handler execution, authorization, audit, and host orchestration. Do not replace the integration with a hand-maintained parallel lifecycle FSM or reimplement FSM_API behavior.
 
-Keep `WorkflowDefinition`, FSM_COS `RuntimeAssembly`, and legacy host work descriptors distinct unless source inspection and a deterministic test prove a safe adapter.
+Keep `WorkflowDefinition`, FSM_COS `RuntimeAssembly`, and legacy host work descriptors distinct unless source inspection and a deterministic test prove a safe adapter. During development, consume FSM_API from its `development` source checkout pinned by Foundry CI; do not add a published NuGet dependency before the explicit publish gate.
 
 ## Safety invariants
 
