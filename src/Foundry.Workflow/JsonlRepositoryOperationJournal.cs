@@ -292,7 +292,7 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
                 if (previous.Status != RepositoryOperationAuditStatus.Pending ||
                     record.Status == RepositoryOperationAuditStatus.Pending ||
                     !SameIdentity(previous, record) ||
-                    !record.CompletedAt.HasValue || record.CompletedAt < previous.StartedAt)
+                    !record.CompletedAt.HasValue || record.CompletedAt.Value < previous.StartedAt)
                     throw new InvalidDataException($"Repository operation '{record.OperationId}' has an invalid state transition.");
                 if (record.Status == RepositoryOperationAuditStatus.Completed &&
                     (string.IsNullOrWhiteSpace(record.OperationReference) || record.ResultingCandidateSha is null ||
@@ -327,8 +327,8 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
             entry.Sequence < 1 || string.IsNullOrEmpty(entry.OperationId) || entry.OperationId.Length != 32 ||
             !Guid.TryParseExact(entry.OperationId, "N", out _) ||
             entry.StartedAt == default ||
-            !Enum.TryParse<WorkTaskAction>(entry.Action, out _) ||
-            !Enum.IsDefined(entry.Status))
+            !Enum.TryParse<WorkTaskAction>(entry.Action, out var action) ||
+            !Enum.IsDefined(action) || !Enum.IsDefined(entry.Status))
             throw new ArgumentException("Repository operation audit schema, identity, or state is invalid.");
         RepositoryOperation.RequireText(entry.TaskId, nameof(entry.TaskId), 128);
         RepositoryOperation.RequireText(entry.Repository, nameof(entry.Repository), 256);
@@ -354,8 +354,8 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
             throw new ArgumentException("Completed repository operation audit records require valid result provenance.");
         if (entry.Status == RepositoryOperationAuditStatus.Failed &&
             (!entry.CompletedAt.HasValue || string.IsNullOrWhiteSpace(entry.FailureType) ||
-             entry.FailureType.Length > 256 || entry.OperationReference is not null ||
-             entry.ResultingCandidateSha is not null))
+             entry.FailureType.Length > 256 || entry.FailureType.Any(char.IsControl) ||
+             entry.OperationReference is not null || entry.ResultingCandidateSha is not null))
             throw new ArgumentException("Failed repository operation audit records require a bounded failure type.");
     }
 
