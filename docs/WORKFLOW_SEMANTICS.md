@@ -3,7 +3,7 @@
 
 # Workflow Semantics — Version 1
 
-**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and timeout semantics have prior CI evidence; the FSM_API-backed production lifecycle and integration tests passed exact-head CI run [#41713120380](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41713120380) on head `8041e76e088d8d7f8965a3443a685ddcc7c0a3f3`.
+**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and timeout semantics have prior CI evidence; the FSM_API-backed production lifecycle and integration tests passed exact-head CI run [#41725200636](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41725200636) on head `7f89891b81e68638d9cf72f67b902e170896ea4b`.
 
 ## The execution model
 
@@ -52,7 +52,7 @@ flowchart TD
 - `Cancel(runId)` requests cooperative cancellation for a running run, or marks an accepted-but-not-started run cancelled. It returns false for an already terminal run.
 - `DisposeAsync()` cancels accepted/running work and waits for running handlers to finish. Handlers must honor cancellation for disposal to finish promptly.
 
-Lifecycle statuses are `Accepted`, `Running`, `Succeeded`, `Failed`, `Cancelled`, `TimedOut`, and `Invalid`. The FSM_API handle's `CurrentState` is the authoritative lifecycle state read by snapshots. The final workflow status remains the existing `WorkflowStatus`; it does not replace or reinterpret step/workflow outcomes. Foundry validates legal transition requests and FSM_API evaluates the registered transition guards. Snapshots are observations, not mutable control objects. A presentation layer may display snapshots and send commands, but it does not own the authoritative state.
+Lifecycle statuses are `Accepted`, `Running`, `Succeeded`, `Failed`, `Cancelled`, `TimedOut`, and `Invalid`. The FSM_API handle's `CurrentState` is the authoritative lifecycle state read by snapshots. The final workflow status remains the existing `WorkflowStatus`; it does not replace or reinterpret step/workflow outcomes. The FSM_API definition and registered guards are the sole authority for transition legality; Foundry submits requests and verifies the resulting CurrentState. Snapshots are observations, not mutable control objects. A presentation layer may display snapshots and send commands, but it does not own the authoritative state.
 
 This is an in-process coordinator, not a durable queue or cross-process service. Run snapshots are retained only for the coordinator's lifetime. Each coordinator owns a unique FSM_API processing group and definition; each run owns a distinct FSM_API handle/context. The adapter serializes access to FSM_API's static registry and explicitly destroys only its own handles and definition. See [FSM_API Runtime Integration](FSM_API_RUNTIME_INTEGRATION.md) for the transition graph, context ownership, source dependency, and local build setup.
 
