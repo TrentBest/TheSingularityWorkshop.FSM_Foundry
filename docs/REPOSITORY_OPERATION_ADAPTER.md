@@ -64,7 +64,7 @@ The feature branch contains:
 - The workflow-registry handler and data-only request contract.
 - Fake-adapter tests for authorization failures, path scope and traversal, wrong task/repository/branch/SHA, CODE RED, lease expiry, read/CI/branch SHA provenance, workflow integration, arbitrary-tool rejection, and candidate advancement after a mutation.
 
-The dispatcher/handler implementation passed the full proof workflow on earlier head `afa96ffc64d29aa2c7f448eca4e1b3ea37db415b` in [GitHub Actions run #41581638543](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41581638543). Subsequent documentation corrections, path-hardening tests, and the new branch-creation operation are newer than that run; exact-head revalidation is pending.
+The exact PR head `3a72ebdae73887adcca23a45dbeda3e3c09f3ed1` passed the full proof workflow in [GitHub Actions run #41582975207](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41582975207). Workflow tests, project builds, the separate-process FSM_API probe, the repeated fox/sheepdog scenario, and evidence artifact publication all succeeded.
 
 Not implemented by this boundary:
 
