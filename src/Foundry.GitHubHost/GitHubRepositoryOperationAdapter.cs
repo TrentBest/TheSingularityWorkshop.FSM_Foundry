@@ -41,7 +41,9 @@ public sealed class GitHubRepositoryOperationPolicy
     {
         if (string.IsNullOrWhiteSpace(branch) || branch.Length > 200 ||
             !BranchPattern.IsMatch(branch) || branch.Contains("//", StringComparison.Ordinal) ||
-            branch.Split('/').Any(part => part is "." or "..") ||
+            branch.Contains("..", StringComparison.Ordinal) ||
+            branch.Contains("@{", StringComparison.Ordinal) ||
+            branch.Split('/').Any(part => part is "." or ".." || part.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)) ||
             branch.EndsWith(".", StringComparison.Ordinal) || branch.EndsWith("/", StringComparison.Ordinal))
             throw new UnauthorizedAccessException("The branch is outside the host candidate-branch namespace.");
     }
@@ -49,9 +51,10 @@ public sealed class GitHubRepositoryOperationPolicy
     private static string ValidateRepository(string repository)
     {
         if (string.IsNullOrWhiteSpace(repository) || repository.Length > 256 ||
-            repository.Any(char.IsControl) || repository.Count(ch => ch == '/') != 1 ||
-            repository.Split('/') is not [var owner, var name] ||
-            !IsGitHubSegment(owner) || !IsGitHubSegment(name))
+            repository.Any(char.IsControl))
+            throw new ArgumentException("Repository must be a valid owner/name identifier.", nameof(repository));
+        var segments = repository.Split('/');
+        if (segments.Length != 2 || !IsGitHubSegment(segments[0]) || !IsGitHubSegment(segments[1]))
             throw new ArgumentException("Repository must be a valid owner/name identifier.", nameof(repository));
         return repository;
     }
@@ -220,8 +223,24 @@ public sealed class GitHubRepositoryOperationAdapter : IRepositoryOperationAdapt
     private static async ValueTask<T> ReadJsonAsync<T>(
         HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
+        const int maximumJsonBytes = 128 * 1024;
+        if (response.Content.Headers.ContentLength is > maximumJsonBytes)
+            throw new InvalidDataException("GitHub response exceeds the host response limit.");
+
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var bounded = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+                break;
+            if (bounded.Length + read > maximumJsonBytes)
+                throw new InvalidDataException("GitHub response exceeds the host response limit.");
+            await bounded.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+        }
+        bounded.Position = 0;
+        return await JsonSerializer.DeserializeAsync<T>(bounded, JsonOptions, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidDataException("GitHub returned an empty or invalid JSON response.");
     }
 
