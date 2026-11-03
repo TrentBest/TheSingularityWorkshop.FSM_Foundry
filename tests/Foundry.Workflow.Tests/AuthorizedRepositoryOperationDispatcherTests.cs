@@ -63,9 +63,9 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         Assert.Equal(CandidateSha, entry.ResultingCandidateSha);
         Assert.NotNull(entry.RequestPayloadSha256);
         Assert.Equal(64, entry.RequestPayloadSha256!.Length);
-        var journalText = File.ReadAllText(Path.Combine(fixture.Directory, "operations.jsonl"));
+        var journalText = File.ReadAllText(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
         Assert.DoesNotContain(privateContent, journalText, StringComparison.Ordinal);
-        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.Directory, "operations.jsonl"));
+        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
         Assert.Equal(RepositoryOperationAuditStatus.Completed, Assert.Single(reopened.GetAll()).Status);
     }
 
@@ -96,7 +96,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             CandidateSha, "src/Foundry.Workflow/Example.cs", "content");
         var pending = fixture.Journal.Begin(operation, Now.AddMinutes(1));
 
-        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.Directory, "operations.jsonl"));
+        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
 
         var entry = Assert.Single(reopened.GetAll());
         Assert.Equal(pending.OperationId, entry.OperationId);
@@ -313,7 +313,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     private sealed class Fixture : IDisposable
     {
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "foundry-operation-tests", Guid.NewGuid().ToString("N"));
-        public string Directory => _directory;
+        public string JournalDirectory => _directory;
         public PersistentWorkTaskCoordinator Tasks { get; }
         public WorkTaskSnapshot Task { get; }
         public WorkTaskCapabilityRegistry Capabilities { get; } = new();
