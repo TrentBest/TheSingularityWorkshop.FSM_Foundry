@@ -8,6 +8,8 @@
 
 ## Entry points
 
+- [FSM_API runtime integration](docs/FSM_API_RUNTIME_INTEGRATION.md) — lifecycle ownership, transition mapping, source dependency, and local setup.
+
 - [README](README.md) — product intent and five-section overview.
 - [Agent onboarding](AGENTS.md) — repository-specific contribution, safety, branch, release, and documentation rules.
 - [Gallery](Gallery.md) — demonstrations and recipes.
