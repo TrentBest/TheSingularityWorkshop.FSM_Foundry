@@ -123,6 +123,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
             Repository, "agents/task-123", CandidateSha, "src/Example.cs",
             "abcdef0123456789abcdef0123456789abcdef01",
             new string('a', 64), DateTimeOffset.UtcNow));
+        var refReads = 0;
         var handler = new StubGitHubHandler((request, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -144,7 +145,7 @@ public sealed class GitHubRepositoryOperationAdapterTests
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
                     @ref = "refs/heads/agents/task-123",
-                    @object = new { sha = commitSha, type = "commit" }
+                    @object = new { sha = ++refReads == 1 ? CandidateSha : commitSha, type = "commit" }
                 }));
             if (request.Method == HttpMethod.Patch && path.Contains("/git/refs/", StringComparison.Ordinal))
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
