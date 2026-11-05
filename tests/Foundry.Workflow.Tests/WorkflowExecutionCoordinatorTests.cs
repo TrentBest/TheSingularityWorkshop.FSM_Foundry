@@ -257,6 +257,27 @@ public sealed class WorkflowExecutionCoordinatorTests
         Assert.True(context.GetOutput<bool>("completed"));
     }
 
+    [Fact]
+    public async Task HostFacingInterfaceExposesTheExistingWorkflowLifecycle()
+    {
+        var calls = 0;
+        var registry = new WorkflowHandlerRegistry();
+        registry.Register("work", _ => { calls++; return ValueTask.CompletedTask; });
+        await using IWorkflowExecutionCoordinator coordinator =
+            new WorkflowExecutionCoordinator(registry);
+
+        var accepted = coordinator.Submit(Definition(new WorkflowStep("step-1", "work")));
+        Assert.Equal(WorkflowRunStatus.Accepted, accepted.Status);
+        Assert.Equal(0, calls);
+
+        var result = await coordinator.StartAsync(accepted.RunId);
+        Assert.Equal(WorkflowStatus.Succeeded, result.Status);
+        Assert.Equal(WorkflowRunStatus.Succeeded,
+            coordinator.GetSnapshot(accepted.RunId).Status);
+        Assert.Equal(1, calls);
+        Assert.False(coordinator.Cancel(accepted.RunId));
+    }
+
     private static WorkflowDefinition Definition(params WorkflowStep[] steps) =>
         new("test.workflow.v1", "Test workflow", 1, steps);
 }

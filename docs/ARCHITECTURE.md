@@ -7,13 +7,13 @@
 
 ## Purpose
 
-Foundry is the Workshop Hub's host-neutral execution pipeline. It accepts explicit work, validates it before side effects, coordinates execution, retains lifecycle state, and reports structured outcomes. It does not own Hub presentation or FSM_COS composition.
+Foundry is the Workshop Hub's host-neutral workflow execution and lifecycle domain. It accepts explicit workflow definitions, validates them before handler side effects, coordinates the existing sequential runner, retains in-process run state, and reports structured outcomes. It does not own Hub presentation or FSM_COS composition. The source-backed [Hub execution ownership and host contract](HUB_EXECUTION_OWNERSHIP.md) distinguishes this implemented workflow seam from the still-unimplemented RuntimeAssembly scheduling handoff and legacy WebPage process-group behavior.
 
 ## Responsibility boundaries
 
 | System | Intended responsibility | Current evidence |
 |---|---|---|
-| Foundry | Workflow definition/validation, run lifecycle, execution coordination, result reporting | Version-1 in-memory definition, preflight validator, registered-handler runner, retained lifecycle coordinator and immutable snapshots; CI verification pending |
+| Foundry | Workflow definition/validation, run lifecycle, execution coordination, result reporting | Version-1 data-only definition, preflight validator, host-registered sequential runner, in-process lifecycle coordinator, immutable snapshots, and host-facing `IWorkflowExecutionCoordinator`; no RuntimeAssembly scheduler or remote transport |
 | The / Architect | Hub intent and human-facing coordination | Cross-repository ownership contract; Hub presentation is optional |
 | GUI | Optional Hub presentation and explicit user intents | GUI issue #53 tracks presentation contract; no execution authority |
 | FSM_API | FSM mechanics when directly consumed | Published 1.0.13 package restored, built, and exercised by the prior passing probe; no reusable adapter yet |

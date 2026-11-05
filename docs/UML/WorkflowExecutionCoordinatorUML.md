@@ -3,13 +3,23 @@
 
 # WorkflowExecutionCoordinator — UML Neighborhood
 
-**Status:** source-grounded view of the PR #10 feature-branch implementation; the timeout extension is not yet part of `development`. The combined lifecycle and timeout tests passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768).
+**Status:** source-grounded view of the current `development` implementation. The timeout and retained lifecycle behavior are part of `development`; the host-facing interface is introduced on this feature branch. Existing lifecycle/timeout tests passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768).
 
 ## Neighborhood
 
 ```mermaid
 classDiagram
     direction TB
+    class IWorkflowExecutionCoordinator {
+        <<interface>>
+        +Submit(WorkflowDefinition) WorkflowRunSnapshot
+        +Submit(WorkflowDefinition, WorkflowExecutionContext) WorkflowRunSnapshot
+        +StartAsync(Guid) Task~WorkflowResult~
+        +StartAsync(Guid, TimeSpan?) Task~WorkflowResult~
+        +Cancel(Guid) bool
+        +GetSnapshot(Guid) WorkflowRunSnapshot
+        +DisposeAsync() ValueTask
+    }
     class WorkflowExecutionCoordinator {
         +Submit(WorkflowDefinition) WorkflowRunSnapshot
         +StartAsync(Guid) Task~WorkflowResult~
@@ -50,6 +60,7 @@ classDiagram
         TimedOut
         Invalid
     }
+    IWorkflowExecutionCoordinator <|.. WorkflowExecutionCoordinator : implemented by
     WorkflowExecutionCoordinator --> WorkflowRunner : delegates execution
     WorkflowExecutionCoordinator --> WorkflowHandlerRegistry : through runner
     WorkflowExecutionCoordinator --> WorkflowDefinition : retains accepted definition
@@ -99,6 +110,7 @@ sequenceDiagram
 
 ## Source and tests
 
+- [Coordinator interface](../../src/Foundry.Workflow/IWorkflowExecutionCoordinator.cs)
 - [Coordinator source](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
 - [Source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md)
 - [Lifecycle tests](../../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)

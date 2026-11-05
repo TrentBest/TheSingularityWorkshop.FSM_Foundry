@@ -13,6 +13,8 @@
 
 ## 01 — Why Foundry exists
 
+The [Hub execution ownership contract](docs/HUB_EXECUTION_OWNERSHIP.md) documents the current host-facing workflow API and distinguishes it from FSM_COS composition and legacy process-group scheduling.
+
 Workflow meaning should not be buried in a desktop window, browser component, or CI YAML. Foundry provides a small, inspectable execution boundary that hosts can use without depending on GUI or a particular platform. Workflow definitions are data; hosts explicitly register the capabilities that definitions may invoke.
 
 ## 02 — Ownership boundaries
