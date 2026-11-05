@@ -140,6 +140,64 @@ public sealed class WorkTaskCapabilityRegistryTests
     }
 
     [Fact]
+    public void ReviewReadyTaskCanGrantOnlyDraftPullRequestHandoff()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var claimed = coordinator.Claim("task-8", "agent-a", TimeSpan.FromMinutes(20), Now);
+        var leaseId = claimed.Lease!.LeaseId;
+        coordinator.Transition("task-8", leaseId, WorkTaskStatus.Investigating,
+            Now.AddSeconds(10), "Inspect the requested change.");
+        coordinator.Transition("task-8", leaseId, WorkTaskStatus.Implementing,
+            Now.AddSeconds(20), "Implement the isolated change.");
+        coordinator.Transition("task-8", leaseId, WorkTaskStatus.Validating,
+            Now.AddSeconds(30), "Validate the exact candidate.");
+
+        var attempt = new WorkTaskRepairAttempt(1, "task-8", "correlation-8",
+            "TrentBest/TheSingularityWorkshop.Foundry", "work/task-8",
+            ".github/workflows/build.yml", Now, 1, BaseSha, 1001, 1,
+            new string('f', 64), true, true, false, null,
+            Now.AddMinutes(1), Now.AddMinutes(4));
+        var expectation = new WorkTaskRepairEvidenceExpectation("task-8", "correlation-8",
+            "TrentBest/TheSingularityWorkshop.Foundry", "work/task-8",
+            ".github/workflows/build.yml", CandidateSha, Now, 1001, 1);
+        // Evidence must identify the exact candidate being authorized.
+        attempt = attempt with { CandidateSha = CandidateSha };
+        var reviewReady = coordinator.ApplyRepairDecision("task-8", leaseId,
+            Array.Empty<WorkTaskRepairAttempt>(), attempt, expectation,
+            TimeSpan.FromMinutes(30), Now.AddMinutes(5));
+        Assert.Equal(WorkTaskStatus.ReviewReady, reviewReady.Status);
+        Assert.NotNull(reviewReady.Lease);
+
+        var registry = new WorkTaskCapabilityRegistry();
+        var capability = registry.Grant(reviewReady, "work/task-8", CandidateSha,
+            new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.CreateDraftPullRequest },
+            Now.AddMinutes(5), TimeSpan.FromMinutes(5));
+
+        Demand(registry, capability, reviewReady, WorkTaskAction.CreateDraftPullRequest,
+            now: Now.AddMinutes(6));
+        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
+            reviewReady, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/file.cs", Now.AddMinutes(6)));
+        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, capability,
+            reviewReady, WorkTaskAction.RequestCiRun, now: Now.AddMinutes(6)));
+        Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(reviewReady, "work/task-8",
+            CandidateSha, new[] { "src/Foundry.Workflow" },
+            new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
+            Now.AddMinutes(1), TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
+    public void DraftPullRequestHandoffCannotBeAuthorizedBeforeReviewReady()
+    {
+        var registry = new WorkTaskCapabilityRegistry();
+        var claimed = ActiveTask();
+        Assert.Throws<UnauthorizedAccessException>(() => registry.Grant(claimed,
+            "work/task-8", CandidateSha, new[] { "src/Foundry.Workflow" },
+            new[] { WorkTaskAction.CreateDraftPullRequest },
+            Now, TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
     public void CapabilityExpiresAndCanBeRevoked()
     {
         var registry = new WorkTaskCapabilityRegistry();
