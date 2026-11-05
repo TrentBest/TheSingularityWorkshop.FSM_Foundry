@@ -3,7 +3,7 @@
 
 # Foundry Architecture
 
-**Status:** the FSM_API integration probe, deterministic fox/sheepdog scenario, sequential workflow runner, and retained in-process lifecycle coordinator passed [development CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40546957980). Broader Hub migration and release readiness remain unverified.
+**Status:** the FSM_API integration probe, deterministic fox/sheepdog scenario, sequential workflow runner, and retained in-process lifecycle coordinator passed [development CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/40546957980). Broader Hub migration and release readiness remain unverified.
 
 ## Purpose
 
@@ -47,7 +47,7 @@ GUI consumes presentation-facing snapshots and sends explicit commands through a
 
 The `Foundry.FsmApiProbe` project uses the published FSM_API package to create a named FSM, assert its initial state, execute the public update path, assert the transition, and perform scoped cleanup. The `Foundry.FoxSheepdog` project exercises the fox/dog state sequence with scripted ticks, asserts the cross-FSM transition, and emits a TSV trace and SVG. The existing CI workflow compares repeat-run outputs byte-for-byte.
 
-These are deterministic state-execution demonstrations, not automatically treated as Foundry workflows. The coordinator tests and deterministic state-evidence checks passed in [CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40546957980).
+These are deterministic state-execution demonstrations, not automatically treated as Foundry workflows. The coordinator tests and deterministic state-evidence checks passed in [CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/40546957980).
 
 ## Safety boundaries
 
