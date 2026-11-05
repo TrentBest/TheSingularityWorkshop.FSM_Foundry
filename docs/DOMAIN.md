@@ -33,7 +33,7 @@ The focused tests cover declared order, invalid definitions before side effects,
 | Validation | Check the complete definition before invoking handlers | Implemented |
 | Step outcome | Recorded result for one step | Implemented, including skipped work after failure/cancellation |
 | Workflow outcome | Aggregate terminal result | Implemented for the current sequential runtime |
-| Retained run lifecycle | Accept/start/cancel/query a run and retain state while the coordinator lives | Implemented in process; CI verification pending |
+| Retained run lifecycle | Accept/start/cancel/query a run and retain state while the coordinator lives | FSM_API-backed on PR #29; exact-head CI pending |
 | Run identity and durable history | Correlate and retain execution attempts across process lifetime | Durable history not implemented |
 | Dependency graph / parallel execution | Execute work based on graph dependencies | Not implemented |
 | Retry, compensation, recovery | Policy for repeating or undoing side effects | Not implemented |
@@ -52,7 +52,7 @@ The focused tests cover declared order, invalid definitions before side effects,
 
 ## What Foundry does not own
 
-- **Finite-state-machine primitives.** FSM_API owns those mechanics where a component directly uses that package.
+- **Finite-state-machine primitives.** FSM_API owns the actual definitions, handles, transition evaluation, and processing-group mechanics used by the production workflow coordinator. Foundry owns the workflow/task semantics and async orchestration around those primitives. See [FSM_API Runtime Integration](FSM_API_RUNTIME_INTEGRATION.md).
 - **MicroBundle composition.** FSM_COS owns its composition boundary. A Foundry workflow is not an FSM_COS RuntimeManifest, and RuntimeAssembly is not a workflow result.
 - **Universal serialization.** FSM_Serialization is not presumed to provide a universal workflow schema.
 - **The host environment.** GitHub Actions, AnyApp, WebPage, or another host supplies triggers, permissions, and external capabilities.
