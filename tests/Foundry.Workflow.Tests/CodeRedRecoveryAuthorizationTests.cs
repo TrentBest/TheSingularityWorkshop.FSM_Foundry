@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Threading;
-using System.Threading.Tasks;
 using TheSingularityWorkshop.Foundry;
 using Xunit;
 
@@ -11,94 +8,165 @@ public sealed class CodeRedRecoveryAuthorizationTests
     private static readonly DateTimeOffset Now = new(2026, 10, 31, 5, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void PersistentRecoveryVerifiesReceiptAndPersistsSingleUseAuditEvidence()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"foundry-recovery-{Guid.NewGuid():N}.jsonl");
-        try
-        {
-            var verifier = new TestVerifier();
-            var coordinator = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path),
-                recoveryReceiptVerifier: verifier);
-            var (lease, incident, receipt) = CreateCodeRedTask(coordinator);
-            var recovered = coordinator.RecoverFromCodeRed("task-recovery", lease, incident,
-                receipt, Now.AddMinutes(1), "resume after approved investigation");
-
-            Assert.Equal(WorkTaskStatus.Investigating, recovered.Status);
-            var audit = recovered.Events[^1];
-            Assert.Equal(receipt.ReceiptId, audit.ApprovalReceiptId);
-            Assert.Equal(receipt.Issuer, audit.ApprovalIssuer);
-            Assert.Equal(receipt.Principal, audit.ApprovalPrincipal);
-            Assert.Equal(receipt, audit.ApprovalReceipt);
-            Assert.Equal(incident.IncidentId, audit.ApprovalIncidentId);
-            Assert.Equal(incident.Sequence, audit.ApprovalIncidentSequence);
-            Assert.Equal(receipt.TaskEventSequence, audit.ApprovalTaskEventSequence);
-
-            var restarted = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path),
-                recoveryReceiptVerifier: verifier);
-            var restored = restarted.GetSnapshot("task-recovery");
-            Assert.Equal(audit, restored.Events[^1]);
-            Assert.Equal(WorkTaskStatus.Investigating, restored.Status);
-            Assert.Throws<InvalidOperationException>(() => restarted.RecoverFromCodeRed(
-                "task-recovery", lease, incident, receipt, Now.AddMinutes(2), "replay"));
-        }
-        finally
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-    }
-
-    [Fact]
-    public void InvalidSignatureAndUntrustedIssuerLeaveTaskInCodeRed()
-    {
-        var coordinator = new WorkTaskCoordinator(new TestVerifier(acceptSignature: false));
-        var (lease, incident, receipt) = CreateCodeRedTask(coordinator);
-        Assert.Throws<UnauthorizedAccessException>(() => coordinator.RecoverFromCodeRed(
-            "task-recovery", lease, incident, receipt, Now.AddMinutes(1), "invalid signature"));
-        Assert.Equal(WorkTaskStatus.CodeRed, coordinator.GetSnapshot("task-recovery").Status);
-
-        var untrusted = receipt with { Issuer = "unknown-host" };
-        Assert.Throws<UnauthorizedAccessException>(() => coordinator.RecoverFromCodeRed(
-            "task-recovery", lease, incident, untrusted, Now.AddMinutes(1), "untrusted issuer"));
-        Assert.Equal(WorkTaskStatus.CodeRed, coordinator.GetSnapshot("task-recovery").Status);
-    }
-
-    [Fact]
-    public void ExpiredOrSequenceMismatchedReceiptIsRejectedWithoutMutation()
-    {
-        var coordinator = new WorkTaskCoordinator(new TestVerifier());
-        var (lease, incident, receipt) = CreateCodeRedTask(coordinator);
-
-        Assert.Throws<UnauthorizedAccessException>(() => coordinator.RecoverFromCodeRed(
-            "task-recovery", lease, incident, receipt, Now.AddMinutes(11), "expired"));
-        var wrongTaskSequence = receipt with { TaskEventSequence = receipt.TaskEventSequence - 1 };
-        Assert.Throws<UnauthorizedAccessException>(() => coordinator.RecoverFromCodeRed(
-            "task-recovery", lease, incident, wrongTaskSequence, Now.AddMinutes(1), "stale task sequence"));
-        var wrongIncidentSequence = receipt with { IncidentSequence = incident.Sequence + 1 };
-        Assert.Throws<UnauthorizedAccessException>(() => coordinator.RecoverFromCodeRed(
-            "task-recovery", lease, incident, wrongIncidentSequence, Now.AddMinutes(1), "stale incident sequence"));
-        Assert.Equal(WorkTaskStatus.CodeRed, coordinator.GetSnapshot("task-recovery").Status);
-    }
-
-    [Fact]
-    public void PersistentRecoveryReadsTheLatestDurableIncidentAndRejectsStaleApproval()
+    public void PersistentRecoveryDelegatesHumanApprovalToHostAndPersistsIncidentProvenance()
     {
         var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
         var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
         try
         {
-            var verifier = new TestVerifier();
-            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath),
-                recoveryReceiptVerifier: verifier);
-            var (lease, incident, receipt) = CreateCodeRedTask(tasks);
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
             var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            var (lease, incident) = CreateCodeRedTask(tasks);
             incidents.Create(incident);
-            incidents.Update(incident.Update("Rechecking evidence", "A newer CI attempt arrived",
-                new string('b', 40), 1235, 2, Now.AddSeconds(30)));
-            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks);
+            var gate = new TestApprovalGate();
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, gate);
+
+            var recovered = recovery.RecoverFromCodeRed("task-recovery", lease,
+                incident.IncidentId, Now.AddMinutes(1), "host approved resume after investigation");
+
+            Assert.Equal(1, gate.Calls);
+            Assert.Equal(WorkTaskStatus.CodeRed, gate.LastTask!.Status);
+            Assert.Equal(incident.IncidentId, gate.LastIncident!.IncidentId);
+            Assert.Equal(incident.Sequence, gate.LastIncident.Sequence);
+            Assert.Equal(WorkTaskStatus.Investigating, recovered.Status);
+            var audit = recovered.Events[^1];
+            Assert.Equal(incident.IncidentId, audit.RecoveryIncidentId);
+            Assert.Equal(incident.Sequence, audit.RecoveryIncidentSequence);
+
+            var restarted = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var restored = restarted.GetSnapshot("task-recovery");
+            Assert.Equal(WorkTaskStatus.Investigating, restored.Status);
+            Assert.Equal(audit, restored.Events[^1]);
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
+    }
+
+    [Fact]
+    public void HostApprovalGateRejectsRecoveryWithoutMutatingTask()
+    {
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            var (lease, incident) = CreateCodeRedTask(tasks);
+            incidents.Create(incident);
+            var gate = new TestApprovalGate { Approved = false };
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, gate);
+            var before = tasks.GetSnapshot("task-recovery");
 
             Assert.Throws<UnauthorizedAccessException>(() => recovery.RecoverFromCodeRed(
-                "task-recovery", lease, incident.IncidentId, receipt,
-                Now.AddMinutes(1), "stale approval must not recover newer incident"));
+                "task-recovery", lease, incident.IncidentId, Now.AddMinutes(1), "not approved"));
+
+            var after = tasks.GetSnapshot("task-recovery");
+            Assert.Equal(1, gate.Calls);
+            Assert.Equal(before.Status, after.Status);
+            Assert.Equal(before.Events, after.Events);
+            Assert.Equal(WorkTaskStatus.CodeRed, after.Status);
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
+    }
+
+    [Fact]
+    public void IncidentChangeDuringHostApprovalInvalidatesTheDecision()
+    {
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            var (lease, incident) = CreateCodeRedTask(tasks);
+            incidents.Create(incident);
+            var gate = new TestApprovalGate
+            {
+                OnDemand = (current, _, _) => incidents.Update(current.Update(
+                    "Rechecking evidence", "A newer CI attempt arrived",
+                    new string('b', 40), 1235, 2, Now.AddSeconds(30)))
+            };
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, gate);
+
+            Assert.Throws<UnauthorizedAccessException>(() => recovery.RecoverFromCodeRed(
+                "task-recovery", lease, incident.IncidentId, Now.AddMinutes(1), "stale approval"));
+
+            Assert.Equal(WorkTaskStatus.CodeRed, tasks.GetSnapshot("task-recovery").Status);
+            Assert.Equal(2, incidents.Get(incident.IncidentId).Sequence);
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
+    }
+
+    [Fact]
+    public void TaskChangeDuringHostApprovalInvalidatesTheDecision()
+    {
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            var (lease, incident) = CreateCodeRedTask(tasks);
+            incidents.Create(incident);
+            var gate = new TestApprovalGate
+            {
+                OnDemand = (_, task, _) => Assert.Equal(WorkTaskStatus.CodeRed, task.Status)
+            };
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, gate);
+
+            // Simulate a task mutation after the host evaluated the exact snapshot.
+            gate.OnDemand = (_, _, _) => tasks.Transition("task-recovery", lease,
+                WorkTaskStatus.Blocked, Now.AddSeconds(30), "new blocker arrived");
+
+            Assert.Throws<InvalidOperationException>(() => recovery.RecoverFromCodeRed(
+                "task-recovery", lease, incident.IncidentId, Now.AddMinutes(1), "stale task approval"));
+
+            Assert.Equal(WorkTaskStatus.Blocked, tasks.GetSnapshot("task-recovery").Status);
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
+    }
+
+    [Fact]
+    public void ApprovalGateRunsOutsideIncidentStoreLock()
+    {
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            var (lease, incident) = CreateCodeRedTask(tasks);
+            incidents.Create(incident);
+            var updateCompleted = false;
+            var gate = new TestApprovalGate
+            {
+                OnDemand = (current, _, _) =>
+                {
+                    incidents.Update(current.Update("Approval pending", "Incident updated during host check",
+                        new string('c', 40), 1236, 3, Now.AddSeconds(30)));
+                    updateCompleted = true;
+                }
+            };
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, gate);
+
+            Assert.Throws<UnauthorizedAccessException>(() => recovery.RecoverFromCodeRed(
+                "task-recovery", lease, incident.IncidentId, Now.AddMinutes(1), "approval became stale"));
+            Assert.True(updateCompleted);
             Assert.Equal(WorkTaskStatus.CodeRed, tasks.GetSnapshot("task-recovery").Status);
         }
         finally
@@ -109,60 +177,71 @@ public sealed class CodeRedRecoveryAuthorizationTests
     }
 
     [Fact]
-    public void IncidentUpdatesAreSerializedUntilPersistentRecoveryCommits()
+    public void ExistingV1SignedReceiptHistoryRemainsReadableAsLegacyAuditOnly()
     {
-        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
-        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
-        using var verifier = new BlockingTestVerifier();
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-legacy-recovery-{Guid.NewGuid():N}.jsonl");
         try
         {
-            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath),
-                recoveryReceiptVerifier: verifier);
-            var (lease, incident, receipt) = CreateCodeRedTask(tasks);
-            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
-            incidents.Create(incident);
-            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks);
-            var recoveryTask = Task.Run(() => recovery.RecoverFromCodeRed(
-                "task-recovery", lease, incident.IncidentId, receipt,
-                Now.AddMinutes(1), "approved recovery"));
+            var request = Request();
+            var leaseId = Guid.NewGuid();
+            var lease = new WorkTaskLease("agent-recovery", leaseId, Now.AddMinutes(30));
+            var store = new JsonlWorkTaskStore(path);
+            var snapshot = store.Create(new WorkTaskSnapshot(request, WorkTaskStatus.Queued,
+                null, 0, Array.Empty<WorkTaskEvent>()));
+            var events = new List<WorkTaskEvent>();
+            var status = WorkTaskStatus.Queued;
+            var attempt = 0;
 
-            Assert.True(verifier.VerificationEntered.Wait(TimeSpan.FromSeconds(5)));
-            using var updateStarted = new ManualResetEventSlim();
-            var updated = incident.Update("Rechecking evidence", "A newer CI attempt arrived",
-                new string('b', 40), 1235, 2, Now.AddSeconds(30));
-            var updateTask = Task.Run(() =>
+            void Append(WorkTaskStatus next, DateTimeOffset occurredAt, string reason,
+                CodeRedRecoveryApprovalReceipt? legacyReceipt = null)
             {
-                updateStarted.Set();
-                return incidents.Update(updated);
-            });
-            Assert.True(updateStarted.Wait(TimeSpan.FromSeconds(5)));
-            Assert.False(updateTask.Wait(TimeSpan.FromMilliseconds(100)));
+                var previous = status;
+                var item = legacyReceipt is null
+                    ? new WorkTaskEvent(events.Count + 1, previous, next, lease.AgentId,
+                        lease.LeaseId, occurredAt, reason)
+                    : new WorkTaskEvent(events.Count + 1, previous, next, lease.AgentId,
+                        lease.LeaseId, occurredAt, reason,
+                        ApprovalReceiptId: legacyReceipt.ReceiptId,
+                        ApprovalIssuer: legacyReceipt.Issuer,
+                        ApprovalPrincipal: legacyReceipt.Principal,
+                        ApprovalIncidentId: legacyReceipt.IncidentId,
+                        ApprovalIncidentSequence: legacyReceipt.IncidentSequence,
+                        ApprovalTaskEventSequence: legacyReceipt.TaskEventSequence,
+                        ApprovalReceipt: legacyReceipt);
+                events.Add(item);
+                status = next;
+                if (next == WorkTaskStatus.Validating)
+                    attempt++;
+                snapshot = store.Append(new WorkTaskSnapshot(request, status, lease, attempt,
+                    Array.AsReadOnly(events.ToArray())));
+            }
 
-            verifier.AllowVerification.Set();
-            Assert.Equal(WorkTaskStatus.Investigating, recoveryTask.GetAwaiter().GetResult().Status);
-            Assert.Equal(2, updateTask.GetAwaiter().GetResult().Sequence);
+            Append(WorkTaskStatus.Claimed, Now, "Task claimed.");
+            Append(WorkTaskStatus.Investigating, Now, "Investigate.");
+            Append(WorkTaskStatus.Implementing, Now, "Implement.");
+            Append(WorkTaskStatus.Validating, Now, "Validate.");
+            Append(WorkTaskStatus.CodeRed, Now, "Required check failed.");
+            var legacyReceipt = new CodeRedRecoveryApprovalReceipt(1, "legacy-receipt",
+                "legacy-host", "legacy-human", "task-recovery", "incident-recovery-1",
+                5, 1, CodeRedRecoveryAction.ResumeInvestigation,
+                Now, Now.AddMinutes(5), "legacy-signature");
+            Append(WorkTaskStatus.Investigating, Now.AddMinutes(1),
+                "Historical receipt-authorized recovery.", legacyReceipt);
+
+            var reopened = new JsonlWorkTaskStore(path);
+            var restored = reopened.Get("task-recovery");
+            Assert.Equal(WorkTaskStatus.Investigating, restored.Status);
+            Assert.Equal(legacyReceipt, restored.Events[^1].ApprovalReceipt);
+            Assert.Null(restored.Events[^1].RecoveryIncidentId);
         }
         finally
         {
-            verifier.AllowVerification.Set();
-            if (File.Exists(taskPath)) File.Delete(taskPath);
-            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+            if (File.Exists(path)) File.Delete(path);
         }
     }
 
-    [Fact]
-    public void IncidentSequenceAdvancesOnEveryDurableUpdateAndClear()
-    {
-        var incident = CreateIncident();
-        var updated = incident.Update("Investigating", "New evidence", new string('b', 40),
-            null, null, Now.AddMinutes(1));
-        Assert.Equal(2, updated.Sequence);
-        var cleared = updated.Clear(Now.AddMinutes(2));
-        Assert.Equal(3, cleared.Sequence);
-    }
-
-    private static (Guid Lease, CodeRedIncident Incident, CodeRedRecoveryApprovalReceipt Receipt)
-        CreateCodeRedTask(WorkTaskCoordinator coordinator)
+    private static (Guid Lease, CodeRedIncident Incident) CreateCodeRedTask(
+        PersistentWorkTaskCoordinator coordinator)
     {
         coordinator.Submit(Request());
         var lease = coordinator.Claim("task-recovery", "agent-recovery",
@@ -171,36 +250,7 @@ public sealed class CodeRedRecoveryAuthorizationTests
         coordinator.Transition("task-recovery", lease, WorkTaskStatus.Implementing, Now, "implement");
         coordinator.Transition("task-recovery", lease, WorkTaskStatus.Validating, Now, "validate");
         coordinator.Transition("task-recovery", lease, WorkTaskStatus.CodeRed, Now, "required check failed");
-        var incident = CreateIncident();
-        var unsignedReceipt = new CodeRedRecoveryApprovalReceipt(1, "receipt-recovery-1", "trusted-host",
-            "human-reviewer", "task-recovery", incident.IncidentId, 5, incident.Sequence,
-            CodeRedRecoveryAction.ResumeInvestigation, Now, Now.AddMinutes(5), "pending-signature");
-        var receipt = unsignedReceipt with
-        {
-            Signature = Convert.ToHexString(SHA256.HashData(unsignedReceipt.GetSigningPayload()))
-        };
-        return (lease, incident, receipt);
-    }
-
-    private static (Guid Lease, CodeRedIncident Incident, CodeRedRecoveryApprovalReceipt Receipt)
-        CreateCodeRedTask(PersistentWorkTaskCoordinator coordinator)
-    {
-        coordinator.Submit(Request());
-        var lease = coordinator.Claim("task-recovery", "agent-recovery",
-            TimeSpan.FromMinutes(30), Now).Lease!.LeaseId;
-        coordinator.Transition("task-recovery", lease, WorkTaskStatus.Investigating, Now, "inspect");
-        coordinator.Transition("task-recovery", lease, WorkTaskStatus.Implementing, Now, "implement");
-        coordinator.Transition("task-recovery", lease, WorkTaskStatus.Validating, Now, "validate");
-        coordinator.Transition("task-recovery", lease, WorkTaskStatus.CodeRed, Now, "required check failed");
-        var incident = CreateIncident();
-        var unsignedReceipt = new CodeRedRecoveryApprovalReceipt(1, "receipt-recovery-1", "trusted-host",
-            "human-reviewer", "task-recovery", incident.IncidentId, 5, incident.Sequence,
-            CodeRedRecoveryAction.ResumeInvestigation, Now, Now.AddMinutes(5), "pending-signature");
-        var receipt = unsignedReceipt with
-        {
-            Signature = Convert.ToHexString(SHA256.HashData(unsignedReceipt.GetSigningPayload()))
-        };
-        return (lease, incident, receipt);
+        return (lease, CreateIncident());
     }
 
     private static CodeRedIncident CreateIncident() => new(1, "incident-recovery-1",
@@ -214,36 +264,22 @@ public sealed class CodeRedRecoveryAuthorizationTests
         "https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/8",
         new string('a', 40), new[] { "src/Foundry.Workflow" }, 3);
 
-    private sealed class BlockingTestVerifier : ICodeRedRecoveryReceiptVerifier, IDisposable
+    private sealed class TestApprovalGate : ICodeRedRecoveryApprovalGate
     {
-        public ManualResetEventSlim VerificationEntered { get; } = new();
-        public ManualResetEventSlim AllowVerification { get; } = new();
+        public bool Approved { get; init; } = true;
+        public int Calls { get; private set; }
+        public CodeRedIncident? LastIncident { get; private set; }
+        public WorkTaskSnapshot? LastTask { get; private set; }
+        public Action<CodeRedIncident, WorkTaskSnapshot, DateTimeOffset>? OnDemand { get; set; }
 
-        public bool IsTrustedIssuer(string issuer) => issuer == "trusted-host";
-
-        public bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature)
+        public void DemandApproval(CodeRedIncident incident, WorkTaskSnapshot task, DateTimeOffset requestedAt)
         {
-            VerificationEntered.Set();
-            if (!AllowVerification.Wait(TimeSpan.FromSeconds(10)))
-                return false;
-            return issuer == "trusted-host" &&
-                signature == Convert.ToHexString(SHA256.HashData(signingPayload.Span)) &&
-                !signingPayload.IsEmpty;
+            Calls++;
+            LastIncident = incident;
+            LastTask = task;
+            OnDemand?.Invoke(incident, task, requestedAt);
+            if (!Approved)
+                throw new UnauthorizedAccessException("The host has no explicit human approval for this recovery.");
         }
-
-        public void Dispose()
-        {
-            VerificationEntered.Dispose();
-            AllowVerification.Dispose();
-        }
-    }
-
-    private sealed class TestVerifier(bool acceptSignature = true) : ICodeRedRecoveryReceiptVerifier
-    {
-        public bool IsTrustedIssuer(string issuer) => issuer == "trusted-host";
-        public bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature) =>
-            acceptSignature && issuer == "trusted-host" &&
-            signature == Convert.ToHexString(SHA256.HashData(signingPayload.Span)) &&
-            !signingPayload.IsEmpty;
     }
 }

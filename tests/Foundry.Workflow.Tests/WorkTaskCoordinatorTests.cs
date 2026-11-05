@@ -71,30 +71,44 @@ public sealed class WorkTaskCoordinatorTests
     [Fact]
     public void RetryBudgetCannotBeBypassedThroughCodeRed()
     {
-        var coordinator = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
-        coordinator.Submit(Request(maximumAttempts: 1));
-        var lease = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
-        coordinator.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now, "inspect");
-        coordinator.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now, "implement");
-        coordinator.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "validate first attempt");
-        coordinator.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now, "validation blocked");
-        Assert.Throws<InvalidOperationException>(() =>
-            coordinator.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now, "skip recovery investigation"));
-        Assert.Throws<InvalidOperationException>(() =>
-            coordinator.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "skip recovery investigation"));
-        Assert.Throws<InvalidOperationException>(() =>
-            coordinator.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now, "unsigned recovery"));
-        var incident = TestIncident();
-        var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence);
-        var recovered = coordinator.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
-            Now.AddMinutes(1), "resume after host approval");
-        Assert.Equal(WorkTaskStatus.Investigating, recovered.Status);
-        Assert.Equal(receipt.ReceiptId, recovered.Events[^1].ApprovalReceiptId);
-        Assert.Equal(receipt.Principal, recovered.Events[^1].ApprovalPrincipal);
-        coordinator.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now, "resume bounded repair");
-        Assert.Throws<InvalidOperationException>(() =>
-            coordinator.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "attempt beyond budget"));
-        Assert.Equal(1, coordinator.GetSnapshot("foundry-8").Attempt);
+        var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-retry-{Guid.NewGuid():N}.jsonl");
+        var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-retry-incident-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(taskPath));
+            var incidents = new JsonlCodeRedIncidentStore(incidentPath);
+            tasks.Submit(Request(maximumAttempts: 1));
+            var lease = tasks.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
+            tasks.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now, "inspect");
+            tasks.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now, "implement");
+            tasks.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "validate first attempt");
+            tasks.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now, "validation blocked");
+            Assert.Throws<InvalidOperationException>(() =>
+                tasks.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now, "skip recovery investigation"));
+            Assert.Throws<InvalidOperationException>(() =>
+                tasks.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "skip recovery investigation"));
+            Assert.Throws<InvalidOperationException>(() =>
+                tasks.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now, "bypass host approval"));
+
+            var incident = TestIncident();
+            incidents.Create(incident);
+            var recovery = new PersistentCodeRedRecoveryCoordinator(incidents, tasks, new AllowRecoveryGate());
+            var recovered = recovery.RecoverFromCodeRed("foundry-8", lease, incident.IncidentId,
+                Now.AddMinutes(1), "host approved recovery");
+            Assert.Equal(WorkTaskStatus.Investigating, recovered.Status);
+            Assert.Equal(incident.IncidentId, recovered.Events[^1].RecoveryIncidentId);
+            Assert.Equal(incident.Sequence, recovered.Events[^1].RecoveryIncidentSequence);
+
+            tasks.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now.AddMinutes(2), "resume bounded repair");
+            Assert.Throws<InvalidOperationException>(() =>
+                tasks.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now.AddMinutes(3), "attempt beyond budget"));
+            Assert.Equal(1, tasks.GetSnapshot("foundry-8").Attempt);
+        }
+        finally
+        {
+            if (File.Exists(taskPath)) File.Delete(taskPath);
+            if (File.Exists(incidentPath)) File.Delete(incidentPath);
+        }
     }
 
     [Fact]
@@ -211,16 +225,14 @@ public sealed class WorkTaskCoordinatorTests
         new string('a', 40), null, null, CodeRedSeverity.Critical, "Validation blocked", 1,
         Now, Now, null, true);
 
-    private static CodeRedRecoveryApprovalReceipt TestReceipt(long taskEventSequence, long incidentSequence) =>
-        new(1, "receipt-8", "test-host", "human-reviewer", "foundry-8", "incident-8",
-            taskEventSequence, incidentSequence, CodeRedRecoveryAction.ResumeInvestigation,
-            Now, Now.AddMinutes(5), "signed-test-receipt");
-
-    private sealed class TestRecoveryReceiptVerifier : ICodeRedRecoveryReceiptVerifier
+    private sealed class AllowRecoveryGate : ICodeRedRecoveryApprovalGate
     {
-        public bool IsTrustedIssuer(string issuer) => issuer == "test-host";
-        public bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature) =>
-            issuer == "test-host" && signature == "signed-test-receipt" && !signingPayload.IsEmpty;
+        public void DemandApproval(CodeRedIncident incident, WorkTaskSnapshot task, DateTimeOffset requestedAt)
+        {
+            Assert.Equal(CodeRedIncidentStatus.Active, incident.Status);
+            Assert.Equal(WorkTaskStatus.CodeRed, task.Status);
+            Assert.Equal("agent-a", task.Lease!.AgentId);
+        }
     }
 
     private static WorkTaskRepairAttempt FailedAttempt() =>

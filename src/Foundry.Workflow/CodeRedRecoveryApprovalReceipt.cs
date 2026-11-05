@@ -3,14 +3,16 @@ using System.Globalization;
 
 namespace TheSingularityWorkshop.Foundry;
 
+/// <summary>Legacy recovery action retained only for replaying existing v1 task journals.</summary>
 public enum CodeRedRecoveryAction
 {
     ResumeInvestigation = 1
 }
 
 /// <summary>
-/// A short-lived host-issued approval for one exact CODE RED recovery transition.
-/// The signature covers <see cref="GetSigningPayload"/>; the signature itself is excluded.
+/// Legacy v1 signed-receipt audit payload retained only for backward-compatible journal
+/// deserialization and structural history validation. Current CODE RED recovery does not
+/// accept or verify this receipt; human approval is enforced by the host approval gate.
 /// </summary>
 public sealed record CodeRedRecoveryApprovalReceipt(
     int SchemaVersion,
@@ -42,14 +44,11 @@ public sealed record CodeRedRecoveryApprovalReceipt(
             Action != CodeRedRecoveryAction.ResumeInvestigation ||
             IssuedAt == default || ExpiresAt <= IssuedAt ||
             ExpiresAt - IssuedAt > MaximumLifetime)
-            throw new ArgumentException("Recovery receipt schema, scope, action, or validity window is invalid.");
+            throw new ArgumentException("Legacy recovery receipt schema, scope, action, or validity window is invalid.");
         return this;
     }
 
-    /// <summary>
-    /// Canonical UTF-8 signing payload. Every variable-length field is length-prefixed;
-    /// timestamps are UTC ticks and the schema/action values are invariant decimal integers.
-    /// </summary>
+    /// <summary>Canonical v1 signing payload retained for audit compatibility only.</summary>
     public byte[] GetSigningPayload()
     {
         Validate();
@@ -75,17 +74,7 @@ public sealed record CodeRedRecoveryApprovalReceipt(
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength ||
             value.Any(char.IsControl))
-            throw new ArgumentException($"Receipt field must contain 1 to {maximumLength} non-control characters.",
+            throw new ArgumentException($"Legacy receipt field must contain 1 to {maximumLength} non-control characters.",
                 parameterName);
     }
-}
-
-/// <summary>
-/// Host-configured trust boundary. Implementations must recognize only configured trusted
-/// issuers and verify the signature over the exact canonical payload supplied by Foundry.
-/// </summary>
-public interface ICodeRedRecoveryReceiptVerifier
-{
-    bool IsTrustedIssuer(string issuer);
-    bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature);
 }
