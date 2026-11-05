@@ -35,6 +35,30 @@ public sealed class WorkTaskCoordinatorTests
     }
 
     [Fact]
+    public void ExpiredCodeRedLeaseCannotBeReclaimedWithoutApprovedRecovery()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var lease = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(2), Now).Lease!;
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Investigating,
+            Now, "inspect");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Implementing,
+            Now, "implement");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Validating,
+            Now, "validate");
+        var codeRed = coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.CodeRed,
+            Now, "validation blocked");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            coordinator.Claim("foundry-8", "agent-b", TimeSpan.FromMinutes(2), Now.AddMinutes(3)));
+
+        var unchanged = coordinator.GetSnapshot("foundry-8");
+        Assert.Equal(WorkTaskStatus.CodeRed, unchanged.Status);
+        Assert.Equal(lease, unchanged.Lease);
+        Assert.Equal(codeRed.Events.Count, unchanged.Events.Count);
+    }
+
+    [Fact]
     public void LifecycleTransitionsAreValidatedAndAudited()
     {
         var coordinator = new WorkTaskCoordinator();
