@@ -16,6 +16,7 @@
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
+- [CiAi artifact transport security](docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — DNS-pinned HTTPS connections, public-address filtering, redirect/proxy policy, and the remaining host integration gates.
 - [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries and evidence labels.
@@ -35,8 +36,8 @@
 | FSM_Serialization integration | Responsibility inspected; format not selected | Keep domain semantics in the owning contract; do not assume arbitrary-object serialization |
 | Governed work lifecycle | Implemented on PR #10 feature branch; not yet merged or connected to live services | [Work-task lifecycle](docs/WORK_TASK_LIFECYCLE.md); local task/incident/repair journals are single-process, not GitHub-backed or distributed |
 | HeadlessAi turn bridge and host adapter | Foundry bridge, concrete source adapter, and manual console composition root implemented on PR #11; pinned source and console project compile in CI | [Turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md), [host adapter](docs/HEADLESSAI_HOST_ADAPTER.md); host credential provisioning and a real provider invocation remain |
-| CiAi artifact ingress | Host-owned v1 callback contract documented; no live receiver or remote transport yet | [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md); ready notice + immutable pull + durable receipt boundary |
-| CI execution | PR #10 latest governed-work head and PR #11 combined stack both passed the full proof workflow, including the durable turn journal | [PR #10 run #304](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41172981012) and [combined-stack PR #11 run #319](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41174088415); verified exact HeadlessAi host-adapter head `d410afd4e23aaf459bdf2ce526faf964d3d36274` in [run #337](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41221916732), then console composition build in [run #352](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41222737607) |
+| CiAi artifact ingress and report consumption | Contracts and report consumer implemented on draft PRs #14 and #15; not merged or live-host composed | [Callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md); exact persisted dispatch/run binding, durable receipt, bounded retrieval, report reconciliation, and provenance-bound repair proposal |
+| CI execution | Exact-head proof workflows pass for the current artifact transport foundation; callback/report branches have independent exact-head evidence | [PR #16 run #41277492187](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41277492187); [PR #15 run #41277130419](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41277130419); [PR #14 run #41277036521](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41277036521) |
 | Source-derived UML | Not implemented | Add diagrams after domain types exist |
 | Living Gallery | Basic probe and trace-derived SVG scenario verified | [Gallery](Gallery.md) and [successful expanded CI run](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40025709384) |
 | Optional article publishing | Design documented; not implemented | Build source-grounded article preview and excerpt images; keep external publishing opt-in |
@@ -50,4 +51,4 @@ Every claimed capability must point to implementation, tests, a workflow run, or
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="320" /></p>
