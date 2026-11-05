@@ -1,0 +1,31 @@
+{
+  "repository": "TrentBest/TheSingularityWorkshop.FSM_Foundry",
+  "policy": "exactly-master-and-development",
+  "required_branches": [
+    "development",
+    "master"
+  ],
+  "actual_branches": [
+    "development",
+    "docs/foundry-domain-theory-foundation",
+    "feature/foundry-ciai-report-consumer",
+    "feature/foundry-codered-vertical-proof",
+    "feature/foundry-fsm-api-runtime-integration",
+    "feature/foundry-github-host-adapter-design",
+    "feature/foundry-headlessai-turn-seam",
+    "feature/foundry-host-owned-codered-approval",
+    "feature/foundry-host-repository-operation-gate",
+    "feature/foundry-hub-execution-contract",
+    "feature/foundry-pinned-artifact-transport",
+    "feature/foundry-workflow-context-v2",
+    "fix/code-red-expired-lease-reclaim",
+    "identity/fsm-foundry-repo-reference-alignment",
+    "master",
+    "work/explicit-workflow-timeouts"
+  ],
+  "branch_count": 16,
+  "status": "NON-COMPLIANT",
+  "evaluated_at": "2026-11-05T04:40:46Z",
+  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41969276477",
+  "triggering_commit": "74742eb798d296a31fac22ee5bb75a2d9f12cfed"
+}
