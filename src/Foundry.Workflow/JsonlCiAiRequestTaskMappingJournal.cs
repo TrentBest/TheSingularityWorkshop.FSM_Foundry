@@ -28,7 +28,8 @@ public sealed record CiAiRequestTaskMapping(
     string AcknowledgementDestination,
     string AcknowledgementAuthProfileId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset ExpiresAt)
+    DateTimeOffset ExpiresAt,
+    string? TrustedEventSha = null)
 {
     public const int CurrentSchemaVersion = 1;
 
@@ -49,6 +50,8 @@ public sealed record CiAiRequestTaskMapping(
             throw new ArgumentException("Candidate ref must identify an isolated branch.", nameof(CandidateRef));
         ValidateSha(CandidateSha, nameof(CandidateSha));
         ValidateSha(TrustedWorkflowSha, nameof(TrustedWorkflowSha));
+        if (TrustedEventSha is not null)
+            ValidateSha(TrustedEventSha, nameof(TrustedEventSha));
         if (!Clean(WorkflowPath, 512) ||
             !WorkflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
             !(WorkflowPath.EndsWith(".yml", StringComparison.Ordinal) || WorkflowPath.EndsWith(".yaml", StringComparison.Ordinal)) ||
@@ -92,15 +95,19 @@ public sealed record CiAiDispatchRunBinding(
     string CandidateRef,
     string CandidateSha,
     string Event,
-    DateTimeOffset BoundAt)
+    DateTimeOffset BoundAt,
+    string? EventSha = null)
 {
     public CiAiDispatchRunBinding ValidateAgainst(CiAiRequestTaskMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        var expectedEventSha = mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
+        var observedEventSha = EventSha ?? WorkflowSha;
         if (RunId <= 0 || RunAttempt <= 0 || BoundAt == default ||
             !string.Equals(Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase) ||
             WorkflowPath != mapping.WorkflowPath || WorkflowRef != mapping.TrustedWorkflowRef ||
             !string.Equals(WorkflowSha, mapping.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(observedEventSha, expectedEventSha, StringComparison.OrdinalIgnoreCase) ||
             CandidateRef != mapping.CandidateRef ||
             !string.Equals(CandidateSha, mapping.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
             Event != "workflow_dispatch" || BoundAt < mapping.CreatedAt || BoundAt > mapping.ExpiresAt)
