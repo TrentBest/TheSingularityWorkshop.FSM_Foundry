@@ -75,7 +75,7 @@ public sealed class AutonomousDevelopmentStatusProjectionTests
     }
 
     [Fact]
-    public void ProjectionRejectsLeaseFromAnotherCorrelationOrEventOwner()
+    public void ProjectionRejectsLeaseOwnerMismatchAndPreservesCorrelationIdentity()
     {
         var coordinator = CreateCoordinator();
         var lease = coordinator.Claim("task-1", "agent-a", TimeSpan.FromMinutes(5), Start).Lease!;
