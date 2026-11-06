@@ -7,6 +7,7 @@ namespace TheSingularityWorkshop.Foundry;
 /// </summary>
 public sealed record AutonomousDevelopmentStatusProjection(
     int SchemaVersion,
+    DateTimeOffset ObservedAt,
     string TaskId,
     string CorrelationId,
     string Repository,
@@ -57,7 +58,7 @@ public sealed record AutonomousDevelopmentStatusProjection(
             if (item is null || item.Sequence != index + 1 ||
                 item.Previous != previousStatus || item.Current == previousStatus ||
                 !Enum.IsDefined(item.Previous) || !Enum.IsDefined(item.Current) ||
-                item.OccurredAt == default ||
+                item.OccurredAt == default || item.OccurredAt > observedAt ||
                 (previousTime.HasValue && item.OccurredAt < previousTime.Value) ||
                 string.IsNullOrWhiteSpace(item.AgentId) || item.LeaseId == Guid.Empty ||
                 string.IsNullOrWhiteSpace(item.Reason) ||
@@ -121,7 +122,7 @@ public sealed record AutonomousDevelopmentStatusProjection(
                 latestApprovalEvent.OccurredAt);
 
         return new AutonomousDevelopmentStatusProjection(
-            CurrentSchemaVersion, request.TaskId, request.CorrelationId, request.Repository,
+            CurrentSchemaVersion, observedAt, request.TaskId, request.CorrelationId, request.Repository,
             request.IssueNumber, request.IssueUrl, request.BaseSha, snapshot.Status,
             snapshot.Attempt, request.MaximumAttempts, snapshot.Lease?.AgentId,
             snapshot.Lease?.ExpiresAt, snapshot.Lease is { } active && active.ExpiresAt > observedAt,
