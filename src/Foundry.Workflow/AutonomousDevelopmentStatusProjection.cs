@@ -62,7 +62,11 @@ public sealed record AutonomousDevelopmentStatusProjection(
                 string.IsNullOrWhiteSpace(item.AgentId) || item.LeaseId == Guid.Empty ||
                 string.IsNullOrWhiteSpace(item.Reason) ||
                 (item.CiRunId.HasValue != item.CiRunAttempt.HasValue) ||
-                (item.CiRunId.HasValue != (item.EvidencePayloadSha256 is not null)))
+                (item.CiRunId.HasValue != (item.EvidencePayloadSha256 is not null)) ||
+                (!(item.Current == WorkTaskStatus.Claimed &&
+                    item.Previous is not (WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)) &&
+                 !WorkTaskCoordinator.IsAllowedTransition(item.Previous, item.Current) &&
+                 !WorkTaskCoordinator.IsValidApprovedRecoveryEvent(item)))
                 throw new ArgumentException("Task event history is discontinuous or invalid.", nameof(snapshot));
 
             if (item.Current == WorkTaskStatus.Validating)
