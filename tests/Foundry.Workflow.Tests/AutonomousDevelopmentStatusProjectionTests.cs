@@ -26,6 +26,7 @@ public sealed class AutonomousDevelopmentStatusProjectionTests
         var projection = AutonomousDevelopmentStatusProjection.Create(snapshot, Start);
 
         Assert.Equal(AutonomousDevelopmentStatusProjection.CurrentSchemaVersion, projection.SchemaVersion);
+        Assert.Equal(Start, projection.ObservedAt);
         Assert.Equal("task-1", projection.TaskId);
         Assert.Equal("corr-1", projection.CorrelationId);
         Assert.Equal(WorkTaskStatus.Queued, projection.Status);
@@ -47,6 +48,7 @@ public sealed class AutonomousDevelopmentStatusProjectionTests
         var fresh = AutonomousDevelopmentStatusProjection.Create(snapshot, Start.AddMinutes(1));
         var expired = AutonomousDevelopmentStatusProjection.Create(snapshot, Start.AddMinutes(6));
 
+        Assert.Equal(Start.AddMinutes(1), fresh.ObservedAt);
         Assert.Equal("agent-a", fresh.AgentId);
         Assert.True(fresh.LeaseActive);
         Assert.False(expired.LeaseActive);
@@ -55,6 +57,25 @@ public sealed class AutonomousDevelopmentStatusProjectionTests
         Assert.Equal("inspect candidate", fresh.LastTransitionReason);
         Assert.Equal("corr-1", fresh.CorrelationId);
         Assert.Equal(Sha, fresh.BaseSha);
+    }
+
+    [Fact]
+    public void ProjectionRejectsFutureDatedEvents()
+    {
+        var coordinator = CreateCoordinator();
+        var lease = coordinator.Claim("task-1", "agent-a", TimeSpan.FromMinutes(5), Start).Lease!;
+        var snapshot = coordinator.Transition("task-1", lease.LeaseId,
+            WorkTaskStatus.Investigating, Start.AddSeconds(1), "inspect candidate");
+        var futureDated = snapshot with
+        {
+            Events = snapshot.Events.Select(item => item with
+            {
+                OccurredAt = item.OccurredAt.AddMinutes(1)
+            }).ToArray()
+        };
+
+        Assert.Throws<ArgumentException>(() =>
+            AutonomousDevelopmentStatusProjection.Create(futureDated, Start.AddSeconds(30)));
     }
 
     [Fact]
