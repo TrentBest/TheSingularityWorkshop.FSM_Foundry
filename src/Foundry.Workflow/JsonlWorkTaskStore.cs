@@ -176,10 +176,11 @@ public sealed class JsonlWorkTaskStore
             var item = snapshot.Events[index];
             if (item is null || item.Sequence != index + 1 ||
                 !Enum.IsDefined(item.Previous) || !Enum.IsDefined(item.Current) ||
-                item.Previous != previousStatus || item.Current == item.Previous ||
+                item.Previous != previousStatus ||
+                (item.Current == item.Previous && item.Current != WorkTaskStatus.Claimed) ||
                 item.Current == WorkTaskStatus.Queued ||
                 !(item.Current == WorkTaskStatus.Claimed &&
-                    item.Previous is not (WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)) &&
+                    item.Previous is not (WorkTaskStatus.CodeRed or WorkTaskStatus.ReviewReady or WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)) &&
                 (!WorkTaskCoordinator.IsAllowedTransition(item.Previous, item.Current) &&
                     !WorkTaskCoordinator.IsValidApprovedRecoveryEvent(item)) ||
                 (WorkTaskCoordinator.HasApprovalMetadata(item) &&
