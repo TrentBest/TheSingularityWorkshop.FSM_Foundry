@@ -111,12 +111,14 @@ Run the focused workflow tests and the repository's full proof workflow on the e
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="420" /></p>
 
 
-## Trusted workflow-source boundary — required before production dispatch
+## Trusted workflow-source boundary — implemented, verification pending
 
-The current Actions dispatcher correlates a dispatch to the candidate branch and candidate SHA, but its dispatch request currently selects that candidate branch as the workflow `ref`. That is not sufficient to establish that the workflow definition itself came from trusted code: a candidate may modify files under `.github/workflows/`.
+The dispatcher now pins the trusted workflow source independently from the candidate being evaluated:
 
-**This is a tracked security gap, not an accepted production design.** See [issue #28](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/28).
+- The host supplies the full trusted `development` SHA. Before dispatch, the dispatcher confirms that `development` still points to that exact commit.
+- The durable dispatch intent stores both identities: candidate branch/SHA and trusted workflow ref/SHA.
+- The GitHub Actions dispatch request uses `ref: development`. The candidate ref and candidate SHA are separate inputs; they are never used as the workflow source.
+- Run discovery and exact-attempt verification bind the workflow path, `workflow_dispatch` event, request ID, trusted `head_branch`, and trusted `head_sha`. Candidate provenance remains separately bound to the journaled dispatch intent.
+- The trusted workflow verifies that it is running from `refs/heads/development`, fetches the candidate ref, requires its tip to equal the authorized candidate SHA, checks out that exact SHA detached, and verifies the checkout before running build/test steps.
 
-The required design is to dispatch the allowlisted workflow from the trusted `development` ref and persist that ref plus its exact commit SHA as trusted-workflow provenance. The host must pass the candidate ref and candidate SHA as separate inputs. The trusted workflow must check out the exact candidate SHA, confirm that the candidate ref still points to that SHA, and only then execute candidate build/test steps. Run correlation must distinguish the trusted workflow SHA from the candidate SHA and re-fetch the exact run attempt.
-
-Until this correction is implemented and tested, the current fake-HTTP dispatcher tests establish request/run correlation behavior only; they do **not** establish that the workflow source is trusted. Production credentials and production host composition are also absent. A green job remains execution evidence, not a CiAi named verdict.
+This closes the candidate-controlled-workflow-source gap tracked by [issue #28](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/28) at the implementation level. The exact-head workflow proof for this correction is still pending; do not treat the feature as production-ready until that proof passes and the host supplies a correctly refreshed trusted development SHA. Production GitHub App token provisioning, production host composition, and conversion of verified run evidence into durable task evidence remain incomplete. A green job remains execution evidence, not a CiAi named verdict.
