@@ -16,12 +16,57 @@ public sealed record CiAiRepairFeedbackResult(
 /// only from CiAi's versioned report verdict; callers cannot supply verdict booleans.
 /// HeadlessAi context remains untrusted proposal input.
 /// </summary>
+/// <summary>
+— Host-accepted, byte-exact CiAi report context for one subsequent HeadlessAi repair turn.
+— The report remains opaque to HeadlessAi; Foundry preserves the accepted bytes and trusted lineage.
+— </summary>
+public sealed record FoundryAcceptedCiAiReportContext
+{
+    public const string RequiredSchema = "ciai.test-results.v1";
+    public const int MaximumReportBytes = 1024 * 1024;
+
+    public required string SchemaVersion { get; init; }
+    public required string ReportIdentity { get; init; }
+    public required string CanonicalReportJson { get; init; }
+    public required string ReportSha256 { get; init; }
+    public required string WorkflowRunId { get; init; }
+    public required int RunAttempt { get; init; }
+    public required string CandidateCommitSha { get; init; }
+
+    public void Validate(string repository, string currentCandidateSha, string? priorCandidateSha)
+    {
+        if (SchemaVersion != RequiredSchema ||
+            string.IsNullOrWhiteSpace(ReportIdentity) ||
+            string.IsNullOrWhiteSpace(CanonicalReportJson) ||
+            ReportSha256 is not { Length: 64 } || !ReportSha256.All(Uri.IsHexDigit) ||
+            !ReportSha256.Equals(ReportSha256.ToLowerInvariant(), StringComparison.Ordinal) ||
+            RunAttempt < 1 || !long.TryParse(WorkflowRunId, NumberStyles.None,
+                CultureInfo.InvariantCulture, out var runId) || runId <= 0 ||
+            CandidateCommitSha is not { Length: 40 } || !CandidateCommitSha.All(Uri.IsHexDigit))
+            throw new InvalidDataException("Accepted CiAi report context is malformed or incomplete.");
+
+        if (ReportIdentity != "sha256:" + ReportSha256)
+            throw new InvalidDataException("Accepted CiAi report identity does not match its SHA-256 digest.");
+        if (!string.Equals(CandidateCommitSha, currentCandidateSha, StringComparison.OrdinalIgnoreCase) &&
+            (priorCandidateSha is null ||
+             !string.Equals(CandidateCommitSha, priorCandidateSha, StringComparison.OrdinalIgnoreCase)))
+            throw new UnauthorizedAccessException("Accepted CiAi report candidate does not match the current or prior candidate.");
+        var bytes = new UTF8Encoding(false, true).GetBytes(CanonicalReportJson);
+        if (bytes.Length > MaximumReportBytes)
+            throw new InvalidDataException("Accepted CiAi report exceeds the shared one-megabyte limit.");
+        var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(digest), Convert.FromHexString(ReportSha256)))
+            throw new InvalidDataException("Accepted CiAi report bytes do not match their trusted digest.");
+    }
+}
+
 public sealed record CiAiConsumedTestResult(
     WorkTaskRepairAttempt Attempt,
     FoundryHeadlessAiEvidence HeadlessAiEvidence,
     string Verdict,
     IReadOnlyList<string> ReasonCodes,
-    string ReportSha256);
+    string ReportSha256,
+    FoundryAcceptedCiAiReportContext AcceptedReport);
 
 /// <summary>
 /// Consumes the versioned ciai.test-results.v1 JSON report after Foundry has authenticated
@@ -209,8 +254,20 @@ public static class CiAiTestResultReportConsumer
         };
         headlessEvidence.Validate(mapping.Repository, mapping.CandidateSha, null);
 
+        var acceptedReport = new FoundryAcceptedCiAiReportContext
+        {
+            SchemaVersion = Schema,
+            ReportIdentity = "sha256:" + reportDigest,
+            CanonicalReportJson = new UTF8Encoding(false, true).GetString(bytes.Span),
+            ReportSha256 = reportDigest,
+            WorkflowRunId = run.RunId.ToString(CultureInfo.InvariantCulture),
+            RunAttempt = run.RunAttempt,
+            CandidateCommitSha = mapping.CandidateSha
+        };
+        acceptedReport.Validate(mapping.Repository, mapping.CandidateSha, null);
+
         return new CiAiConsumedTestResult(attempt, headlessEvidence, verdict,
-            Array.AsReadOnly(reasonCodes.ToArray()), reportDigest);
+            Array.AsReadOnly(reasonCodes.ToArray()), reportDigest, acceptedReport);
     }
 
     private static void ValidateUniqueProperties(JsonElement element)
