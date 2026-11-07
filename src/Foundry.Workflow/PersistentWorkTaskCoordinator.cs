@@ -5,7 +5,7 @@ namespace TheSingularityWorkshop.Foundry;
 /// an in-memory mutation, this adapter permanently fails closed for the process; callers
 /// must restart and restore from the journal before accepting more work.
 /// </summary>
-public sealed class PersistentWorkTaskCoordinator
+public sealed class PersistentWorkTaskCoordinator : IDisposable
 {
     private readonly object _gate = new();
     private readonly WorkTaskCoordinator _coordinator;
@@ -104,6 +104,9 @@ public sealed class PersistentWorkTaskCoordinator
             return _coordinator.GetSnapshot(taskId);
         }
     }
+
+    public void Dispose() => _coordinator.Dispose();
+
 
     private WorkTaskSnapshot Persist(WorkTaskSnapshot snapshot, bool create = false)
     {
