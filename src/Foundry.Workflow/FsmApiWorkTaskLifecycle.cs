@@ -28,20 +28,16 @@ internal sealed class FsmApiWorkTaskLifecycle : IDisposable
         lock (RegistryGate)
         {
             var builder = FsmEngine.Create.CreateFiniteStateMachine(_definitionName, processRate: -1,
-                    processingGroup: _processingGroup)
-                .State(nameof(WorkTaskStatus.Queued), null, null, null)
-                .State(nameof(WorkTaskStatus.Claimed), null, null, null)
-                .State(nameof(WorkTaskStatus.Investigating), null, null, null)
-                .State(nameof(WorkTaskStatus.Implementing), null, null, null)
-                .State(nameof(WorkTaskStatus.Validating), null, null, null)
-                .State(nameof(WorkTaskStatus.RepairRequired), null, null, null)
-                .State(nameof(WorkTaskStatus.Blocked), null, null, null)
-                .State(nameof(WorkTaskStatus.CodeRed), null, null, null)
-                .State(nameof(WorkTaskStatus.ReviewReady), null, null, null)
-                .State(nameof(WorkTaskStatus.HandedOff), null, null, null)
-                .State(nameof(WorkTaskStatus.Stopped), null, null, null)
-                .State(nameof(WorkTaskStatus.Failed), null, null, null)
-                .WithInitialState(initialState.ToString());
+                processingGroup: _processingGroup);
+            // FSM_API initializes instances from the first registered state. Register the
+            // requested initial state first so isolated transition probes start at their source.
+            builder.State(initialState.ToString(), null, null, null);
+            foreach (var status in Enum.GetValues<WorkTaskStatus>())
+            {
+                if (status != initialState)
+                    builder.State(status.ToString(), null, null, null);
+            }
+            builder.WithInitialState(initialState.ToString());
 
             builder
                 .Transition(nameof(WorkTaskStatus.Queued), nameof(WorkTaskStatus.Claimed),
