@@ -49,6 +49,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.Equal(receipt.RequestId, inputs.GetProperty("foundry_request_id").GetString());
         Assert.Equal(Branch, inputs.GetProperty("candidate_ref").GetString());
         Assert.Equal(CandidateSha, inputs.GetProperty("candidate_sha").GetString());
+        Assert.Equal(TrustedWorkflowSha, inputs.GetProperty("trusted_workflow_sha").GetString());
 
         var reopened = new JsonlGitHubActionsDispatchJournal(journalPath);
         Assert.Equal(GitHubActionsDispatchState.Acknowledged, reopened.Get(receipt.RequestId).State);
