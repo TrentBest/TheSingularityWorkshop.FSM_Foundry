@@ -43,10 +43,15 @@ public sealed class WorkTaskCoordinatorTests
                 store.Create(original.Submit(Request(taskId: "a-first-task")));
                 store.Create(original.Submit(Request()));
                 var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
+                store.Append(original.GetSnapshot("foundry-8"));
                 original.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+                store.Append(original.GetSnapshot("foundry-8"));
                 original.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
+                store.Append(original.GetSnapshot("foundry-8"));
                 original.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now.AddSeconds(3), "validate");
+                store.Append(original.GetSnapshot("foundry-8"));
                 original.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now.AddSeconds(4), "blocked");
+                store.Append(original.GetSnapshot("foundry-8"));
                 var incident = TestIncident();
                 var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence);
                 var recovered = original.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
