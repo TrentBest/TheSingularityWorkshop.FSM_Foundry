@@ -312,6 +312,106 @@ public sealed class GitHubActionsWorkflowDispatcherTests
     }
 
     [Fact]
+    public async Task CorrelationRejectsCandidateWorkflowRefAndForeignWorkflowPath()
+    {
+        var requestId = string.Empty;
+        var handler = new StubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return GitRef(path);
+            if (request.Method == HttpMethod.Post)
+            {
+                using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+                requestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    total_count = 2,
+                    workflow_runs = new[]
+                    {
+                        new
+                        {
+                            id = 101L, run_attempt = 1,
+                            html_url = "https://github.com/TrentBest/Sample/actions/runs/101",
+                            status = "completed", conclusion = "success",
+                            head_branch = Branch, head_sha = TrustedWorkflowSha, path = WorkflowPath,
+                            @event = "workflow_dispatch", display_title = "Foundry CI " + requestId
+                        },
+                        new
+                        {
+                            id = 102L, run_attempt = 1,
+                            html_url = "https://github.com/TrentBest/Sample/actions/runs/102",
+                            status = "completed", conclusion = "success",
+                            head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha,
+                            path = ".github/workflows/foreign.yml",
+                            @event = "workflow_dispatch", display_title = "Foundry CI " + requestId
+                        }
+                    }
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var dispatcher = CreateDispatcher(handler, NewJournalPath());
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+
+        var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
+
+        Assert.Null(correlation);
+    }
+
+    [Fact]
+    public async Task ExactAttemptVerificationRejectsWrongTrustedWorkflowAttemptShaAndNumber()
+    {
+        var requestId = string.Empty;
+        var handler = new StubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
+                return GitRef(path);
+            if (request.Method == HttpMethod.Post)
+            {
+                using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+                requestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    total_count = 1,
+                    workflow_runs = new[]
+                    {
+                        new
+                        {
+                            id = 123L, run_attempt = 1,
+                            html_url = "https://github.com/TrentBest/Sample/actions/runs/123",
+                            status = "completed", conclusion = "success",
+                            head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha, path = WorkflowPath,
+                            @event = "workflow_dispatch", display_title = "Foundry CI " + requestId
+                        }
+                    }
+                }));
+            if (request.Method == HttpMethod.Get && path.EndsWith("/attempts/1", StringComparison.Ordinal))
+                return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+                {
+                    id = 123L, run_attempt = 2, path = WorkflowPath,
+                    @event = "workflow_dispatch", head_branch = TrustedWorkflowRef,
+                    head_sha = CandidateSha, display_title = "Foundry CI " + requestId,
+                    status = "completed", conclusion = "success"
+                }));
+            return Json(HttpStatusCode.NotFound, "{}");
+        });
+        var dispatcher = CreateDispatcher(handler, NewJournalPath());
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            async () => await dispatcher.VerifyRequiredJobsAsync(receipt, correlation!, [RequiredJob]));
+        Assert.DoesNotContain(handler.Requests, item => item.Uri.Contains("/jobs?", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task UnknownWorkflowKeyIsRejectedBeforeAnyGitHubRequest()
     {
         var handler = new StubHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
