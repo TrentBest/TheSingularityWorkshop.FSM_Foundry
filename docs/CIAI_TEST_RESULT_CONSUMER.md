@@ -68,6 +68,14 @@ The consumer accepts the exact canonical bytes emitted by CiAi's `CiTestResultRe
 
 Foundry hashes and validates the exact retrieved bytes, then stores the digest as the evidence payload identity. It does not reserialize the report to compute a different identity, and it does not reinterpret CiAi's verdict. Unknown reason codes remain bounded diagnostic data; they do not change the verdict.
 
+### Accepted report handoff to HeadlessAi
+
+A successful `CiAiTestResultReportConsumer.Consume` also creates a host-only `FoundryAcceptedCiAiReportContext`. It preserves the exact validated UTF-8 report text, `sha256:<digest>` identity, lowercase digest, schema, run/attempt, repository, and tested candidate SHA. Its constructor is internal so callers cannot manufacture an accepted context from an unverified artifact.
+
+The context is carried on `FoundryHeadlessAiTurnRequest.AcceptedCiAiReport`. Repair turns require it and require the report candidate to equal the prior candidate being repaired. The context is revalidated against the current/prior candidate, repository, exact-run evidence reference, byte cap, and digest before the host adapter prepares the HeadlessAi request. The accepted report identity/digest/run/candidate are included in the turn idempotency fingerprint.
+
+The Foundry port remains independent of the HeadlessAi assembly. The host adapter maps the context directly to `HeadlessAiAcceptedCiReportContext` and calls the existing accepted-report `HeadlessAiAgentTurnRequest.Create(envelope, acceptedReport, now)` overload. It must preserve the report JSON unchanged; HeadlessAi still treats it as opaque evidence and returns only an untrusted proposal.
+
 ## 04 — See it in a minute
 
 The executable contract tests cover:
