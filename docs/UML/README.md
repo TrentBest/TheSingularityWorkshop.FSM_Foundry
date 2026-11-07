@@ -3,7 +3,7 @@
 
 # Foundry UML and Source Documentation
 
-**Status:** source-grounded UML policy and manual views exist for the initial probe and the retained workflow lifecycle coordinator. Automated generation remains absent.
+**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, and workflow execution coordinator. The architecture guide now contains a component/authority-flow diagram for the expanded governed-work domain. Dedicated class neighborhoods and lifecycle/sequence diagrams for task coordination, capabilities, CODE RED, HeadlessAi, and GitHub operations remain to be added. Automated generation and stale-view detection are not implemented.
 
 ## Principles
 
@@ -17,7 +17,7 @@
 ## Planned structure
 
 - `docs/UML/README.md` — policy, coverage, and navigation.
-- `docs/UML/INVENTORY.md` — source files, types, and view coverage once inventory is generated.
+- `docs/UML/INVENTORY.md` — source areas and view coverage.
 - `docs/UML/Standard/` — reusable diagram and evidence conventions as they mature.
 - `docs/UML/[TypeName]UML.md` — type neighborhood diagrams grounded in actual declarations.
 
@@ -33,19 +33,21 @@
 
 Only add a view when there is sufficient evidence. Mark unimplemented flows as target designs.
 
-## Current inventory
+## Current views
 
 - [WorkflowExecutionCoordinator neighborhood](WorkflowExecutionCoordinatorUML.md) — retained run lifecycle and its relationship to the existing runner.
 - [Coordinator source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md) — purpose, public commands, limits, and tests.
-- [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — the original state-execution proof.
+- [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — state-execution proof.
+- [Fox/Sheepdog neighborhood](FoundryFoxSheepdogUML.md) — deterministic multi-state demonstration.
+- [Architecture diagram](../ARCHITECTURE.md#1-system-shape) — current component and authority flow; it is an authored architecture view grounded in the source ownership boundaries, not generated UML.
 
-The workflow runtime views are maintained manually and are not generated output. The broader type inventory, source-span provenance, and stale-view detection remain future work.
+The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The task/agent/GitHub domain now has real source and tests, but those types do not yet have dedicated neighborhood/sequence/state diagrams.
 
 ## Validation expectations
 
-The future CI check should detect missing required companion documents, stale generated views, broken internal links, and diagrams whose referenced source identity no longer exists. A generator or Roslyn integration is not present merely because this policy describes it.
+A future CI check should detect missing required companion documents, stale generated views, broken internal links, and diagrams whose referenced source identity no longer exists. A generator or Roslyn integration is not present merely because this policy describes it.
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<!-- The Singularity Workshop footer -->
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
