@@ -35,6 +35,46 @@ public sealed class WorkTaskCoordinatorTests
     }
 
     [Fact]
+    public void ExpiredCodeRedLeaseCannotBeReclaimedAndLeavesHistoryUnchanged()
+    {
+        using var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var lease = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(1), Now).Lease!;
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Validating, Now.AddSeconds(3), "validate");
+        var codeRed = coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.CodeRed,
+            Now.AddSeconds(4), "validation blocked");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            coordinator.Claim("foundry-8", "agent-b", TimeSpan.FromMinutes(1), Now.AddMinutes(2)));
+
+        var after = coordinator.GetSnapshot("foundry-8");
+        Assert.Equal(WorkTaskStatus.CodeRed, after.Status);
+        Assert.Equal(codeRed.Lease, after.Lease);
+        Assert.Equal(codeRed.Events, after.Events);
+    }
+
+    [Fact]
+    public void RestoreReplaysDurableTaskHistoryIntoFsmApiBeforeResuming()
+    {
+        using var original = new WorkTaskCoordinator();
+        original.Submit(Request());
+        var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!;
+        var investigating = original.Transition("foundry-8", lease.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+
+        using var restored = new WorkTaskCoordinator();
+        restored.Restore(investigating);
+
+        Assert.Equal(WorkTaskStatus.Investigating, restored.GetSnapshot("foundry-8").Status);
+        var resumed = restored.Transition("foundry-8", lease.LeaseId,
+            WorkTaskStatus.Implementing, Now.AddSeconds(2), "resume after replay");
+        Assert.Equal(WorkTaskStatus.Implementing, resumed.Status);
+        Assert.Equal(3, resumed.Events.Count);
+    }
+
+    [Fact]
     public void LifecycleTransitionsAreValidatedAndAudited()
     {
         var coordinator = new WorkTaskCoordinator();
