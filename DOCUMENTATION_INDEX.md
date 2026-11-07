@@ -3,53 +3,57 @@
 
 # Documentation Index
 
-**Repository:** TheSingularityWorkshop.Foundry  
-**Purpose:** Navigate product theory, implementation evidence, diagrams, demonstrations, and readiness.
+**Repository:** TheSingularityWorkshop.FSM_Foundry  
+**Purpose:** Navigate the domain theory, implementation contracts, verification evidence, and remaining integration gates.
 
 ## Entry points
 
-- [README](README.md) — product intent and five-section overview.
-- [Agent onboarding](AGENTS.md) — repository-specific contribution, safety, branch, release, and documentation rules.
-- [Gallery](Gallery.md) — demonstrations and recipes.
-- [Domain and ownership](docs/DOMAIN.md) — proposed Foundry domain, ownership boundaries, safety invariants, and first release slice.
-- [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — version-1 execution model, bounded per-run context, validation, outcomes, and explicit limitations.
-- [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
-- [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
-- [Host repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated typed operations, candidate SHA transitions, durable non-secret audit, concrete GitHub branch/read/staged-write/commit behavior, and remaining CI/host limits.
-- [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — Foundry-owned v1 HTTPS ingress, authentication, durable idempotency receipts, immutable artifact pull, and provider acknowledgement.
-- [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
-- [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
-- [Architecture](docs/ARCHITECTURE.md) — system boundaries and evidence labels.
-- [Contract inspection ledger](docs/CONTRACT_INSPECTION.md) — source-backed findings from the Workshop stack and unresolved decisions.
-- [Roadmap and readiness](docs/ROADMAP.md) — milestones and verification gates.
-- [UML policy and inventory](docs/UML/README.md) — diagrams, source provenance, and coverage.
+- [README](README.md) — product orientation and branch-aware status.
+- [Domain](docs/DOMAIN.md) — complete Foundry domain: workflow execution, governed repository work, authority, evidence, ownership, and limits.
+- [Architecture](docs/ARCHITECTURE.md) — component map, authority flow, adapters, persistence, and recovery.
+- [Agent onboarding](AGENTS.md) — contributor policy, safety invariants, branch/release guardrails, and evidence rules.
+- [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — sequential execution, validation, outcomes, and bounded context.
+- [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — JSON data channel, bounds, and ownership.
+- [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelope, lease fencing, state transitions, journals, CODE RED, and exact-CI decisions.
+- [Repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — typed operations, host capabilities, GitHub adapter, dispatch reconciliation, and candidate-checkout provenance.
+- [HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — lease-gated turns, provenance, duplicate suppression, and recovery.
+- [HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — source-pinned adapter and manual host composition.
+- [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — intended ready-notice/authenticated-ingress/immutable-pull/receipt protocol.
+- [Hub integration boundary](docs/HUB_INTEGRATION_BOUNDARY.md) — why legacy host work descriptors and process-group ticks are not workflow definitions.
+- [Contract inspection ledger](docs/CONTRACT_INSPECTION.md) — external Workshop contracts and unresolved integration decisions.
+- [Roadmap](docs/ROADMAP.md) — milestones and readiness gates.
+- [UML policy and inventory](docs/UML/README.md) — source provenance and diagram coverage.
+- [Gallery](Gallery.md) — deterministic demonstrations and recipes.
 
-## Coverage ledger
+## Coverage and evidence ledger
 
-| Area | Current status | Evidence / next action |
+Status labels in this table are scoped to the active feature branch unless explicitly marked otherwise. **Implemented** means source exists; **tested** means a named deterministic test/CI proof covers it; **live** means an actual external service invocation has been verified. These are different evidence levels.
+
+| Domain area | Current implementation/evidence | Remaining gate |
 |---|---|---|
-| Product vision and boundaries | Domain and ownership documented against the implemented version-1 runtime | [Domain and ownership](docs/DOMAIN.md); validate proposed concepts against a working contract and tests |
-| Source contract exploration | First pass recorded | [Contract inspection ledger](docs/CONTRACT_INSPECTION.md); deeper tests and WebApp source remain |
-| Runnable workflow definition | Version-1 in-memory sequential contract with bounded per-run JSON context implemented on PR #12 | [Definition](src/Foundry.Workflow/WorkflowDefinition.cs), [validator](src/Foundry.Workflow/WorkflowValidator.cs), [runner](src/Foundry.Workflow/WorkflowRunner.cs), [context](docs/WORKFLOW_EXECUTION_CONTEXT.md); persisted workflow-definition format remains open |
-| FSM_API integration | Basic real-package probe passes; expanded state scenario added | [Probe source](src/Foundry.FsmApiProbe/Program.cs), [fox/sheepdog scenario](src/Foundry.FoxSheepdog/Program.cs), [CI workflow](.github/workflows/foundry-fsm-api-probe.yml), and [successful expanded CI run](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40025709384) |
-| FSM_COS integration | Boundary inspected; Foundry integration not implemented | Only use for composition if a concrete workflow requires it |
-| FSM_Serialization integration | Responsibility inspected; format not selected | Keep domain semantics in the owning contract; do not assume arbitrary-object serialization |
-| Governed work lifecycle | Implemented on PR #10 feature branch; not yet merged or connected to live services | [Work-task lifecycle](docs/WORK_TASK_LIFECYCLE.md); local task/incident/repair journals are single-process, not GitHub-backed or distributed |
-| GitHub repository operations | Capability-gated branch/read/stage/commit, allowlisted Actions dispatch, durable dispatch intent/recovery, exact run-attempt required-job verification, and durable verification state implemented on draft PR #26 | [Repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md); production GitHub App credentials, distributed storage, conversion to durable task evidence, and ReviewReady draft-PR handoff remain |
-| HeadlessAi turn bridge and host adapter | Foundry bridge, concrete source adapter, and manual console composition root implemented on PR #11; pinned source and console project compile in CI | [Turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md), [host adapter](docs/HEADLESSAI_HOST_ADAPTER.md); host credential provisioning and a real provider invocation remain |
-| CiAi artifact ingress | Host-owned v1 callback contract documented; no live receiver or remote transport yet | [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md); ready notice + immutable pull + durable receipt boundary |
-| CI execution | PR #10 latest governed-work head and PR #11 combined stack both passed the full proof workflow, including the durable turn journal | [PR #10 run #304](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41172981012) and [combined-stack PR #11 run #319](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41174088415); verified exact HeadlessAi host-adapter head `d410afd4e23aaf459bdf2ce526faf964d3d36274` in [run #337](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41221916732), then console composition build in [run #352](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41222737607) |
-| Source-derived UML | Not implemented | Add diagrams after domain types exist |
-| Living Gallery | Basic probe and trace-derived SVG scenario verified | [Gallery](Gallery.md) and [successful expanded CI run](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40025709384) |
-| Optional article publishing | Design documented; not implemented | Build source-grounded article preview and excerpt images; keep external publishing opt-in |
-| Tests and abuse cases | Workflow and governed-task tests cover ordering, invalid input, failure, cancellation, bounded task/lease/audit metadata, strict journal replay, lease fencing, and repair-policy provenance | CI run #337 passed the current PR #11 head; add real provider and trusted cross-service integration tests next |
-| Release/publication | Not in scope | Requires explicit approval |
+| Sequential workflow execution | Typed definitions, complete preflight validation, host handler registry, sequential runner, bounded JSON context, retained in-process lifecycle | Durable workflow-run history, cross-process transport, parallelism, retry/compensation remain outside v1 |
+| FSM_API | Separate-process package probe and deterministic multi-state Fox/Sheepdog scenario in CI | No claim that those demonstrations are Hub workflow definitions |
+| Governed task lifecycle | Versioned task envelope, validated states, expiring fenced leases, attempt budget, sequenced events, persistent local replay | Distributed/multi-host task store and live GitHub issue claim |
+| CODE RED | Incident records/notices, mutation suspension, signed single-use recovery receipt, sequence-bound validation, persistence/replay tests | Production human-authentication/receipt issuer integration and external notification transport |
+| Repair policy/evidence | Bounded deterministic decision policy, exact CI run/attempt identity checks, repair-attempt journal | End-to-end ingestion of trusted CiAi verdict/artifact into task state |
+| HeadlessAi | Lease-gated bridge, immutable request/result mapping, provenance validation, at-most-once journal; source host adapter and console composition | Provisioned host credentials and a verified live provider turn |
+| Repository authorization | Typed closed operations, host-issued task/lease/branch/SHA/path/action capabilities, revalidation before transport | Production host capability/credential composition; distributed authorization state |
+| GitHub repository adapter | Candidate branch creation, immutable reads, staged blob writes, explicit commit/ref advance, local audit/staging journals | Live GitHub API proof and production GitHub App permissions |
+| GitHub Actions | Host-allowlisted dispatch, durable dispatch intent/reconciliation, trusted workflow-source pinning, request-ID run correlation, exact run-attempt/required-job verification | Real authorized dispatch and host-side candidate-provenance artifact retrieval/validation |
+| CiAi callback | Versioned contract for authenticated notice, immutable artifact pull, durable idempotency receipt | HTTPS receiver, transport adapter, live CiAi integration |
+| Draft PR handoff | Capability vocabulary and target lifecycle semantics | Actual draft PR creation, durable evidence conversion, human review handoff |
+| End-to-end autonomy | Bounded components and deterministic adapter proofs | Full issue → claim → model → repair → exact CI → evidence → draft PR cycle; MyVR pilot |
+| Release/publication | Human approval boundary documented; privileged operations absent from current repository-operation API | Not automated; explicit owner authorization required |
+
+## Verification notes
+
+PR #26's code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Those runs passed workflow tests, builds, the separate-process FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. Because they were push/PR events, they skipped the `workflow_dispatch`-only candidate checkout verification and provenance artifact steps. The current documentation commits follow that tested code head and need a fresh exact-head CI run.
 
 ## Update rule
 
-Every claimed capability must point to implementation, tests, a workflow run, or a reproducible artifact. Keep proposed architecture separate from implemented behavior. Update this ledger when evidence changes.
+Every implementation claim must point to source, tests, exact-head CI, or a reproducible external artifact. A contract document is not proof of a deployed transport; a fake-adapter test is not live-service proof; a dispatch acknowledgment is not CI evidence; and a green CI run is not merge/release authorization. Update this ledger whenever code or evidence changes.
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
+<!-- The Singularity Workshop footer -->
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
