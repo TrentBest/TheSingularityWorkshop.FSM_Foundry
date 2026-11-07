@@ -20,21 +20,44 @@ public sealed record CiAiRepairFeedbackResult(
 /// Host-accepted, byte-exact CiAi report context for one subsequent HeadlessAi repair turn.
 /// The report remains opaque to HeadlessAi; Foundry preserves the accepted bytes and trusted lineage.
 /// </summary>
-public sealed record FoundryAcceptedCiAiReportContext
+public sealed class FoundryAcceptedCiAiReportContext
 {
     public const string RequiredSchema = "ciai.test-results.v1";
     public const int MaximumReportBytes = 1024 * 1024;
 
-    public required string SchemaVersion { get; init; }
-    public required string ReportIdentity { get; init; }
-    public required string CanonicalReportJson { get; init; }
-    public required string ReportSha256 { get; init; }
-    public required string WorkflowRunId { get; init; }
-    public required int RunAttempt { get; init; }
-    public required string CandidateCommitSha { get; init; }
+    public string Repository { get; }
+    public string SchemaVersion { get; }
+    public string ReportIdentity { get; }
+    public string CanonicalReportJson { get; }
+    public string ReportSha256 { get; }
+    public string WorkflowRunId { get; }
+    public int RunAttempt { get; }
+    public string CandidateCommitSha { get; }
+
+    internal FoundryAcceptedCiAiReportContext(
+        string repository,
+        string schemaVersion,
+        string reportIdentity,
+        string canonicalReportJson,
+        string reportSha256,
+        string workflowRunId,
+        int runAttempt,
+        string candidateCommitSha)
+    {
+        Repository = repository;
+        SchemaVersion = schemaVersion;
+        ReportIdentity = reportIdentity;
+        CanonicalReportJson = canonicalReportJson;
+        ReportSha256 = reportSha256;
+        WorkflowRunId = workflowRunId;
+        RunAttempt = runAttempt;
+        CandidateCommitSha = candidateCommitSha;
+    }
 
     public void Validate(string repository, string currentCandidateSha, string? priorCandidateSha)
     {
+        if (!string.Equals(Repository, repository, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Accepted CiAi report repository does not match the HeadlessAi task.");
         if (SchemaVersion != RequiredSchema ||
             string.IsNullOrWhiteSpace(ReportIdentity) ||
             string.IsNullOrWhiteSpace(CanonicalReportJson) ||
@@ -254,16 +277,15 @@ public static class CiAiTestResultReportConsumer
         };
         headlessEvidence.Validate(mapping.Repository, mapping.CandidateSha, null);
 
-        var acceptedReport = new FoundryAcceptedCiAiReportContext
-        {
-            SchemaVersion = Schema,
-            ReportIdentity = "sha256:" + reportDigest,
-            CanonicalReportJson = new UTF8Encoding(false, true).GetString(bytes.Span),
-            ReportSha256 = reportDigest,
-            WorkflowRunId = run.RunId.ToString(CultureInfo.InvariantCulture),
-            RunAttempt = run.RunAttempt,
-            CandidateCommitSha = mapping.CandidateSha
-        };
+        var acceptedReport = new FoundryAcceptedCiAiReportContext(
+            mapping.Repository,
+            Schema,
+            "sha256:" + reportDigest,
+            new UTF8Encoding(false, true).GetString(bytes.Span),
+            reportDigest,
+            run.RunId.ToString(CultureInfo.InvariantCulture),
+            run.RunAttempt,
+            mapping.CandidateSha);
         acceptedReport.Validate(mapping.Repository, mapping.CandidateSha, null);
 
         return new CiAiConsumedTestResult(attempt, headlessEvidence, verdict,
