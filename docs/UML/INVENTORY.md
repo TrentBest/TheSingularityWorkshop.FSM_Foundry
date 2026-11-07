@@ -3,41 +3,47 @@
 
 # UML and Source Documentation Inventory
 
-**Inventory date:** 2026-10-23  
-**Branch:** development  
-**Scope:** basic CI probe and fox/sheepdog state-trace proof added.
+**Inventory scope:** `feature/foundry-host-repository-operation-gate`. The earlier 2026-10-23 inventory covered only the FSM_API probe and Fox/Sheepdog demonstration and is superseded by this expanded source inventory.
 
 ## Source inventory
 
-The first executable source file is a thin CI probe, not the Foundry workflow engine. A second executable now proves a bounded fox/sheepdog state sequence and emits trace-derived SVG evidence. The inventory distinguishes these verified proofs from still-undecided workflow contracts.
+The current source tree contains three distinct areas: the sequential workflow runtime, governed work/agent coordination, and host-side repository/CI integration. The companion pages currently cover only a subset of the types; do not infer UML coverage from source existence.
 
-| Source area | Source files | Companion Markdown | Neighborhood UML | Status |
-|---|---:|---:|---:|---|
-| FSM_API CI probe | 1 (`Program.cs`) | `Program.md` | `FoundryFsmApiProbeUML.md` | Implemented; CI run passes |
-| Fox/sheepdog CI scenario | 1 (`Program.cs`) | `Program.md` | `FoundryFoxSheepdogUML.md` | Implemented; CI run passes with repeatable trace/SVG artifacts |
-| Workflow definition/manifest | 0 verified | N/A | N/A | Contract undecided |
-| Reusable execution adapter | 0 verified | N/A | N/A | Not implemented; probe is deliberately narrow |
-| CI runner integration | 1 workflow | Workflow YAML | N/A | Probe workflow passes |
+| Source area | Representative source | Companion / UML | Status |
+|---|---|---|---|
+| FSM_API probe | `Foundry.FsmApiProbe/Program.cs` | `Program.md`, `FoundryFsmApiProbeUML.md` | Implemented; deterministic CI probe |
+| Fox/Sheepdog scenario | `Foundry.FoxSheepdog/Program.cs` | `Program.md`, `FoundryFoxSheepdogUML.md` | Implemented; repeatable trace/SVG evidence |
+| Workflow definition/validation | `WorkflowDefinition.cs`, `WorkflowValidator.cs` | `WORKFLOW_SEMANTICS.md` | Implemented and tested |
+| Workflow execution | `WorkflowRunner.cs`, `WorkflowExecutionCoordinator.cs`, `WorkflowExecutionContext.cs` | `WorkflowExecutionCoordinatorUML.md`, workflow guides | Implemented and tested; manual UML exists for coordinator |
+| Governed task lifecycle | `WorkTaskCoordinator.cs`, `PersistentWorkTaskCoordinator.cs`, `JsonlWorkTaskStore.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; deterministic lifecycle/persistence tests |
+| Capability authorization | `WorkTaskCapabilityRegistry.cs`, `AuthorizedRepositoryOperationDispatcher.cs` | `DOMAIN.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Implemented; fake-adapter authorization tests |
+| CODE RED incidents/recovery | `CodeRedIncident.cs`, `CodeRedRecoveryApprovalReceipt.cs`, `PersistentCodeRedRecoveryCoordinator.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; signed receipt/replay tests |
+| Repair decisions/evidence | `WorkTaskRepairDecisionPolicy.cs`, `WorkTaskRepairAttemptJournal.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; exact-run provenance and bounded decision tests |
+| HeadlessAi bridge | `HeadlessAiTurnBridge.cs`, `JsonlHeadlessAiTurnJournal.cs` | `HEADLESSAI_TURN_BRIDGE.md` | Implemented; fake executor and durable replay tests |
+| HeadlessAi host adapter | `HeadlessAiAgentTurnClient.cs`, console composition root | `HEADLESSAI_HOST_ADAPTER.md` | Source adapter/console compile; live provider turn not verified |
+| CiAi dispatch/reconciliation | `CiAiDispatchSubmissionCoordinator.cs`, `CiAiDispatchRunReconciler.cs`, `CiAiDispatchRunMarker.cs` | `CIAI_ARTIFACT_CALLBACK_CONTRACT.md` | Host-neutral contract/core implemented; live CiAi transport remains |
+| GitHub repository adapter | `GitHubRepositoryOperationAdapter.cs`, `JsonlGitHubRepositoryStagingStore.cs` | `REPOSITORY_OPERATION_ADAPTER.md` | Implemented on feature branch; fake-HTTP/local-store tests |
+| GitHub Actions dispatcher | `GitHubActionsWorkflowDispatcher.cs`, `GitHubActionsDispatchJournal.cs` | `REPOSITORY_OPERATION_ADAPTER.md` | Dispatch/correlation/required-job verification implemented; live dispatch and artifact retrieval remain |
 
-## Planned view coverage
+## View coverage
 
-| View | Status | Evidence needed |
+| View | Current status | Evidence needed for completion |
 |---|---|---|
-| Architecture/component | Conceptual target only | Confirmed contracts and source |
-| Class neighborhoods | Pending | Actual declared types |
-| Sequence: successful workflow | Pending | Implementation and tests |
-| Sequence: failure/recovery | Pending | Failure-path implementation and tests |
-| Activity/control flow | Pending | Real decision logic |
-| State lifecycle | Pending | Actual FSM and runner lifecycle |
-| Use cases | Initial goals in target diagram | User/CI scenarios validated with the owner |
-| Data model and lineage | Pending | Actual workflow schema and artifact flow |
-| Test traceability | Pending | Tests and requirement identifiers |
+| Architecture/component | Source-grounded architecture diagram in `docs/ARCHITECTURE.md` | Keep diagram synchronized with component ownership and real integration joins |
+| Class neighborhoods | Partial: workflow coordinator and initial probe | Add task coordinator, capability dispatcher, incident/recovery, agent bridge, and GitHub adapter neighborhoods |
+| Sequence: successful workflow | Workflow behavior documented; coordinator UML exists | Add tested sequence trace with exact source revision |
+| Sequence: failure/recovery | Contract semantics documented | Add failure, stale lease, CODE RED recovery, and indeterminate external-effect sequences |
+| Activity/control flow | Partial in workflow semantics | Add source-derived repair decision and authorization flows |
+| State lifecycle | Workflow and task state vocabularies documented | Add source-derived diagrams for both separate lifecycle owners |
+| Use cases | Initial target/use cases documented | Validate live host scenarios and human review interactions |
+| Data model and lineage | Task, operation, dispatch, and evidence contracts documented | Diagram the exact candidate/run/attempt/artifact lineage |
+| Test traceability | Test files and evidence linked from guides | Map each critical invariant to named tests and exact CI run |
 
 ## Exit criteria
 
-Update this inventory whenever source changes. Every generated view should identify its source revision and evidence. The probe neighborhood is manual and source-grounded; it must not be described as generated. A conceptual diagram must never be counted as source-derived coverage.
+Update this inventory whenever source changes. Every diagram must identify whether it is source-derived, test-derived, runtime-captured, human-authored, or conceptual. Include repository revision and source provenance for generated views. A conceptual target must never be counted as implemented UML coverage.
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<!-- The Singularity Workshop footer -->
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
