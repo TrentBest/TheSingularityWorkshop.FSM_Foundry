@@ -31,21 +31,21 @@ public sealed record CiAiConsumedTestResult(
 /// </summary>
 public static class CiAiTestResultReportConsumer
 {
-    public const int MaximumReportBytes = 16 * 1024 * 1024;
+    public const int MaximumReportBytes = 1024 * 1024;
     private const string Schema = "ciai.test-results.v1";
 
     private static readonly HashSet<string> RootProperties = new(StringComparer.Ordinal)
     {
-        "ContractVersion", "Schema", "Repository", "CandidateRef", "CandidateSha",
-        "WorkflowPath", "WorkflowDefinitionRef", "PullRequestNumber", "PullRequestHeadRef",
-        "PullRequestHeadSha", "PullRequestBaseRef", "PullRequestBaseSha", "RunEvidenceUrl",
-        "JobEvidenceUrl", "WorkflowDefinitionSha", "EventName", "EventRef", "EventSha",
-        "RunId", "RunAttempt", "JobId", "JobName", "JobStatus", "JobConclusion",
-        "RequiredCheckStatus", "Verdict", "ReasonCodes", "TestFramework", "Format",
-        "SourceArtifactId", "SourceArtifactName", "SourceJobKey", "ProviderArchiveDigest",
-        "ArchiveSizeBytes", "ArtifactCreatedAt", "ArtifactExpiresAt", "PayloadSha256",
-        "PayloadSizeBytes", "Total", "Passed", "Failed", "Skipped", "Other", "Results",
-        "ObservedAt"
+        "contractVersion", "schema", "repository", "candidateRef", "candidateSha",
+        "workflowPath", "workflowDefinitionRef", "pullRequestNumber", "pullRequestHeadRef",
+        "pullRequestHeadSha", "pullRequestBaseRef", "pullRequestBaseSha", "runEvidenceUrl",
+        "jobEvidenceUrl", "workflowDefinitionSha", "eventName", "eventRef", "eventSha",
+        "runId", "runAttempt", "jobId", "jobName", "jobStatus", "jobConclusion",
+        "requiredCheckStatus", "verdict", "reasonCodes", "testFramework", "format",
+        "sourceArtifactId", "sourceArtifactName", "sourceJobKey", "providerArchiveDigest",
+        "archiveSizeBytes", "artifactCreatedAt", "artifactExpiresAt", "payloadSha256",
+        "payloadSizeBytes", "total", "passed", "failed", "skipped", "other", "results",
+        "observedAt"
     };
 
     /// <summary>
@@ -121,41 +121,41 @@ public static class CiAiTestResultReportConsumer
             RootProperties.Any(name => !properties.ContainsKey(name)))
             throw new FormatException("CiAi test-result report has unknown or missing v1 properties.");
 
-        if (ReadInt32(properties, "ContractVersion") != 1 || ReadText(properties, "Schema", 64) != Schema)
+        if (ReadInt32(properties, "contractVersion") != 1 || ReadText(properties, "schema", 64) != Schema)
             throw new FormatException("CiAi test-result report contract version or schema is unsupported.");
 
-        RequireEqual(ReadText(properties, "Repository", 256), mapping.Repository, "repository");
-        RequireEqual(ReadText(properties, "CandidateRef", 255), mapping.CandidateRef, "candidate ref");
-        RequireEqualSha(ReadText(properties, "CandidateSha", 40), mapping.CandidateSha, "candidate SHA");
-        RequireEqual(ReadText(properties, "WorkflowPath", 512), mapping.WorkflowPath, "workflow path");
-        RequireEqual(ReadText(properties, "WorkflowDefinitionRef", 255), mapping.TrustedWorkflowRef, "trusted workflow ref");
-        RequireEqualSha(ReadText(properties, "WorkflowDefinitionSha", 40), mapping.TrustedWorkflowSha, "trusted workflow SHA");
-        RequireEqual(ReadText(properties, "EventName", 64), run.Event, "event name");
-        RequireEqual(ReadText(properties, "EventRef", 255), mapping.TrustedWorkflowRef, "event ref");
-        RequireEqualSha(ReadText(properties, "EventSha", 40),
+        RequireEqual(ReadText(properties, "repository", 256), mapping.Repository, "repository");
+        RequireEqual(ReadText(properties, "candidateRef", 255), mapping.CandidateRef, "candidate ref");
+        RequireEqualSha(ReadText(properties, "candidateSha", 40), mapping.CandidateSha, "candidate SHA");
+        RequireEqual(ReadText(properties, "workflowPath", 512), mapping.WorkflowPath, "workflow path");
+        RequireEqual(ReadText(properties, "workflowDefinitionRef", 255), mapping.TrustedWorkflowRef, "trusted workflow ref");
+        RequireEqualSha(ReadText(properties, "workflowDefinitionSha", 40), mapping.TrustedWorkflowSha, "trusted workflow SHA");
+        RequireEqual(ReadText(properties, "eventName", 64), run.Event, "event name");
+        RequireEqual(ReadText(properties, "eventRef", 255), mapping.TrustedWorkflowRef, "event ref");
+        RequireEqualSha(ReadText(properties, "eventSha", 40),
             run.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha, "event SHA");
-        if (ReadInt64(properties, "RunId") != run.RunId ||
-            ReadInt32(properties, "RunAttempt") != run.RunAttempt)
+        if (ReadInt64(properties, "runId") != run.RunId ||
+            ReadInt32(properties, "runAttempt") != run.RunAttempt)
             throw new UnauthorizedAccessException("CiAi report run identity does not match the exact persisted GitHub run binding.");
-        var jobId = ReadInt64(properties, "JobId");
-        if (jobId <= 0 || ReadText(properties, "JobName", 200) != mapping.JobName)
+        var jobId = ReadInt64(properties, "jobId");
+        if (jobId <= 0 || ReadText(properties, "jobName", 200) != mapping.JobName)
             throw new UnauthorizedAccessException("CiAi report job identity does not match the registered workflow job.");
 
-        var runUrl = ReadGitHubEvidenceUrl(properties, "RunEvidenceUrl",
+        var runUrl = ReadGitHubEvidenceUrl(properties, "runEvidenceUrl",
             $"/{mapping.Repository}/actions/runs/{run.RunId}");
-        _ = ReadGitHubEvidenceUrl(properties, "JobEvidenceUrl",
+        _ = ReadGitHubEvidenceUrl(properties, "jobEvidenceUrl",
             $"/{mapping.Repository}/actions/runs/{run.RunId}/job/{jobId}");
 
-        if (ReadText(properties, "JobStatus", 64) != "completed")
+        if (ReadText(properties, "jobStatus", 64) != "completed")
             throw new InvalidDataException("CiAi report job is not complete.");
         var jobConclusion = OptionalText(properties, "JobConclusion", 64);
         if (string.IsNullOrWhiteSpace(jobConclusion))
             jobConclusion = null;
-        var requiredCheckStatus = ReadText(properties, "RequiredCheckStatus", 64);
-        var verdict = ReadText(properties, "Verdict", 64);
+        var requiredCheckStatus = ReadText(properties, "requiredCheckStatus", 64);
+        var verdict = ReadText(properties, "verdict", 64);
         ValidateVerdictShape(verdict, requiredCheckStatus, jobConclusion);
 
-        var observedAt = ReadTimestamp(properties, "ObservedAt");
+        var observedAt = ReadTimestamp(properties, "observedAt");
         if (observedAt < run.BoundAt || observedAt > now || observedAt > artifact.ExpiresAt)
             throw new InvalidDataException("CiAi report observation time is outside the bound run and artifact validity window.");
 
@@ -248,7 +248,7 @@ public static class CiAiTestResultReportConsumer
 
     private static List<string> ReadReasonCodes(Dictionary<string, JsonElement> properties)
     {
-        var element = properties["ReasonCodes"];
+        var element = properties["reasonCodes"];
         if (element.ValueKind != JsonValueKind.Array || element.GetArrayLength() is < 1 or > 32)
             throw new FormatException("CiAi report reason codes must contain between one and 32 entries.");
         var values = new List<string>();
@@ -270,7 +270,7 @@ public static class CiAiTestResultReportConsumer
     private static (List<string> Digests, List<string> Summary, CiAiResultCounts Counts)
         ReadAndValidateResults(Dictionary<string, JsonElement> properties)
     {
-        var results = properties["Results"];
+        var results = properties["results"];
         if (results.ValueKind != JsonValueKind.Array || results.GetArrayLength() > 10_000)
             throw new FormatException("CiAi report test results must be a bounded array.");
 
@@ -340,11 +340,11 @@ public static class CiAiTestResultReportConsumer
         CiAiResultCounts actual)
     {
         var declared = new CiAiResultCounts(
-            ReadNonNegativeCount(properties, "Total"),
-            ReadNonNegativeCount(properties, "Passed"),
-            ReadNonNegativeCount(properties, "Failed"),
-            ReadNonNegativeCount(properties, "Skipped"),
-            ReadNonNegativeCount(properties, "Other"));
+            ReadNonNegativeCount(properties, "total"),
+            ReadNonNegativeCount(properties, "passed"),
+            ReadNonNegativeCount(properties, "failed"),
+            ReadNonNegativeCount(properties, "skipped"),
+            ReadNonNegativeCount(properties, "other"));
 
         if (declared != actual ||
             (long)declared.Passed + declared.Failed + declared.Skipped + declared.Other != declared.Total)
