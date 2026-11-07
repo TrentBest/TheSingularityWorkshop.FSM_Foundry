@@ -62,10 +62,17 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void RejectsReportsAboveTheCanonicalOneMiBLimit()
+    {
+        var oversized = new byte[1024 * 1024 + 1];
+        Assert.Throws<InvalidDataException>(() => CreateVerifiedArtifact(oversized));
+    }
+
+    [Fact]
     public void RejectsAggregateCountersThatDifferFromIndividualResults()
     {
         var node = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
-        node["Failed"] = 2;
+        node["failed"] = 2;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<InvalidDataException>(() =>
@@ -76,11 +83,11 @@ public sealed class CiAiTestResultReportConsumerTests
     public void RejectsCompletePassContainingFailedTestRecords()
     {
         var node = JsonNode.Parse(CreateReport("CompletePass", "Passed", "success", EventSha))!;
-        node["Results"]![0]!["Outcome"] = "Failed";
-        node["Results"]![0]!["RawOutcome"] = "Failed";
-        node["Results"]![0]!["Message"] = "Unexpected failure in a report claiming CompletePass.";
-        node["Passed"] = 0;
-        node["Failed"] = 1;
+        node["results"]![0]!["outcome"] = "Failed";
+        node["results"]![0]!["rawOutcome"] = "Failed";
+        node["results"]![0]!["message"] = "Unexpected failure in a report claiming CompletePass.";
+        node["passed"] = 0;
+        node["failed"] = 1;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<InvalidDataException>(() =>
@@ -91,8 +98,8 @@ public sealed class CiAiTestResultReportConsumerTests
     public void RejectsActionableFailureWithoutActualDiagnosticText()
     {
         var node = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
-        node["Results"]![0]!["Message"] = null;
-        node["Results"]![0]!["StackTrace"] = null;
+        node["results"]![0]!["message"] = null;
+        node["results"]![0]!["stackTrace"] = null;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<FormatException>(() =>
@@ -131,7 +138,7 @@ public sealed class CiAiTestResultReportConsumerTests
     {
         var bytes = CreateReport("IncompleteOrUntrusted", "Passed", "success", EventSha);
         var json = Encoding.UTF8.GetString(bytes);
-        var duplicate = Encoding.UTF8.GetBytes(json[..^1] + ",\"Schema\":\"ciai.test-results.v1\"}");
+        var duplicate = Encoding.UTF8.GetBytes(json[..^1] + ",\"schema\":\"ciai.test-results.v1\"}");
         Assert.Throws<FormatException>(() =>
             CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(duplicate), CreateTask(), Now));
     }
@@ -240,6 +247,6 @@ public sealed class CiAiTestResultReportConsumerTests
             Results = new object[] { result },
             ObservedAt
         };
-        return JsonSerializer.SerializeToUtf8Bytes(report);
+        return JsonSerializer.SerializeToUtf8Bytes(report, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 }
