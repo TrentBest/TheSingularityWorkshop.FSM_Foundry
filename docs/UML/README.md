@@ -36,12 +36,14 @@ Only add a view when there is sufficient evidence. Mark unimplemented flows as t
 ## Current views
 
 - [WorkflowExecutionCoordinator neighborhood](WorkflowExecutionCoordinatorUML.md) — retained run lifecycle and its relationship to the existing runner.
+- [WorkTaskCoordinator neighborhood](WorkTaskCoordinatorUML.md) — governed task lifecycle, exact CI evidence decision, and CODE RED recovery.
 - [Coordinator source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md) — purpose, public commands, limits, and tests.
+- [WorkTaskCoordinator source companion](../../src/Foundry.Workflow/WorkTaskCoordinator.md) — task envelope, leases, evidence-gated transitions, recovery, and persistence boundary.
 - [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — state-execution proof.
 - [Fox/Sheepdog neighborhood](FoundryFoxSheepdogUML.md) — deterministic multi-state demonstration.
 - [Architecture diagram](../ARCHITECTURE.md#1-system-shape) — current component and authority flow; it is an authored architecture view grounded in the source ownership boundaries, not generated UML.
 
-The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The task/agent/GitHub domain now has real source and tests, but those types do not yet have dedicated neighborhood/sequence/state diagrams.
+The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The task coordinator now has a dedicated neighborhood and evidence/recovery sequences. Capability dispatch, incident/recovery types, agent bridge, and GitHub operations still need dedicated neighborhood/sequence/state diagrams.
 
 ## Validation expectations
 
