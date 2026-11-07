@@ -11,6 +11,8 @@ public sealed class GitHubActionsWorkflowDispatcherTests
     private const string Repository = "TrentBest/Sample";
     private const string Branch = "agents/task-123";
     private const string CandidateSha = "0123456789abcdef0123456789abcdef01234567";
+    private const string TrustedWorkflowRef = "development";
+    private const string TrustedWorkflowSha = "abcdef0123456789abcdef0123456789abcdef01";
     private const string WorkflowPath = ".github/workflows/foundry-fsm-api-probe.yml";
     private const string RequiredJob = "Build, execute, and capture state evidence";
 
@@ -20,7 +22,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var handler = new StubHandler((request, _) =>
         {
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith(
                 "/actions/workflows/foundry-fsm-api-probe.yml/dispatches", StringComparison.Ordinal))
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
@@ -35,14 +37,17 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.Equal(Repository, receipt.Repository);
         Assert.Equal(Branch, receipt.Branch);
         Assert.Equal(CandidateSha, receipt.CandidateSha);
+        Assert.Equal(TrustedWorkflowRef, receipt.TrustedWorkflowRef);
+        Assert.Equal(TrustedWorkflowSha, receipt.TrustedWorkflowSha);
         Assert.Equal("foundry-fsm-api-probe.yml", receipt.WorkflowFile);
         Assert.Equal(WorkflowPath, receipt.WorkflowPath);
         Assert.Equal(32, receipt.RequestId.Length);
         var post = Assert.Single(handler.Requests.Where(item => item.Method == HttpMethod.Post));
         using var body = JsonDocument.Parse(post.Body!);
-        Assert.Equal(Branch, body.RootElement.GetProperty("ref").GetString());
+        Assert.Equal(TrustedWorkflowRef, body.RootElement.GetProperty("ref").GetString());
         var inputs = body.RootElement.GetProperty("inputs");
         Assert.Equal(receipt.RequestId, inputs.GetProperty("foundry_request_id").GetString());
+        Assert.Equal(Branch, inputs.GetProperty("candidate_ref").GetString());
         Assert.Equal(CandidateSha, inputs.GetProperty("candidate_sha").GetString());
 
         var reopened = new JsonlGitHubActionsDispatchJournal(journalPath);
@@ -91,7 +96,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                         id = 765432L, run_attempt = 1,
                         html_url = "https://github.com/TrentBest/Sample/actions/runs/765432",
                         status = "completed", conclusion = "success",
-                        head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
+                        head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha, path = WorkflowPath,
                         @event = "workflow_dispatch", display_title = "Foundry CI " + capturedRequestId
                     }}
                 }));
@@ -145,7 +150,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                             id = 123456L, run_attempt = 2,
                             html_url = "https://github.com/TrentBest/Sample/actions/runs/123456",
                             status = "completed", conclusion = "success",
-                            head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
+                            head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha, path = WorkflowPath,
                             @event = "workflow_dispatch", display_title = "Foundry CI " + correlationRequestId
                         },
                         new
@@ -187,11 +192,11 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.NotNull(correlation);
         Assert.Equal(123456L, correlation.RunId);
         Assert.Equal(2, correlation.RunAttempt);
-        Assert.Equal(CandidateSha, correlation.HeadSha);
-        Assert.Equal(Branch, correlation.HeadBranch);
+        Assert.Equal(TrustedWorkflowSha, correlation.HeadSha);
+        Assert.Equal(TrustedWorkflowRef, correlation.HeadBranch);
         Assert.Equal(WorkflowPath, correlation.WorkflowPath);
         Assert.Equal("success", correlation.Conclusion);
-        Assert.Contains("head_sha=" + CandidateSha, handler.Requests.Single(item => item.Method == HttpMethod.Get &&
+        Assert.Contains("head_sha=" + TrustedWorkflowSha, handler.Requests.Single(item => item.Method == HttpMethod.Get &&
             item.Uri.Contains("/actions/workflows/", StringComparison.Ordinal)).Uri);
 
         var evidence = await dispatcher.VerifyRequiredJobsAsync(receipt, correlation!, [RequiredJob]);
@@ -291,7 +296,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.OK, """
                 {"total_count":1,"workflow_runs":[
                   {"id":1,"run_attempt":1,"html_url":"https://github.com/TrentBest/Sample/actions/runs/1",
-                   "status":"completed","conclusion":"success","head_branch":"agents/task-123",
+                   "status":"completed","conclusion":"success","head_branch":"development",
                    "head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                    "path":".github/workflows/foundry-fsm-api-probe.yml","event":"workflow_dispatch",
                    "display_title":"Foundry CI unrelated"}
@@ -325,18 +330,23 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             new GitHubActionsWorkflowDefinition("proof", "foundry-fsm-api-probe.yml", WorkflowPath)
         ]);
         return new GitHubActionsWorkflowDispatcher(client, new TestTokenProvider(), repositories,
-            workflows, new JsonlGitHubActionsDispatchJournal(journalPath));
+            workflows, new JsonlGitHubActionsDispatchJournal(journalPath), TrustedWorkflowSha);
     }
 
     private static string NewJournalPath() => Path.Combine(Path.GetTempPath(),
         "FoundryActionsTests", Guid.NewGuid().ToString("N") + ".jsonl");
 
-    private static HttpResponseMessage CandidateRef() =>
-        Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+    private static HttpResponseMessage GitRef(string path)
+    {
+        var trusted = path.Contains("development", StringComparison.Ordinal);
+        var branch = trusted ? TrustedWorkflowRef : Branch;
+        var sha = trusted ? TrustedWorkflowSha : CandidateSha;
+        return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
         {
-            @ref = "refs/heads/" + Branch,
-            @object = new { type = "commit", sha = CandidateSha }
+            @ref = "refs/heads/" + branch,
+            @object = new { type = "commit", sha }
         }));
+    }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string content) =>
         new(status) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
