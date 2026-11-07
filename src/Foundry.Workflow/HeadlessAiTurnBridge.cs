@@ -188,6 +188,12 @@ public sealed record FoundryHeadlessAiTurnResult
     public string? PriorTurnId { get; init; }
     public string? PriorCandidateCommitSha { get; init; }
     public string? IdempotencyKey { get; init; }
+    public string? AcceptedReportSchemaVersion { get; init; }
+    public string? AcceptedReportIdentity { get; init; }
+    public string? AcceptedReportSha256 { get; init; }
+    public string? AcceptedReportWorkflowRunId { get; init; }
+    public int? AcceptedReportRunAttempt { get; init; }
+    public string? AcceptedReportCandidateCommitSha { get; init; }
     public string? ErrorCode { get; init; }
     public string? Diagnosis { get; init; }
     public string? PatchIntent { get; init; }
@@ -215,6 +221,22 @@ public sealed record FoundryHeadlessAiTurnResult
             !string.Equals(PriorCandidateCommitSha, request.PriorCandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
             IdempotencyKey != request.IdempotencyKey)
             throw new InvalidOperationException("HeadlessAi returned a result for different task or candidate provenance.");
+
+        var accepted = request.AcceptedCiAiReport;
+        if (accepted is null)
+        {
+            if (AcceptedReportSchemaVersion is not null || AcceptedReportIdentity is not null ||
+                AcceptedReportSha256 is not null || AcceptedReportWorkflowRunId is not null ||
+                AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null)
+                throw new InvalidOperationException("HeadlessAi returned accepted-report lineage for a turn that supplied no accepted report.");
+        }
+        else if (AcceptedReportSchemaVersion != accepted.SchemaVersion ||
+            AcceptedReportIdentity != accepted.ReportIdentity ||
+            AcceptedReportSha256 != accepted.ReportSha256 ||
+            AcceptedReportWorkflowRunId != accepted.WorkflowRunId ||
+            AcceptedReportRunAttempt != accepted.RunAttempt ||
+            !string.Equals(AcceptedReportCandidateCommitSha, accepted.CandidateCommitSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("HeadlessAi result accepted-report lineage does not match the exact report supplied to the turn.");
         if (string.IsNullOrWhiteSpace(TurnId) || TurnId.Length > 128 ||
             string.IsNullOrWhiteSpace(ProviderId) || ProviderId.Length > 128 ||
             string.IsNullOrWhiteSpace(ModelId) || ModelId.Length > 256 ||
