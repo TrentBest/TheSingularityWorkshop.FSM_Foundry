@@ -53,7 +53,11 @@ public sealed class WorkTaskCoordinatorTests
                 original.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now.AddSeconds(4), "blocked");
                 store.Append(original.GetSnapshot("foundry-8"));
                 var incident = TestIncident();
-                var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence);
+                var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence) with
+                {
+                    IssuedAt = Now.AddSeconds(5),
+                    ExpiresAt = Now.AddMinutes(6)
+                };
                 var recovered = original.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
                     Now.AddMinutes(1), "approved recovery");
                 store.Append(recovered);
