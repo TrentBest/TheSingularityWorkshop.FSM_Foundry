@@ -14,6 +14,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-31T10:46:00Z");
     private const string Repository = "owner/repo";
     private const string CandidateSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private const string RepairCandidateSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     private const string BaseSha = "cccccccccccccccccccccccccccccccccccccccc";
     private const string WorkflowSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string EventSha = "dddddddddddddddddddddddddddddddddddddddd";
@@ -86,7 +87,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             var turnCoordinator = new FoundryHeadlessAiTurnCoordinator(
                 tasks, client, turnJournal, new FixedTimeProvider(Now.AddMinutes(1)));
             var turn = await turnCoordinator.InvokeAsync(
-                "task-1", leaseId, "work/task-1", CandidateSha,
+                "task-1", leaseId, "work/task-1", RepairCandidateSha,
                 "experiences-developer", "Repair the exact failing candidate using the supplied CiAi evidence.",
                 "Return a bounded patch proposal; do not claim authorization.",
                 """{"type":"object","required":["diagnosis","patchIntent"]}""",
@@ -100,6 +101,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.Equal("turn-repair-1", turn.TurnId);
             Assert.Equal(WorkTaskStatus.RepairRequired, tasks.GetSnapshot("task-1").Status);
             Assert.Equal("turn-initial-1", client.Request!.PriorTurnId);
+            Assert.Equal(RepairCandidateSha, client.Request.CandidateCommitSha);
             Assert.Equal(CandidateSha, client.Request.PriorCandidateCommitSha);
             Assert.Single(client.Request.Evidence);
             Assert.Equal(CandidateSha, client.Request.Evidence[0].CommitSha);
