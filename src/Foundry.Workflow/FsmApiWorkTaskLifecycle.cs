@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using TheSingularityWorkshop.FSM_API;
 using FsmEngine = TheSingularityWorkshop.FSM_API.FSM_API;
 
@@ -10,6 +11,8 @@ namespace TheSingularityWorkshop.Foundry;
 internal sealed class FsmApiWorkTaskLifecycle : IDisposable
 {
     private static readonly object RegistryGate = new();
+    private static readonly ConcurrentDictionary<(WorkTaskStatus Previous, WorkTaskStatus Next), Lazy<bool>>
+        TransitionCache = new();
     private readonly string _processingGroup = $"Foundry.WorkTask.{Guid.NewGuid():N}";
     private readonly string _definitionName = $"Foundry.WorkTask.Lifecycle.{Guid.NewGuid():N}";
     private readonly WorkTaskStatus _initialState;
@@ -230,6 +233,13 @@ internal sealed class FsmApiWorkTaskLifecycle : IDisposable
         if (!Enum.IsDefined(previous) || !Enum.IsDefined(next) || previous == next)
             return false;
 
+        return TransitionCache.GetOrAdd((previous, next), edge =>
+            new Lazy<bool>(() => ProbeTransition(edge.Previous, edge.Next),
+                LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+    }
+
+    private static bool ProbeTransition(WorkTaskStatus previous, WorkTaskStatus next)
+    {
         using var lifecycle = new FsmApiWorkTaskLifecycle(previous);
         var taskId = $"transition-probe-{Guid.NewGuid():N}";
         lifecycle.CreateTask(taskId);
