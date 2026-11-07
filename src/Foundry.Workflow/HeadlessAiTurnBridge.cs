@@ -29,6 +29,8 @@ public sealed record FoundryHeadlessAiTurnRequest
     public string? PriorCandidateCommitSha { get; init; }
     public IReadOnlyList<FoundryHeadlessAiEvidence> Evidence { get; init; } =
         Array.Empty<FoundryHeadlessAiEvidence>();
+    /// <summary>Exact host-accepted CiAi report bytes and lineage for a repair turn.</summary>
+    public FoundryAcceptedCiAiReportContext? AcceptedCiAiReport { get; init; }
 
     public void Validate(DateTimeOffset now)
     {
@@ -82,6 +84,15 @@ public sealed record FoundryHeadlessAiTurnRequest
             throw new ArgumentException("At most 64 CI evidence references may be supplied.", nameof(Evidence));
         foreach (var item in Evidence)
             item.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
+        if (AcceptedCiAiReport is not null)
+        {
+            AcceptedCiAiReport.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
+            if (!Evidence.Any(item =>
+                    item.WorkflowRunId == AcceptedCiAiReport.WorkflowRunId &&
+                    item.Attempt == AcceptedCiAiReport.RunAttempt &&
+                    string.Equals(item.CommitSha, AcceptedCiAiReport.CandidateCommitSha, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("Accepted CiAi report must have a matching exact-run evidence reference.", nameof(AcceptedCiAiReport));
+        }
     }
 
     private static void ValidateSha(string? value, string name)
@@ -93,7 +104,8 @@ public sealed record FoundryHeadlessAiTurnRequest
     internal static string CreateIdempotencyKey(WorkTaskSnapshot task, string branch,
         string candidateSha, string role, string instructions, string canonicalPrompt,
         string responseSchema, string? priorTurnId, string? priorCandidateCommitSha,
-        IReadOnlyList<FoundryHeadlessAiEvidence> evidence)
+        IReadOnlyList<FoundryHeadlessAiEvidence> evidence,
+        FoundryAcceptedCiAiReportContext? acceptedCiAiReport)
     {
         var material = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -110,7 +122,12 @@ public sealed record FoundryHeadlessAiTurnRequest
             responseSchema,
             priorTurnId,
             priorCandidateCommitSha,
-            evidence
+            evidence,
+            acceptedReportIdentity = acceptedCiAiReport?.ReportIdentity,
+            acceptedReportSha256 = acceptedCiAiReport?.ReportSha256,
+            acceptedReportRunId = acceptedCiAiReport?.WorkflowRunId,
+            acceptedReportRunAttempt = acceptedCiAiReport?.RunAttempt,
+            acceptedReportCandidateSha = acceptedCiAiReport?.CandidateCommitSha
         });
         return "foundry-" + Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant();
     }
@@ -263,7 +280,8 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         string authorizedBranch, string candidateCommitSha, string role, string instructions,
         string canonicalPrompt, string responseSchema, IReadOnlyList<FoundryHeadlessAiEvidence>? evidence = null,
         string? priorTurnId = null, string? priorCandidateCommitSha = null,
-        TimeSpan? turnLifetime = null, CancellationToken cancellationToken = default)
+        TimeSpan? turnLifetime = null, CancellationToken cancellationToken = default,
+        FoundryAcceptedCiAiReportContext? acceptedCiAiReport = null)
     {
         var now = _timeProvider.GetUtcNow();
         var task = _tasks.GetSnapshot(taskId);
@@ -276,8 +294,10 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         {
             if (string.IsNullOrWhiteSpace(priorTurnId) ||
                 string.IsNullOrWhiteSpace(priorCandidateCommitSha) ||
-                evidence is null || evidence.Count == 0)
-                throw new InvalidOperationException("A repair turn requires prior-turn provenance and the accepted CiAi evidence context.");
+                evidence is null || evidence.Count == 0 || acceptedCiAiReport is null)
+                throw new InvalidOperationException("A repair turn requires prior-turn provenance, accepted report bytes, and exact-run evidence.");
+            if (!string.Equals(acceptedCiAiReport.CandidateCommitSha, priorCandidateCommitSha, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("The accepted CiAi report must be bound to the prior candidate being repaired.");
             var priorTurn = _journal.GetCompletedTurn(taskId, priorTurnId)
                 ?? throw new UnauthorizedAccessException("A repair turn must resume a completed prior turn from the same task journal.");
             if (priorTurn.CorrelationId != task.Request.CorrelationId ||
@@ -309,13 +329,14 @@ public sealed class FoundryHeadlessAiTurnCoordinator
             IdempotencyKey = "pending",
             PriorTurnId = priorTurnId,
             PriorCandidateCommitSha = priorCandidateCommitSha,
-            Evidence = Array.AsReadOnly((evidence ?? Array.Empty<FoundryHeadlessAiEvidence>()).ToArray())
+            Evidence = Array.AsReadOnly((evidence ?? Array.Empty<FoundryHeadlessAiEvidence>()).ToArray()),
+            AcceptedCiAiReport = acceptedCiAiReport
         };
         request = request with
         {
             IdempotencyKey = FoundryHeadlessAiTurnRequest.CreateIdempotencyKey(
                 task, authorizedBranch, candidateCommitSha, role, instructions,
-                canonicalPrompt, responseSchema, priorTurnId, priorCandidateCommitSha, request.Evidence)
+                canonicalPrompt, responseSchema, priorTurnId, priorCandidateCommitSha, request.Evidence, request.AcceptedCiAiReport)
         };
         request.Validate(now);
         cancellationToken.ThrowIfCancellationRequested();
