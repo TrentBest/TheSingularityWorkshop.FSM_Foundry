@@ -171,7 +171,8 @@ public sealed class GitHubActionsWorkflowDispatcher
             {
                 ["foundry_request_id"] = requestId,
                 ["candidate_ref"] = branch,
-                ["candidate_sha"] = candidateSha
+                ["candidate_sha"] = candidateSha,
+                ["trusted_workflow_sha"] = _trustedWorkflowSha
             }
         }, JsonOptions);
         using var response = await SendAsync(HttpMethod.Post,
