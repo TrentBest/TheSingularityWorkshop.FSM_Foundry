@@ -67,6 +67,51 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$CANDIDATE_SHA"
 
+      - name: Record verified candidate checkout provenance
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          REQUEST_ID: ${{ github.event.inputs.foundry_request_id }}
+          CANDIDATE_REF: ${{ github.event.inputs.candidate_ref }}
+          CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
+          TRUSTED_REF: ${{ github.ref }}
+          TRUSTED_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_PATH: ${{ github.workflow }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$CANDIDATE_SHA"
+          mkdir -p artifacts
+          jq -n \
+            --arg schema "foundry.candidate-checkout-provenance.v1" \
+            --arg request_id "$REQUEST_ID" \
+            --arg repository "$REPOSITORY" \
+            --arg workflow_path "$WORKFLOW_PATH" \
+            --arg workflow_ref "$WORKFLOW_REF" \
+            --arg event_name "$EVENT_NAME" \
+            --arg trusted_ref "$TRUSTED_REF" \
+            --arg trusted_sha "$TRUSTED_SHA" \
+            --arg candidate_ref "$CANDIDATE_REF" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg checked_out_head "$actual" \
+            --arg run_id "$RUN_ID" \
+            --arg run_attempt "$RUN_ATTEMPT" \
+            '{
+              schema: $schema,
+              request_id: $request_id,
+              repository: $repository,
+              workflow_path: $workflow_path,
+              workflow_ref: $workflow_ref,
+              event_name: $event_name,
+              trusted_workflow: { ref: $trusted_ref, sha: $trusted_sha },
+              candidate: { ref: $candidate_ref, requested_sha: $candidate_sha, checked_out_head: $checked_out_head },
+              run: { id: $run_id, attempt: ($run_attempt | tonumber) }
+            }' > artifacts/candidate-checkout-provenance.json
+
       - name: Check out pinned HeadlessAi source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -117,6 +162,15 @@ jobs:
           diff -u artifacts/fox-run-1/fox-sheepdog.trace artifacts/fox-run-2/fox-sheepdog.trace
           diff -u artifacts/fox-run-1/fox-sheepdog.svg artifacts/fox-run-2/fox-sheepdog.svg
           grep -q "PASS: dog-to-fox cross-FSM transition reached Mangled." artifacts/fox-run-1.txt
+
+      - name: Publish candidate checkout provenance
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: foundry-candidate-checkout-provenance
+          path: artifacts/candidate-checkout-provenance.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Publish run evidence as a workflow artifact
         if: always()
