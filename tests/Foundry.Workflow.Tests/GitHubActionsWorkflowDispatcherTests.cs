@@ -66,7 +66,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post && path.EndsWith("/dispatches", StringComparison.Ordinal))
             {
                 using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
@@ -136,7 +136,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post && path.EndsWith("/dispatches", StringComparison.Ordinal))
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
@@ -158,7 +158,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                             id = 123455L, run_attempt = 1,
                             html_url = "https://github.com/TrentBest/Sample/actions/runs/123455",
                             status = "completed", conclusion = "success",
-                            head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
+                            head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha, path = WorkflowPath,
                             @event = "workflow_dispatch", display_title = "Foundry CI unrelated-request"
                         }
                     }
@@ -167,7 +167,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
                     id = 123456L, run_attempt = 2, path = WorkflowPath,
-                    @event = "workflow_dispatch", head_branch = Branch, head_sha = CandidateSha,
+                    @event = "workflow_dispatch", head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha,
                     display_title = "Foundry CI " + correlationRequestId,
                     status = "completed", conclusion = "success"
                 }));
@@ -218,7 +218,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post && path.EndsWith("/dispatches", StringComparison.Ordinal))
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
@@ -230,7 +230,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                         id = 123456L, run_attempt = 1,
                         html_url = "https://github.com/TrentBest/Sample/actions/runs/123456",
                         status = "completed", conclusion = "failure",
-                        head_branch = Branch, head_sha = CandidateSha, path = WorkflowPath,
+                        head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha, path = WorkflowPath,
                         @event = "workflow_dispatch", display_title = "Foundry CI " + correlationRequestId
                     }}
                 }));
@@ -238,7 +238,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                 return Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
                 {
                     id = 123456L, run_attempt = 1, path = WorkflowPath,
-                    @event = "workflow_dispatch", head_branch = Branch, head_sha = CandidateSha,
+                    @event = "workflow_dispatch", head_branch = TrustedWorkflowRef, head_sha = TrustedWorkflowSha,
                     display_title = "Foundry CI " + correlationRequestId,
                     status = "completed", conclusion = "failure"
                 }));
@@ -269,7 +269,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var handler = new StubHandler((request, _) =>
         {
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             return Json(HttpStatusCode.OK, """{"total_count":1,"workflow_runs":[]}""");
@@ -290,7 +290,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Get && path.Contains("/git/ref/", StringComparison.Ordinal))
-                return CandidateRef();
+                return GitRef(request.RequestUri!.AbsolutePath);
             if (request.Method == HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             return Json(HttpStatusCode.OK, """
