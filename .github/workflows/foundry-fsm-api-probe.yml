@@ -9,6 +9,7 @@ on:
       - development
       - work/code-red-task-lifecycle
       - feature/foundry-headlessai-turn-seam
+      - feature/foundry-fsm-api-runtime-integration
   workflow_dispatch:
 
 permissions:
