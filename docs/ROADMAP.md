@@ -76,7 +76,7 @@
 
 ## Evidence and branch hygiene
 
-PR #26 code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Both covered workflow tests, builds, FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. They did not execute the dispatch-only candidate checkout/provenance steps. The documentation commits that update this roadmap are newer and require their own exact-head CI confirmation.
+PR #26 code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Both covered workflow tests, builds, FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. They did not execute the dispatch-only candidate checkout/provenance steps. The latest documentation head `071505bcdb93b7eac876e928f7faf0a1f01a641c` passed exact-head CI run [#42424488301](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42424488301). This verifies the documentation commit's build/test workflow; it does not execute the dispatch-only candidate checkout/provenance path.
 
 A green CI run is evidence, not permission to merge, release, deploy, or publish.
 
