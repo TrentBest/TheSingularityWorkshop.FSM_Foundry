@@ -148,7 +148,7 @@ public static class CiAiTestResultReportConsumer
 
         if (ReadText(properties, "jobStatus", 64) != "completed")
             throw new InvalidDataException("CiAi report job is not complete.");
-        var jobConclusion = OptionalText(properties, "JobConclusion", 64);
+        var jobConclusion = OptionalText(properties, "jobConclusion", 64);
         if (string.IsNullOrWhiteSpace(jobConclusion))
             jobConclusion = null;
         var requiredCheckStatus = ReadText(properties, "requiredCheckStatus", 64);
@@ -289,7 +289,7 @@ public static class CiAiTestResultReportConsumer
             ValidateUniqueProperties(item);
             var values = item.EnumerateObject().ToDictionary(property => property.Name,
                 property => property.Value, StringComparer.Ordinal);
-            if (!values.TryGetValue("Outcome", out var outcomeElement) ||
+            if (!values.TryGetValue("outcome", out var outcomeElement) ||
                 outcomeElement.ValueKind != JsonValueKind.String)
                 throw new FormatException("CiAi test result outcome must be a string.");
 
@@ -315,15 +315,15 @@ public static class CiAiTestResultReportConsumer
             if (outcome != "Failed")
                 continue;
 
-            if (!values.TryGetValue("RecordSha256", out var digest) ||
+            if (!values.TryGetValue("recordSha256", out var digest) ||
                 digest.ValueKind != JsonValueKind.String || digest.GetString() is not { Length: 64 } digestText ||
                 !digestText.All(Uri.IsHexDigit))
                 throw new FormatException("CiAi failed test record is missing its SHA-256 identity.");
             digests.Add(digestText.ToLowerInvariant());
 
-            var name = OptionalText(values, "TestName", 512);
-            var message = OptionalText(values, "Message", 4_000);
-            var stack = OptionalText(values, "StackTrace", 8_000);
+            var name = OptionalText(values, "testName", 512);
+            var message = OptionalText(values, "message", 4_000);
+            var stack = OptionalText(values, "stackTrace", 8_000);
             if (string.IsNullOrWhiteSpace(message) && string.IsNullOrWhiteSpace(stack))
                 throw new FormatException("CiAi failed test record is missing actionable diagnostic text.");
             summaries.Add($"{name ?? "Failed test"}: {message ?? stack}");
