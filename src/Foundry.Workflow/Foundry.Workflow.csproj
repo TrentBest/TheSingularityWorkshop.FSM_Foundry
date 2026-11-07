@@ -5,4 +5,8 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Development consumes the FSM_API source checkout pinned by the repository CI workflow. -->
+    <ProjectReference Include="../../fsm-api/FSM_API/FSM_API.csproj" />
+  </ItemGroup>
 </Project>

@@ -2,13 +2,14 @@ namespace TheSingularityWorkshop.Foundry;
 
 /// <summary>
 /// Owns accepted workflow runs and their observable lifecycle while delegating step execution
-/// to the existing <see cref="WorkflowRunner"/>.
+/// to the existing <see cref="WorkflowRunner"/>. FSM_API owns each run's state transitions.
 /// </summary>
 public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
 {
     private readonly object _gate = new();
     private readonly Dictionary<Guid, RunState> _runs = new();
     private readonly WorkflowRunner _runner;
+    private readonly FsmApiWorkflowLifecycle _lifecycle = new();
     private bool _disposed;
 
     public WorkflowExecutionCoordinator(WorkflowHandlerRegistry handlers)
@@ -31,8 +32,9 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
         {
             ThrowIfDisposed();
             var state = new RunState(Guid.NewGuid(), definition, context, DateTimeOffset.UtcNow);
+            _lifecycle.CreateRun(state.RunId);
             _runs.Add(state.RunId, state);
-            return state.ToSnapshot();
+            return state.ToSnapshot(_lifecycle.GetStatus(state.RunId));
         }
     }
 
@@ -56,10 +58,12 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
         {
             ThrowIfDisposed();
             state = GetRun(runId);
-            if (state.Status != WorkflowRunStatus.Accepted)
+            var current = _lifecycle.GetStatus(runId);
+            if (current != WorkflowRunStatus.Accepted)
                 throw new InvalidOperationException(
-                    $"Run '{runId}' cannot start from status '{state.Status}'.");
-            state.Status = WorkflowRunStatus.Running;
+                    $"Run '{runId}' cannot start from status '{current}'.");
+
+            _lifecycle.Transition(runId, WorkflowRunStatus.Running);
             state.StartedAt = DateTimeOffset.UtcNow;
             state.Timeout = timeout is { } limit
                 ? new CancellationTokenSource(limit)
@@ -84,17 +88,18 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
                 return false;
 
             var state = GetRun(runId);
-            if (state.Status == WorkflowRunStatus.Accepted)
+            var status = _lifecycle.GetStatus(runId);
+            if (status == WorkflowRunStatus.Accepted)
             {
+                _lifecycle.Transition(runId, WorkflowRunStatus.Cancelled);
                 state.Result = new WorkflowResult(state.Definition.Id, WorkflowStatus.Cancelled,
                     Array.Empty<StepResult>(), Array.Empty<WorkflowDiagnostic>());
-                state.Status = WorkflowRunStatus.Cancelled;
                 state.CompletedAt = DateTimeOffset.UtcNow;
                 state.Completion.TrySetResult(state.Result);
                 return true;
             }
 
-            if (state.Status != WorkflowRunStatus.Running)
+            if (status != WorkflowRunStatus.Running)
                 return false;
 
             // CancelAsync requests cancellation without running arbitrary callbacks under _gate.
@@ -107,7 +112,7 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
     public WorkflowRunSnapshot GetSnapshot(Guid runId)
     {
         lock (_gate)
-            return GetRun(runId).ToSnapshot();
+            return GetRun(runId).ToSnapshot(_lifecycle.GetStatus(runId));
     }
 
     public async ValueTask DisposeAsync()
@@ -123,18 +128,18 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
             _disposed = true;
             foreach (var state in _runs.Values)
             {
-                if (state.Status == WorkflowRunStatus.Accepted)
+                if (_lifecycle.GetStatus(state.RunId) == WorkflowRunStatus.Accepted)
                 {
+                    _lifecycle.Transition(state.RunId, WorkflowRunStatus.Cancelled);
                     state.Result = new WorkflowResult(state.Definition.Id, WorkflowStatus.Cancelled,
                         Array.Empty<StepResult>(), Array.Empty<WorkflowDiagnostic>());
-                    state.Status = WorkflowRunStatus.Cancelled;
                     state.CompletedAt = DateTimeOffset.UtcNow;
                     state.Completion.TrySetResult(state.Result);
                 }
             }
 
             cancellations = _runs.Values
-                .Where(state => state.Status == WorkflowRunStatus.Running)
+                .Where(state => _lifecycle.GetStatus(state.RunId) == WorkflowRunStatus.Running)
                 .Select(state => state.Cancellation)
                 .ToArray();
             completions = _runs.Values.Select(state => state.Completion.Task).ToArray();
@@ -151,6 +156,7 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
         {
             lock (_gate)
             {
+                _lifecycle.Dispose();
                 foreach (var state in _runs.Values)
                     state.Cancellation.Dispose();
             }
@@ -186,8 +192,7 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
                     result.Steps, result.Diagnostics);
             }
 
-            state.Result = result;
-            state.Status = result.Status switch
+            var terminalStatus = result.Status switch
             {
                 WorkflowStatus.Succeeded => WorkflowRunStatus.Succeeded,
                 WorkflowStatus.Failed => WorkflowRunStatus.Failed,
@@ -196,6 +201,9 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
                 WorkflowStatus.Invalid => WorkflowRunStatus.Invalid,
                 _ => throw new ArgumentOutOfRangeException(nameof(result.Status))
             };
+
+            _lifecycle.Transition(state.RunId, terminalStatus);
+            state.Result = result;
             state.CompletedAt = DateTimeOffset.UtcNow;
             state.Completion.TrySetResult(result);
         }
@@ -225,7 +233,6 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
         public DateTimeOffset SubmittedAt { get; } = submittedAt;
         public DateTimeOffset? StartedAt { get; set; }
         public DateTimeOffset? CompletedAt { get; set; }
-        public WorkflowRunStatus Status { get; set; } = WorkflowRunStatus.Accepted;
         public WorkflowResult? Result { get; set; }
         public CancellationTokenSource Cancellation { get; } = new();
         public CancellationTokenSource? Timeout { get; set; }
@@ -233,8 +240,8 @@ public sealed class WorkflowExecutionCoordinator : IAsyncDisposable
         public TaskCompletionSource<WorkflowResult> Completion { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public WorkflowRunSnapshot ToSnapshot() => new(
-            RunId, Definition.Id, Definition.Name, Status, SubmittedAt, StartedAt, CompletedAt, Result);
+        public WorkflowRunSnapshot ToSnapshot(WorkflowRunStatus status) => new(
+            RunId, Definition.Id, Definition.Name, status, SubmittedAt, StartedAt, CompletedAt, Result);
     }
 }
 

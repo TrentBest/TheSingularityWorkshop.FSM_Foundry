@@ -9,6 +9,7 @@ on:
       - development
       - work/code-red-task-lifecycle
       - feature/foundry-headlessai-turn-seam
+      - feature/foundry-fsm-api-runtime-integration
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check out pinned FSM_API development source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: TrentBest/FSM_API
+          ref: 4db572f5e0e74df028b01ee22fb393e2bd203eb6
+          path: fsm-api
 
       - name: Check out pinned HeadlessAi source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

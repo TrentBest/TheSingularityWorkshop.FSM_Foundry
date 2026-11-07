@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="TheSingularityWorkshop.FSM_API" Version="1.0.13" />
+    <ProjectReference Include="../../fsm-api/FSM_API/FSM_API.csproj" />
   </ItemGroup>
 </Project>
