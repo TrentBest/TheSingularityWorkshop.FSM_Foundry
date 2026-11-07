@@ -119,7 +119,8 @@ jobs:
           path: |
             artifacts/fsm-api-probe-run-*.txt
             artifacts/fox-run-1.txt
-            artifacts/fox-run-1/fox-sheepdog.trace
-            artifacts/fox-run-1/fox-sheepdog.svg
+            artifacts/fox-run-1/**
+            artifacts/fox-run-2.txt
+            artifacts/fox-run-2/**
           if-no-files-found: warn
           retention-days: 14
