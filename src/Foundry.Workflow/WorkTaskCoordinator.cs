@@ -271,8 +271,24 @@ public sealed class WorkTaskCoordinator : IDisposable
         ArgumentNullException.ThrowIfNull(snapshot);
         JsonlWorkTaskStore.ValidateSnapshot(snapshot);
 
+        // Durable structure proves that an approval receipt is present and correctly bound;
+        // it does not prove who signed it. Re-authenticate every consumed receipt before
+        // replaying the guarded CODE RED recovery edge into FSM_API.
+        foreach (var item in snapshot.Events.Where(HasApprovalMetadata))
+        {
+            var receipt = item.ApprovalReceipt;
+            var verifier = _recoveryReceiptVerifier;
+            if (!IsValidApprovedRecoveryEvent(item) || receipt is null || verifier is null ||
+                !verifier.IsTrustedIssuer(receipt.Issuer) ||
+                !verifier.VerifySignature(receipt.Issuer, receipt.GetSigningPayload(), receipt.Signature))
+                throw new UnauthorizedAccessException(
+                    "Durable task history contains a CODE RED recovery receipt that cannot be re-authenticated.");
+        }
+
         lock (_gate)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(WorkTaskCoordinator));
             if (_tasks.ContainsKey(snapshot.Request.TaskId))
                 throw new InvalidOperationException($"Task '{snapshot.Request.TaskId}' already exists.");
             _tasks.Add(snapshot.Request.TaskId, TaskState.Restore(snapshot, _lifecycle));
