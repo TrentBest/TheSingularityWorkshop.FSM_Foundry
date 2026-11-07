@@ -1,3 +1,5 @@
+using TheSingularityWorkshop.FSM_API;
+
 namespace TheSingularityWorkshop.Foundry;
 
 public sealed record WorkTaskRequest(int SchemaVersion, string TaskId, string CorrelationId,
@@ -61,11 +63,13 @@ public sealed record WorkTaskSnapshot(WorkTaskRequest Request, WorkTaskStatus St
 /// Deterministic in-process task lifecycle and lease-conflict reference implementation.
 /// A durable GitHub-backed store and transport are host adapters, not implied here.
 /// </summary>
-public sealed class WorkTaskCoordinator
+public sealed class WorkTaskCoordinator : IDisposable
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, TaskState> _tasks = new(StringComparer.Ordinal);
     private readonly ICodeRedRecoveryReceiptVerifier? _recoveryReceiptVerifier;
+    private readonly FsmApiWorkTaskLifecycle _lifecycle = new();
+    private bool _disposed;
 
     public WorkTaskCoordinator(ICodeRedRecoveryReceiptVerifier? recoveryReceiptVerifier = null) =>
         _recoveryReceiptVerifier = recoveryReceiptVerifier;
@@ -78,7 +82,7 @@ public sealed class WorkTaskCoordinator
         {
             if (_tasks.ContainsKey(validated.TaskId))
                 throw new InvalidOperationException($"Task '{validated.TaskId}' already exists.");
-            var state = new TaskState(validated);
+            var state = new TaskState(validated, _lifecycle);
             _tasks.Add(validated.TaskId, state);
             return state.Snapshot();
         }
@@ -97,6 +101,8 @@ public sealed class WorkTaskCoordinator
             var state = Get(taskId);
             if (state.Status is WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)
                 throw new InvalidOperationException($"Terminal task '{taskId}' cannot be claimed.");
+            if (state.Status is WorkTaskStatus.CodeRed or WorkTaskStatus.ReviewReady)
+                throw new InvalidOperationException($"Task '{taskId}' in state '{state.Status}' cannot be reclaimed.");
             if (state.Lease is { } current && current.ExpiresAt > now)
                 throw new InvalidOperationException($"Task '{taskId}' is leased by '{current.AgentId}'.");
             if (state.Status != WorkTaskStatus.Queued && state.Lease is null)
@@ -104,7 +110,7 @@ public sealed class WorkTaskCoordinator
             var previous = state.Status;
             var lease = new WorkTaskLease(agentId, Guid.NewGuid(), now.Add(leaseDuration));
             state.Lease = lease;
-            state.Status = WorkTaskStatus.Claimed;
+            state.SetStatus(WorkTaskStatus.Claimed);
             state.AddEvent(previous, WorkTaskStatus.Claimed, agentId, lease.LeaseId, now, "Task claimed.");
             return state.Snapshot();
         }
@@ -125,8 +131,6 @@ public sealed class WorkTaskCoordinator
                 throw new InvalidOperationException("The task lease is missing, expired, or superseded.");
             if (next is WorkTaskStatus.ReviewReady or WorkTaskStatus.RepairRequired)
                 throw new InvalidOperationException("Review readiness and repair authorization must be derived from exact CI evidence through ApplyRepairDecision.");
-            if (!Allowed(state.Status, next))
-                throw new InvalidOperationException($"Transition '{state.Status}' -> '{next}' is not allowed.");
             if (next == WorkTaskStatus.Validating && state.Attempt >= state.Request.MaximumAttempts)
                 throw new InvalidOperationException("The configured validation attempt budget is exhausted.");
             if (next == WorkTaskStatus.Validating)
@@ -134,7 +138,7 @@ public sealed class WorkTaskCoordinator
             if (next == WorkTaskStatus.RepairRequired && state.Attempt >= state.Request.MaximumAttempts)
                 next = WorkTaskStatus.Blocked;
             var previous = state.Status;
-            state.Status = next;
+            state.SetStatus(next);
             if (next is WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)
                 state.Lease = null;
             state.AddEvent(previous, next, lease.AgentId, lease.LeaseId, now, reason);
@@ -198,7 +202,7 @@ public sealed class WorkTaskCoordinator
                 throw new UnauthorizedAccessException("The CODE RED recovery receipt issuer or signature is not trusted.");
 
             var previous = state.Status;
-            state.Status = WorkTaskStatus.Investigating;
+            state.SetStatus(WorkTaskStatus.Investigating, allowApprovedRecovery: true);
             state.AddEvent(previous, WorkTaskStatus.Investigating, lease.AgentId, lease.LeaseId,
                 now, reason, approvalReceiptId: receipt.ReceiptId,
                 approvalIssuer: receipt.Issuer, approvalPrincipal: receipt.Principal,
@@ -250,10 +254,8 @@ public sealed class WorkTaskCoordinator
                 WorkTaskRepairDecision.CodeRed => WorkTaskStatus.CodeRed,
                 _ => throw new InvalidOperationException("Unknown repair decision.")
             };
-            if (!Allowed(state.Status, next))
-                throw new InvalidOperationException($"Evidence decision '{state.Status}' -> '{next}' is not allowed.");
             var previous = state.Status;
-            state.Status = next;
+            state.SetStatus(next);
             if (next == WorkTaskStatus.Blocked)
                 state.Lease = null;
             state.AddEvent(previous, next, lease.AgentId, lease.LeaseId, now,
@@ -273,7 +275,7 @@ public sealed class WorkTaskCoordinator
         {
             if (_tasks.ContainsKey(snapshot.Request.TaskId))
                 throw new InvalidOperationException($"Task '{snapshot.Request.TaskId}' already exists.");
-            _tasks.Add(snapshot.Request.TaskId, TaskState.Restore(snapshot));
+            _tasks.Add(snapshot.Request.TaskId, TaskState.Restore(snapshot, _lifecycle));
         }
     }
 
@@ -282,10 +284,22 @@ public sealed class WorkTaskCoordinator
         lock (_gate) return Get(taskId).Snapshot();
     }
 
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            _lifecycle.Dispose();
+            _disposed = true;
+        }
+    }
+
     private TaskState Get(string taskId) => _tasks.TryGetValue(taskId, out var state)
         ? state : throw new KeyNotFoundException($"Unknown task '{taskId}'.");
 
-    internal static bool IsAllowedTransition(WorkTaskStatus current, WorkTaskStatus next) => Allowed(current, next);
+    internal static bool IsAllowedTransition(WorkTaskStatus current, WorkTaskStatus next) =>
+        FsmApiWorkTaskLifecycle.IsTransitionAllowed(current, next);
 
     internal static bool HasApprovalMetadata(WorkTaskEvent item) =>
         item.ApprovalReceiptId is not null || item.ApprovalIssuer is not null ||
@@ -313,35 +327,51 @@ public sealed class WorkTaskCoordinator
         receipt.TaskEventSequence == item.ApprovalTaskEventSequence &&
         receipt.TaskId.Length > 0 && receipt.Action == CodeRedRecoveryAction.ResumeInvestigation;
 
-    private static bool Allowed(WorkTaskStatus current, WorkTaskStatus next) => (current, next) switch
+    private sealed class TaskState
     {
-        (WorkTaskStatus.Claimed, WorkTaskStatus.Investigating or WorkTaskStatus.Blocked or WorkTaskStatus.CodeRed or WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.Investigating, WorkTaskStatus.Implementing or WorkTaskStatus.Blocked or WorkTaskStatus.CodeRed or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.Implementing, WorkTaskStatus.Validating or WorkTaskStatus.Blocked or WorkTaskStatus.CodeRed or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.Validating, WorkTaskStatus.RepairRequired or WorkTaskStatus.ReviewReady or WorkTaskStatus.Blocked or WorkTaskStatus.CodeRed or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.RepairRequired, WorkTaskStatus.Implementing or WorkTaskStatus.Blocked or WorkTaskStatus.CodeRed or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.Blocked, WorkTaskStatus.Claimed or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.CodeRed, WorkTaskStatus.Blocked or WorkTaskStatus.Stopped or WorkTaskStatus.Failed) => true,
-        (WorkTaskStatus.ReviewReady, WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped) => true,
-        _ => false
-    };
-
-    private sealed class TaskState(WorkTaskRequest request)
-    {
+        private readonly FsmApiWorkTaskLifecycle _lifecycle;
         private readonly List<WorkTaskEvent> _events = new();
-        private TaskState(WorkTaskSnapshot snapshot) : this(snapshot.Request.Validate())
+
+        public TaskState(WorkTaskRequest request, FsmApiWorkTaskLifecycle lifecycle)
         {
-            Request = snapshot.Request.Validate();
-            Status = snapshot.Status;
-            Lease = snapshot.Lease;
-            Attempt = snapshot.Attempt;
-            _events.AddRange(snapshot.Events);
+            Request = request;
+            _lifecycle = lifecycle;
+            _lifecycle.CreateTask(request.TaskId);
         }
-        public static TaskState Restore(WorkTaskSnapshot snapshot) => new(snapshot);
-        public WorkTaskRequest Request { get; } = request;
-        public WorkTaskStatus Status { get; set; } = WorkTaskStatus.Queued;
+
+        private TaskState(WorkTaskSnapshot snapshot, FsmApiWorkTaskLifecycle lifecycle)
+            : this(snapshot.Request.Validate(), lifecycle)
+        {
+            try
+            {
+                foreach (var item in snapshot.Events)
+                    _lifecycle.Transition(Request.TaskId, item.Current,
+                        allowApprovedRecovery: IsValidApprovedRecoveryEvent(item));
+
+                Lease = snapshot.Lease;
+                Attempt = snapshot.Attempt;
+                _events.AddRange(snapshot.Events);
+                if (Status != snapshot.Status)
+                    throw new InvalidDataException("Replayed FSM_API task state does not match the durable snapshot.");
+            }
+            catch
+            {
+                _lifecycle.DestroyTask(Request.TaskId);
+                throw;
+            }
+        }
+
+        public static TaskState Restore(WorkTaskSnapshot snapshot, FsmApiWorkTaskLifecycle lifecycle) =>
+            new(snapshot, lifecycle);
+
+        public WorkTaskRequest Request { get; }
+        public WorkTaskStatus Status => _lifecycle.GetStatus(Request.TaskId);
         public WorkTaskLease? Lease { get; set; }
         public int Attempt { get; set; }
+
+        public void SetStatus(WorkTaskStatus status, bool allowApprovedRecovery = false) =>
+            _lifecycle.Transition(Request.TaskId, status, allowApprovedRecovery);
+
         public void AddEvent(WorkTaskStatus previous, WorkTaskStatus current, string agent, Guid lease,
             DateTimeOffset at, string reason, long? ciRunId = null, int? ciRunAttempt = null,
             string? evidencePayloadSha256 = null, string? approvalReceiptId = null,
@@ -352,7 +382,9 @@ public sealed class WorkTaskCoordinator
                 reason, ciRunId, ciRunAttempt, evidencePayloadSha256, approvalReceiptId,
                 approvalIssuer, approvalPrincipal, approvalIncidentId, approvalIncidentSequence,
                 approvalTaskEventSequence, approvalReceipt));
+
         public WorkTaskSnapshot Snapshot() =>
             new(Request, Status, Lease, Attempt, Array.AsReadOnly(_events.ToArray()));
     }
+
 }
