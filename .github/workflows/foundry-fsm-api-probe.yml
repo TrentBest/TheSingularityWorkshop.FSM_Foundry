@@ -17,6 +17,10 @@ on:
         description: Host-generated correlation ID
         required: true
         type: string
+      candidate_ref:
+        description: Exact authorized candidate branch
+        required: true
+        type: string
       candidate_sha:
         description: Exact candidate commit to verify
         required: true
@@ -26,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: foundry-ci-proof-${{ github.workflow }}-${{ github.ref }}
+  group: foundry-ci-proof-${{ github.workflow }}-${{ github.event.inputs.foundry_request_id || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -39,16 +43,115 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Verify dispatched candidate SHA
+      - name: Verify trusted workflow source and candidate ref
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          EXPECTED_CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          TRUSTED_WORKFLOW_REF: ${{ github.ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$TRUSTED_WORKFLOW_REF" != "refs/heads/development" || ! "$TRUSTED_WORKFLOW_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Dispatch did not originate from the trusted development workflow ref."
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_CANDIDATE_REF" =~ ^agents/[A-Za-z0-9._/-]{1,180}$ || "$EXPECTED_CANDIDATE_REF" == *..* ]]; then
+            echo "Candidate ref is outside the authorized branch namespace."
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Candidate SHA must be a full 40-character hexadecimal commit."
+            exit 1
+          fi
+          mapfile -t refs < <(git ls-remote --exit-code origin "refs/heads/${EXPECTED_CANDIDATE_REF}")
+          if [[ "${#refs[@]}" -ne 1 ]]; then
+            echo "Candidate ref did not resolve to exactly one remote ref."
+            exit 1
+          fi
+          actual="${refs[0]%%
+
+      - name: Check out pinned HeadlessAi source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: TrentBest/TheSingularityWorkshop.HeadlessAi
+          ref: c87386f0deb5f2f9f8a34dadc6811f2d59727c9f
+          path: headlessai
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore projects
+        run: |
+          dotnet restore src/Foundry.FsmApiProbe/Foundry.FsmApiProbe.csproj
+          dotnet restore src/Foundry.FoxSheepdog/Foundry.FoxSheepdog.csproj
+          dotnet restore tests/Foundry.Workflow.Tests/Foundry.Workflow.Tests.csproj
+          dotnet restore src/Foundry.HeadlessAiHost/Foundry.HeadlessAiHost.csproj
+          dotnet restore src/Foundry.HeadlessAiHost.Console/Foundry.HeadlessAiHost.Console.csproj
+          dotnet restore src/Foundry.GitHubHost/Foundry.GitHubHost.csproj
+
+      - name: Test workflow runtime
+        run: dotnet test tests/Foundry.Workflow.Tests/Foundry.Workflow.Tests.csproj --configuration Release --no-restore
+
+      - name: Build projects
+        run: |
+          dotnet build src/Foundry.FsmApiProbe/Foundry.FsmApiProbe.csproj --configuration Release --no-restore
+          dotnet build src/Foundry.FoxSheepdog/Foundry.FoxSheepdog.csproj --configuration Release --no-restore
+          dotnet build src/Foundry.HeadlessAiHost/Foundry.HeadlessAiHost.csproj --configuration Release --no-restore
+          dotnet build src/Foundry.HeadlessAiHost.Console/Foundry.HeadlessAiHost.Console.csproj --configuration Release --no-restore
+          dotnet build src/Foundry.GitHubHost/Foundry.GitHubHost.csproj --configuration Release --no-restore
+
+      - name: Verify basic FSM_API probe in separate processes
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          dotnet run --project src/Foundry.FsmApiProbe/Foundry.FsmApiProbe.csproj --configuration Release --no-build > artifacts/fsm-api-probe-run-1.txt 2>&1
+          dotnet run --project src/Foundry.FsmApiProbe/Foundry.FsmApiProbe.csproj --configuration Release --no-build > artifacts/fsm-api-probe-run-2.txt 2>&1
+          diff -u artifacts/fsm-api-probe-run-1.txt artifacts/fsm-api-probe-run-2.txt
+          cat artifacts/fsm-api-probe-run-1.txt
+
+      - name: Execute fox and sheepdog scenario twice
+        shell: bash
+        run: |
+          mkdir -p artifacts/fox-run-1 artifacts/fox-run-2
+          dotnet run --project src/Foundry.FoxSheepdog/Foundry.FoxSheepdog.csproj --configuration Release --no-build -- artifacts/fox-run-1 | tee artifacts/fox-run-1.txt
+          dotnet run --project src/Foundry.FoxSheepdog/Foundry.FoxSheepdog.csproj --configuration Release --no-build -- artifacts/fox-run-2 | tee artifacts/fox-run-2.txt
+          diff -u artifacts/fox-run-1/fox-sheepdog.trace artifacts/fox-run-2/fox-sheepdog.trace
+          diff -u artifacts/fox-run-1/fox-sheepdog.svg artifacts/fox-run-2/fox-sheepdog.svg
+          grep -q "PASS: dog-to-fox cross-FSM transition reached Mangled." artifacts/fox-run-1.txt
+
+      - name: Publish run evidence as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: foundry-ci-state-evidence
+          path: |
+            artifacts/fsm-api-probe-run-*.txt
+            artifacts/fox-run-1.txt
+            artifacts/fox-run-1/fox-sheepdog.trace
+            artifacts/fox-run-1/fox-sheepdog.svg
+          if-no-files-found: warn
+          retention-days: 14
+\\t'*}"
+          if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
+            echo "Candidate ref resolves to $actual, expected $EXPECTED_CANDIDATE_SHA."
+            exit 1
+          fi
+
+      - name: Check out exact candidate commit
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+
+      - name: Verify checked-out candidate SHA
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         run: |
-          if [[ ! "$EXPECTED_CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Candidate SHA must be a full 40-character hexadecimal commit."
-            exit 1
-          fi
           actual="$(git rev-parse HEAD)"
           if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
             echo "Checked out $actual, expected $EXPECTED_CANDIDATE_SHA."
