@@ -3,71 +3,138 @@
 
 # Foundry Architecture
 
-**Status:** the FSM_API integration probe, deterministic fox/sheepdog scenario, sequential workflow runner, and retained in-process lifecycle coordinator passed [development CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40546957980). Broader Hub migration and release readiness remain unverified.
+**Scope:** Current implementation on `feature/foundry-host-repository-operation-gate`. See the [coverage ledger](../DOCUMENTATION_INDEX.md) for the distinction between this branch, `development`, fake-adapter proof, and live integration.
 
-## Purpose
+## 1. System shape
 
-Foundry is the Workshop Hub's host-neutral execution pipeline. It accepts explicit work, validates it before side effects, coordinates execution, retains lifecycle state, and reports structured outcomes. It does not own Hub presentation or FSM_COS composition.
+Foundry is the execution and governed-work control plane between human/Hub intent and host-provided capabilities.
 
-## Responsibility boundaries
+```mermaid
+flowchart TB
+    Human[Human / Hub intent] --> Task[WorkTaskRequest]
+    Task --> Coordinator[WorkTaskCoordinator]
+    Coordinator --> Lease[Lease and task lifecycle]
+    Lease --> Capability[Host-issued capability]
+    Capability --> Dispatcher[AuthorizedRepositoryOperationDispatcher]
+    Dispatcher --> GitHubHost[GitHub host adapter]
+    GitHubHost --> GitHub[GitHub repository / Actions]
+    Coordinator --> AgentBridge[HeadlessAiTurnBridge]
+    AgentBridge --> HeadlessHost[HeadlessAi host adapter]
+    HeadlessHost --> Model[HeadlessAi invocation]
+    GitHub --> Evidence[Run and checkout evidence]
+    CiAi[CiAi policy and evidence] --> Evidence
+    Evidence --> Decision[Repair decision policy]
+    Decision --> Coordinator
+    Coordinator --> Review[Review handoff]
+```
 
-| System | Intended responsibility | Current evidence |
+The diagram describes ownership and intended data flow, not a claim that the entire path is live. The implemented components and missing joins are listed below.
+
+## 2. Two execution boundaries
+
+### Sequential workflow execution
+
+`WorkflowDefinition` is validated by `WorkflowValidator`, handlers are selected only from the host-owned `WorkflowHandlerRegistry`, and `WorkflowRunner` executes steps sequentially. `WorkflowExecutionCoordinator` owns accepted/running/terminal snapshots, start-once behavior, cooperative cancellation/timeout, and disposal.
+
+This path is intentionally in-process and in-memory. It is suitable for bounded sequential host workflows; it is not the governed task queue, distributed scheduler, or retry engine.
+
+### Governed repository work
+
+`WorkTaskCoordinator` owns task identity, lifecycle, leases, transition history, bounded attempt count, and guarded recovery. `PersistentWorkTaskCoordinator` and JSONL stores provide local durable replay. `WorkTaskCapabilityRegistry` issues host-side scoped grants. `AuthorizedRepositoryOperationDispatcher` revalidates task/lease/capability state immediately before calling an adapter. The repository operation handler is registered into the existing workflow registry when a host chooses to expose that operation.
+
+The two boundaries can compose, but their lifecycles remain distinct: the task is not a workflow run, and a workflow result does not by itself authorize or complete a task.
+
+## 3. Authority flow
+
+1. A trusted host accepts a validated task request and establishes its repository/issue/base-SHA identity.
+2. The task coordinator claims the task under a unique, expiring lease.
+3. The host grants a short-lived capability for an explicit action set, path set, branch, and candidate SHA.
+4. The agent may propose a typed operation. Proposal data contains no credential or capability token.
+5. The dispatcher reloads task state and re-demands the capability immediately before external transport.
+6. The adapter independently enforces repository allowlists, path containment, branch namespace, exact refs, request bounds, and host credential policy.
+7. A durable pending intent is flushed before the side effect. The terminal result is recorded only after provenance validation.
+8. The candidate SHA changes only through an explicit commit operation. A changed candidate SHA requires a newly scoped capability.
+
+A capability is authority, not authentication. The host's credential provider authenticates to GitHub; the capability registry constrains what the authenticated host may do for this task.
+
+## 4. GitHub repository adapter
+
+`Foundry.GitHubHost` contains typed REST operations for isolated candidate branch creation, immutable-SHA file reads, staged file writes, explicit commits, and allowlisted Actions dispatch.
+
+- Repository identity and candidate branch namespace are host configured.
+- Branch creation is based on the exact task base SHA.
+- Reads are bound to the immutable candidate SHA.
+- Writes stage immutable blobs and do not move refs.
+- Commits use the authorized candidate as parent and advance the candidate ref without force.
+- Actions dispatch selects a host-allowlisted workflow and uses trusted `development` as workflow source; candidate branch/SHA are separate inputs.
+- Dispatch intent is journaled before the HTTP request. Ambiguous responses are reconciled by request ID; the dispatcher refuses an unsafe duplicate dispatch.
+- Run correlation binds workflow path, event, trusted workflow ref/SHA, request ID, run ID, and attempt. GitHub `head_sha` identifies trusted workflow source, not candidate checkout.
+- The workflow emits a separate candidate-checkout provenance artifact only after detached checkout verification. Host retrieval and validation of that artifact remain a required integration step.
+
+The adapter tests use fake HTTP handlers and local journals. They prove deterministic request construction, response validation, restart behavior, and refusal paths; they do not prove live GitHub API behavior, production credentials, or installation permissions.
+
+## 5. Agent and CI boundaries
+
+- **HeadlessAi** performs model invocation. Foundry's bridge controls whether a turn may be reserved for a currently leased task, maps immutable requests/results, validates provenance, and persists at-most-once turn state.
+- **CiAi** owns CI policy and exact-run verdict/evidence contracts. Foundry can request an allowlisted workflow and correlate/verify the GitHub run, but a dispatch acknowledgment is not a CI verdict.
+- **GitHub** owns repository and review state. Foundry's adapter does not make a draft PR or merge decision merely because a run passed.
+- **Human/host authorization** remains outside model output. CODE RED recovery requires a trusted signed receipt; merge/release/deploy/publish remain explicit human-controlled actions.
+
+## 6. Durability and recovery
+
+| Store | What it records | Durability boundary |
 |---|---|---|
-| Foundry | Workflow definition/validation, run lifecycle, execution coordination, result reporting | Version-1 in-memory definition, preflight validator, registered-handler runner, retained lifecycle coordinator and immutable snapshots; CI verification pending |
-| The / Architect | Hub intent and human-facing coordination | Cross-repository ownership contract; Hub presentation is optional |
-| GUI | Optional Hub presentation and explicit user intents | GUI issue #53 tracks presentation contract; no execution authority |
-| FSM_API | FSM mechanics when directly consumed | Published 1.0.13 package restored, built, and exercised by the prior passing probe; no reusable adapter yet |
-| FSM_COS | Runtime composition when supported by its implementation | Source confirms composition boundary; Foundry integration not implemented |
-| FSM_Serialization | Binary representation boundary for domain-owned values | Existing package contract inspected; no Foundry format selected |
-| ProtocolAi | Potential protocol/contract interoperability | Deterministic identity vocabulary; Foundry integration is future work |
-| GrammarAi | Potential language grammar/representation capabilities | Deterministic grammar structure; Foundry integration is future work |
-| AnyApp / WebPage / headless CI | Potential execution hosts and adapters | WebPage is the current Hub behavior reference; migration is not yet proven |
+| Workflow coordinator | Run snapshots | Process lifetime only |
+| Work-task JSONL store | Task snapshots/events | Local filesystem; cooperating-process lock; not distributed |
+| CODE RED incident store | Incident lifecycle | Local JSONL with validated replay |
+| Repair-attempt journal | Attempt and exact evidence references | Local JSONL |
+| HeadlessAi turn journal | Reservation, completion, indeterminate state | Local JSONL; at-most-once recovery semantics |
+| Repository-operation journal | Pending/completed/failed operation audit | Local JSONL; pending requires external reconciliation |
+| GitHub dispatch journal | Dispatch intent/ack/correlation/verification | Local JSONL; request-ID reconciliation |
+| GitHub | Issues, refs, commits, workflow runs/artifacts, PRs | External system of record |
 
-## Workflow execution and retained lifecycle
+A local append-only journal is not a distributed transaction. If a process crashes after GitHub performs a side effect but before local completion is recorded, the operation is indeterminate. Recovery must query GitHub and reconcile; never infer failure and blindly repeat the side effect.
 
-The existing `WorkflowRunner` remains the only sequential workflow executor. It validates the entire definition against the host-owned handler registry, runs steps in declared order, and returns structured step/workflow outcomes.
+## 7. Failure and escalation behavior
 
-`WorkflowExecutionCoordinator` adds the Hub-facing lifecycle around that runner:
+- Invalid requests fail before side effects.
+- Stale leases and expired/revoked capabilities block privileged operations.
+- CODE RED permits only read-only repository access and suspends mutation.
+- Recovery is guarded by a signed, single-use, task/incident/sequence-bound approval receipt.
+- Exhausted attempts, unavailable or mismatched evidence, ambiguous dispatches, corrupted journals, and uncertain side effects stop or escalate rather than becoming success.
+- A model proposal cannot override any of these conditions.
+- No merge, release, deployment, branch deletion, or package publication is exposed by the current repository-operation API.
 
-- Accept a definition without executing it.
-- Start an accepted run exactly once.
-- Query an immutable snapshot containing run identity, status, timestamps, and a terminal result when available.
-- Request cooperative cancellation before or during execution.
-- Dispose by cancelling accepted/running work and awaiting completion.
+## 8. Explicit non-goals and integration gaps
 
-This is an in-process, in-memory lifecycle. It is not a durable queue, scheduler, persisted run history, or cross-process transport. The coordinator does not reinterpret `WorkflowResult`, add retries, or turn arbitrary handlers into safe transactional operations.
+The current branch does not yet constitute a complete autonomous issue-to-draft-PR system. Remaining integration work includes live issue selection/claim, production GitHub App credentials and re-authentication, distributed stores/leases, candidate artifact retrieval and validation, conversion of exact CI evidence into durable repair-attempt/task state, draft-PR creation/review handoff, and the end-to-end MyVR pilot.
 
-## Keep neighboring concepts distinct
+The CiAi callback document describes a protocol contract; it is not proof that the HTTPS ingress/remote transport is deployed. The HeadlessAi source adapter compiling is not proof of a real provider invocation. Fake GitHub/HTTP tests are not live network proof.
 
-WebPage's Hub/process-group contracts include `WorkDescriptor`, `CompletionToken`, `IExecutionProvider.Execute`, and named process-group updates. FSM_COS returns a `RuntimeAssembly`. These contracts are not interchangeable with Foundry's `WorkflowDefinition` and `WorkflowResult`. Trace actual callers and tests before deciding whether they share any lower-level lifecycle or observation primitive.
+## 9. Architectural rules
 
-GUI consumes presentation-facing snapshots and sends explicit commands through an adapter. It does not own the authoritative loop or runtime state. WebPage remains a behavior/reference fixture while any migration is proven through tests. FSM_COS remains the composition authority.
+- Keep `WorkflowRunner` as the only sequential step executor.
+- Keep `WorkflowExecutionCoordinator` as workflow-run lifecycle owner.
+- Keep `WorkTaskCoordinator` as governed-task lifecycle owner.
+- Keep FSM_API as the state-machine mechanics owner wherever consumed; do not add a parallel transition graph.
+- Keep FSM_COS composition separate; Foundry does not build or reinterpret `RuntimeAssembly`.
+- Keep credentials and host transport outside model-facing contracts.
+- Prefer typed allowlisted operations over generic tools.
+- Persist intent before external side effects and reconcile indeterminate outcomes.
+- Label every claim by branch, test type, exact SHA, and whether evidence is fake-adapter or live.
 
-## Verified first state-execution slice
+## Related documents
 
-The `Foundry.FsmApiProbe` project uses the published FSM_API package to create a named FSM, assert its initial state, execute the public update path, assert the transition, and perform scoped cleanup. The `Foundry.FoxSheepdog` project exercises the fox/dog state sequence with scripted ticks, asserts the cross-FSM transition, and emits a TSV trace and SVG. The existing CI workflow compares repeat-run outputs byte-for-byte.
-
-These are deterministic state-execution demonstrations, not automatically treated as Foundry workflows. The coordinator tests and deterministic state-evidence checks passed in [CI run #84](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/40546957980).
-
-## Safety boundaries
-
-- Workflow input is data, not executable code.
-- Do not evaluate arbitrary scripts or expressions from an untrusted manifest.
-- Use least-privilege CI permissions and explicit timeouts.
-- Cancellation is cooperative; a handler that ignores its token can delay shutdown.
-- Do not expose raw exception messages that might contain secrets.
-- Do not publish repository content, packages, or deployments automatically.
-- Publication and deployment require explicit user approval.
-
-## Cross-language direction
-
-C#, Java, Rust, and other languages may eventually be supported through explicit language adapters and stable data contracts. A shared definition alone does not make runtimes interoperable: each execution boundary needs a defined transport/call mechanism, data representation, error model, cancellation semantics, and security model. This is a future direction, not a current feature.
-
-## Architectural decision rule
-
-Prefer reusing Workshop technologies where their real interfaces fit. Introduce a new reusable runtime abstraction only when a working test demonstrates a capability that cannot reasonably live in a thin host/adapter. Preserve the distinction between workflow execution, host-scheduled work, legacy process-group ticks, and composed runtime assemblies.
+- [Domain](DOMAIN.md)
+- [Workflow semantics](WORKFLOW_SEMANTICS.md)
+- [Work-task lifecycle](WORK_TASK_LIFECYCLE.md)
+- [Repository operation boundary](REPOSITORY_OPERATION_ADAPTER.md)
+- [HeadlessAi turn bridge](HEADLESSAI_TURN_BRIDGE.md)
+- [HeadlessAi host adapter](HEADLESSAI_HOST_ADAPTER.md)
+- [CiAi callback contract](CIAI_ARTIFACT_CALLBACK_CONTRACT.md)
+- [Roadmap](ROADMAP.md)
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<!-- The Singularity Workshop footer -->
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
