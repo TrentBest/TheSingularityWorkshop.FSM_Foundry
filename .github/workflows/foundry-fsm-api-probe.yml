@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: foundry-ci-proof-${{ github.workflow }}-${{ github.event.inputs.foundry_request_id || github.run_id }}
+  group: foundry-ci-proof-${{ github.workflow }}-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
             echo "Candidate ref did not resolve to exactly one remote ref."
             exit 1
           fi
-          actual="$(printf '%s\\n' "${refs[0]}" | cut -f1)"
+          actual="$(cut -f1 <<< "${refs[0]}")"
           if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
             echo "Candidate ref resolves to $actual, expected $EXPECTED_CANDIDATE_SHA."
             exit 1
