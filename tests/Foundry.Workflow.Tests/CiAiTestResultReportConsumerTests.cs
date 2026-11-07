@@ -74,6 +74,34 @@ public sealed class CiAiTestResultReportConsumerTests
             AcceptedCiAiReport = consumed.AcceptedReport
         };
         repairRequest.Validate(Now);
+        var acceptedResult = new FoundryHeadlessAiTurnResult
+        {
+            TurnId = "turn-1",
+            TaskId = repairRequest.TaskId,
+            CorrelationId = repairRequest.CorrelationId,
+            Repository = repairRequest.Repository,
+            AuthorizedBranch = repairRequest.AuthorizedBranch,
+            BaseCommitSha = repairRequest.BaseCommitSha,
+            CandidateCommitSha = repairRequest.CandidateCommitSha,
+            RequestFingerprint = new string('a', 64),
+            ProviderId = "provider",
+            ModelId = "model",
+            StartedAt = Now,
+            CompletedAt = Now.AddMinutes(1),
+            PriorTurnId = repairRequest.PriorTurnId,
+            PriorCandidateCommitSha = repairRequest.PriorCandidateCommitSha,
+            IdempotencyKey = repairRequest.IdempotencyKey,
+            AcceptedReportSchemaVersion = consumed.AcceptedReport.SchemaVersion,
+            AcceptedReportIdentity = consumed.AcceptedReport.ReportIdentity,
+            AcceptedReportSha256 = consumed.AcceptedReport.ReportSha256,
+            AcceptedReportWorkflowRunId = consumed.AcceptedReport.WorkflowRunId,
+            AcceptedReportRunAttempt = consumed.AcceptedReport.RunAttempt,
+            AcceptedReportCandidateCommitSha = consumed.AcceptedReport.CandidateCommitSha
+        };
+        acceptedResult.ValidateAgainst(repairRequest);
+        Assert.Throws<InvalidOperationException>(() =>
+            (acceptedResult with { AcceptedReportIdentity = "sha256:" + new string('0', 64) })
+                .ValidateAgainst(repairRequest));
         Assert.Throws<UnauthorizedAccessException>(() =>
             consumed.AcceptedReport.Validate("other/repository", CandidateSha, null));
     }
