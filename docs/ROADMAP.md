@@ -3,93 +3,84 @@
 
 # Foundry Roadmap and Readiness
 
-**Readiness: early implementation; no current percentage is asserted.** The previous 35% estimate predates the governed-work lifecycle and is not comparable to the expanded scope. The version-1 workflow runtime passed its development CI gate; the governed-work feature branch passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768) on exact head `230907aad4a7a75aed589d61f4c43aa9ea2a1eb4`, including workflow timeout/cancellation tests. This is not a release-readiness claim. The signed host-issued CODE RED recovery receipt boundary passed [feature-branch CI run #294](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41172622514) on exact head 0ef31369daa115fb652e46b79d208ea66ab8fc83.
+**Readiness:** Foundry has multiple implemented and deterministically tested slices, but the complete autonomous issue-to-draft-PR loop is not yet proven. No percentage is asserted. Status below describes the active repository-operation feature branch; it must not be mistaken for merged `development` or a released package.
 
-## Milestones
+## Completed implementation slices
 
-### M0 — Repository and documentation bootstrap
-- [x] Establish repository identity and MIT license.
-- [x] State intended boundaries and distinguish target from implementation.
-- [x] Add documentation navigation, Gallery, and roadmap.
-- [ ] Verify repository branch policy and protect intended development flow.
+### Workflow execution
+- [x] Typed version-1 workflow definitions and full preflight validation.
+- [x] Host-owned handler registry and one sequential `WorkflowRunner`.
+- [x] Structured step/workflow outcomes, failure handling, cancellation, and skipped-step semantics.
+- [x] Retained in-process lifecycle through `WorkflowExecutionCoordinator`.
+- [x] Bounded JSON run context with clone, duplicate-write, entry-count, value-size, aggregate-size, and depth checks.
+- [x] Cooperative workflow timeout with a distinct `TimedOut` result and cancellation precedence tests on its feature branch.
 
-### M1 — Define the domain from real Workshop contracts
-- [x] Inspect FSM_API public builder/context APIs and its CI workflow.
-- [x] Inspect FSM_COS composition contract and runtime boundary.
-- [x] Inspect the FSM_Serialization representation boundary.
-- [x] Inspect ProtocolAi/GrammarAi responsibility boundaries and AnyApp's host path at README/project/source level.
-- [x] Record an initial Foundry domain and ownership proposal in [DOMAIN.md](DOMAIN.md).
-- [x] Trace representative WebPage Hub contracts, callers, and tests; record the non-equivalence and safe host-adapter seam in [HUB_INTEGRATION_BOUNDARY.md](HUB_INTEGRATION_BOUNDARY.md).
-- [ ] Record final source-backed contract decisions and source-derived UML.
+### Governed work and authorization
+- [x] Versioned task envelope bound to repository, issue, base SHA, path scope, and bounded attempt count.
+- [x] Task lifecycle with sequenced events, expiring leases, fencing, attempt enforcement, and guarded terminal transitions.
+- [x] Local persistent task journal with validated replay and fail-closed restore.
+- [x] CODE RED incident lifecycle, status projections/notices, mutation suspension, and signed single-use recovery approval receipts bound to the current task/incident sequence.
+- [x] Host-issued short-lived capabilities scoped to task, lease, branch, candidate SHA, paths, and explicit actions.
+- [x] Deterministic exact-CI repair decision policy and local repair-attempt journal.
+- [x] HeadlessAi lease-gated turn bridge, provenance checks, durable at-most-once journal, and source-pinned host adapter/console composition.
 
-### M2 — First executable workflow
-- [x] Add a minimal buildable .NET 8 probe project.
-- [x] Define a versioned in-memory workflow definition contract (persisted format remains open).
-- [x] Document version-1 execution semantics in [WORKFLOW_SEMANTICS.md](WORKFLOW_SEMANTICS.md).
-- [x] Execute and assert a deterministic state transition through the actual published FSM_API API in a probe.
-- [x] Demonstrate a deterministic terminal state in the API probe.
-- [x] Add and verify a deterministic multi-state fox/sheepdog scenario with explicit state assertions.
-- [x] Add invalid-definition, handled-failure, ordering, cancellation, and handler-registration tests.
-- [x] Produce structured step and workflow outcomes distinct from console output and host exit codes.
-- [x] Add retained in-process run lifecycle: submit, start once, observe snapshots, cancel, and async disposal.
-- [x] Verify coordinator lifecycle tests in development CI run #84.
+### Repository and CI host boundary — active PR #26
+- [x] Closed typed repository-operation set and workflow-handler integration.
+- [x] Revalidation of task state, lease, capability, path, action, branch, and candidate SHA before adapter side effects.
+- [x] Local durable operation audit with flushed pending intent and terminal result; indeterminate operations require reconciliation.
+- [x] GitHub host adapter for isolated candidate branch creation, immutable-SHA reads, staged blob writes, explicit commits, and non-force candidate-ref advancement.
+- [x] Local staging store and dispatch journal with replay validation and cooperating-process file locks.
+- [x] Host-allowlisted GitHub Actions workflow dispatch with trusted `development` workflow source pinned independently from candidate branch/SHA.
+- [x] Durable dispatch intent, restart reconciliation without blind resend, request-ID run correlation, exact run-attempt metadata re-fetch, and required-job verification.
+- [x] Trusted workflow candidate-checkout provenance artifact emitted only after exact detached checkout verification.
+- [ ] Exercise the workflow_dispatch path through the authorized host adapter and validate the emitted artifact from the host.
 
-### M3 — CI proof
-- [x] Run the FSM_API probe in GitHub Actions; the manifest-driven workflow itself remains pending.
-- [x] Verify CI exit-code mapping and upload a probe-output artifact.
-- [x] Compare deterministic output from two fresh basic-probe processes.
-- [x] Run the fox/sheepdog scenario in two fresh processes and compare TSV and SVG evidence byte-for-byte.
-- [x] Prove cooperative workflow timeout outcomes and distinguish timeout from caller-requested cancellation in feature-branch CI run #276.
-- [ ] Harden permissions for untrusted pull requests.
-- [ ] Publish workflow logs and a concise evidence summary.
+## Remaining integration milestones
 
-### M4 — Living documentation and optional article production
-- [ ] Align README and existing docs with the FSM_COS reader journey, moniker, badge, visual, and footer standards.
-- [ ] Generate diagrams from real source/runtime evidence.
-- [ ] Include stable type identity, source spans, and provenance.
-- [ ] Add stale-output verification and a focused change test.
-- [ ] Add Gallery recipes linked to successful runs.
-- [ ] Add an opt-in article build that selects real source excerpts and records repository revision/path/line range.
-- [ ] Generate high-contrast, readable code-excerpt images with equivalent selectable text and accessible descriptions.
-- [ ] Produce a local/CI preview artifact without requiring publishing credentials.
-- [ ] Define a publisher adapter only after selecting a destination; keep actual publication disabled unless explicitly approved.
+### I1 — Live GitHub boundary
+- [ ] Provision a production GitHub App/token provider with least-privilege installation permissions.
+- [ ] Verify secure credential refresh/re-authentication and failure pause/resume.
+- [ ] Run the host adapter against GitHub in an explicitly authorized test repository and verify branch/ref/commit/Actions behavior.
+- [ ] Prove live workflow_dispatch correlation and exact run attempt.
+- [ ] Retrieve candidate-checkout provenance artifact with bounded download, digest/size/schema checks, and exact receipt/run binding.
 
-### M5 — Host and language expansion
-- [ ] Evaluate AnyApp/WebApp as hosts only after the CI proof works.
-- [ ] Evaluate ProtocolAi/GrammarAi adapters with explicit contracts.
-- [ ] Add additional languages only when the first cross-boundary proof is testable.
+### I2 — Exact evidence to task decision
+- [ ] Connect CiAi's trusted exact-run verdict/evidence packet through the host adapter.
+- [ ] Convert verified candidate and CI provenance into a durable `WorkTaskRepairAttempt`.
+- [ ] Prove duplicate, stale, wrong-repository, wrong-candidate, wrong-run, wrong-attempt, missing-job, skipped-job, and incomplete evidence fail closed.
+- [ ] Advance to `RepairRequired` or `ReviewReady` only through the deterministic decision policy.
 
-### M6 — Governed repository-work lifecycle
-The completed items below are implemented on PR #10's feature branch and are not yet part of `development` until the owner reviews and merges that PR.
-- [x] Add a versioned, repository/issue/SHA-bound work-task envelope with bounded identifiers, path scope, and attempt budget.
-- [x] Add validated lifecycle transitions, expiring agent leases, fencing tokens, and sequenced audit history.
-- [x] Add append-only local task, CODE RED incident, and CI repair-attempt journals with restart replay and fail-closed corruption handling.
-- [x] Add host-issued, short-lived capabilities scoped to task, lease, branch, candidate SHA, paths, and explicit actions.
-- [x] Add credential-free CODE RED incident records and validated active/cleared notice projections.
-- [x] Require a short-lived, signed host approval receipt for CODE RED recovery, bound to the active incident sequence and exact task-event sequence; persist the complete signed receipt in the task audit.
-- [x] Add exact-CI-attempt provenance checks and bounded deterministic repair decisions.
-- [x] Add a concrete `Foundry.HeadlessAiHost` adapter that maps Foundry turns to HeadlessAi's immutable request/executor without moving lifecycle or authorization into HeadlessAi; build it against pinned HeadlessAi source in CI run #337.
-- [x] Add `Foundry.HeadlessAiHost.Console` as a manual host composition root and compile it in CI run #352.
-- [ ] Provision host-managed provider credentials and execute one real provider turn through the manual smoke runner.
-- [ ] Connect CiAi's exact-run evidence packet/outbox and bounded rerun request/ledger through trusted host adapters.
-- [ ] Bridge the task lifecycle into the existing WorkflowExecutionCoordinator/WorkflowRunner; do not create a competing runner.
-- [ ] Prove the red → evidence → bounded repair → green → draft-PR path with deterministic fake-provider/fake-GitHub tests.
-- [ ] Complete the first integrated MyVR pilot and preserve human review/merge authority.
+### I3 — Human-reviewed handoff
+- [ ] Implement capability-gated draft-PR creation against the exact verified candidate SHA.
+- [ ] Persist PR identity and evidence links in task history.
+- [ ] Present review-ready state and handoff to the human; never auto-merge.
+- [ ] Prove recovery after process restart and ambiguous PR creation without duplicates.
 
-## Readiness rubric
+### I4 — First end-to-end pilot
+- [ ] Complete the bounded red → investigation → repair → exact CI → evidence → draft PR flow with deterministic fake-provider/fake-GitHub tests.
+- [ ] Run the first live pilot in MyVR under host-approved repository scope.
+- [ ] Validate cancellation, exhausted budgets, CODE RED escalation/recovery, re-authentication, and restart recovery.
+- [ ] Only then consider multi-agent fan-out and cross-repository orchestration.
 
-| Gate | Weight | Current evidence |
-|---|---:|---|
-| Purpose and dependency boundaries | 15% | Source-level contract inspection plus an initial domain proposal |
-| Contracts and implementation | 20% | Version-1 workflow runtime on development; PR #10 adds the governed task/lease/journal/capability/repair-policy slice |
-| Automated tests | 20% | Workflow runtime, task lifecycle, strict journal replay, repair policy, signed CODE RED recovery receipt validation, and persistence tests passed on PR #10 exact head in CI run #294 (112 tests) |
-| CI execution and security | 20% | Pinned-action workflow has read-only contents permission and a 15-minute timeout; broader threat cases pending |
-| Demonstration and reproducibility | 15% | Successful basic probe plus fox/dog state assertions, cross-FSM transition, repeatable trace/SVG, and uploaded artifact |
-| Documentation/UML completeness | 10% | Bootstrap docs, lifecycle UML, and Hub integration boundary; source-derived UML and complete reader journey remain |
+## Cross-cutting requirements
 
-**No release recommendation yet.** Readiness rises when gates are supported by verifiable implementation and test evidence, not merely by adding documents. CI run #294 verifies PR #10 head commit `0ef31369daa115fb652e46b79d208ea66ab8fc83`. PR #11's source-pinned HeadlessAi adapter build passed run #337 on exact head `d410afd4e23aaf459bdf2ce526faf964d3d36274`; this does not prove a live provider call, GitHub/CiAi integration, or the MyVR pilot.
+- Preserve the boundary between workflow-run lifecycle and governed-task lifecycle.
+- Keep `WorkflowRunner` as the only sequential executor.
+- Keep FSM_API responsible for FSM mechanics; do not add a parallel mutable transition graph.
+- Keep FSM_COS composition separate from Foundry execution.
+- Keep HeadlessAi invocation separate from task lifecycle and repository authority.
+- Keep CiAi policy separate from host credential/permission management.
+- Preserve every attempt and evidence reference; bound retries, time, concurrency, path scope, and provider budgets.
+- Fail closed on ambiguity, stale leases, corrupted journals, missing credentials, incomplete evidence, or indeterminate side effects.
+- Never merge, publish, deploy, delete branches, or release packages without explicit owner authorization.
+
+## Evidence and branch hygiene
+
+PR #26 code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Both covered workflow tests, builds, FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. They did not execute the dispatch-only candidate checkout/provenance steps. The documentation commits that update this roadmap are newer and require their own exact-head CI confirmation.
+
+A green CI run is evidence, not permission to merge, release, deploy, or publish.
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<!-- The Singularity Workshop footer -->
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
