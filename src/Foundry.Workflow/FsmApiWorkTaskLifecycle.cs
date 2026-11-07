@@ -40,27 +40,91 @@ internal sealed class FsmApiWorkTaskLifecycle : IDisposable
                 .State(nameof(WorkTaskStatus.Failed), null, null, null)
                 .WithInitialState(initialState.ToString());
 
-            Add(builder, WorkTaskStatus.Queued, WorkTaskStatus.Claimed);
-            Add(builder, WorkTaskStatus.Claimed, WorkTaskStatus.Investigating, WorkTaskStatus.Blocked,
-                WorkTaskStatus.CodeRed, WorkTaskStatus.HandedOff, WorkTaskStatus.Stopped, WorkTaskStatus.Failed);
-            Add(builder, WorkTaskStatus.Investigating, WorkTaskStatus.Implementing, WorkTaskStatus.Blocked,
-                WorkTaskStatus.CodeRed, WorkTaskStatus.Stopped, WorkTaskStatus.Failed, WorkTaskStatus.Claimed);
-            Add(builder, WorkTaskStatus.Implementing, WorkTaskStatus.Validating, WorkTaskStatus.Blocked,
-                WorkTaskStatus.CodeRed, WorkTaskStatus.Stopped, WorkTaskStatus.Failed, WorkTaskStatus.Claimed);
-            Add(builder, WorkTaskStatus.Validating, WorkTaskStatus.RepairRequired, WorkTaskStatus.ReviewReady,
-                WorkTaskStatus.Blocked, WorkTaskStatus.CodeRed, WorkTaskStatus.Stopped, WorkTaskStatus.Failed,
-                WorkTaskStatus.Claimed);
-            Add(builder, WorkTaskStatus.RepairRequired, WorkTaskStatus.Implementing, WorkTaskStatus.Blocked,
-                WorkTaskStatus.CodeRed, WorkTaskStatus.Stopped, WorkTaskStatus.Failed, WorkTaskStatus.Claimed);
-            Add(builder, WorkTaskStatus.Blocked, WorkTaskStatus.Claimed, WorkTaskStatus.Stopped, WorkTaskStatus.Failed);
-            Add(builder, WorkTaskStatus.CodeRed, WorkTaskStatus.Blocked, WorkTaskStatus.Stopped, WorkTaskStatus.Failed);
-            Add(builder, WorkTaskStatus.ReviewReady, WorkTaskStatus.HandedOff, WorkTaskStatus.Stopped);
-
-            builder.Transition(nameof(WorkTaskStatus.CodeRed), nameof(WorkTaskStatus.Investigating),
-                context => context is WorkTaskLifecycleContext lifecycle &&
-                    lifecycle.AllowApprovedRecovery &&
-                    IsRequested(context, WorkTaskStatus.Investigating));
-
+            builder
+                .Transition(nameof(WorkTaskStatus.Queued), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.Investigating),
+                    context => IsRequested(context, WorkTaskStatus.Investigating))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.CodeRed),
+                    context => IsRequested(context, WorkTaskStatus.CodeRed))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.HandedOff),
+                    context => IsRequested(context, WorkTaskStatus.HandedOff))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.Claimed), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.Implementing),
+                    context => IsRequested(context, WorkTaskStatus.Implementing))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.CodeRed),
+                    context => IsRequested(context, WorkTaskStatus.CodeRed))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.Investigating), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.Validating),
+                    context => IsRequested(context, WorkTaskStatus.Validating))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.CodeRed),
+                    context => IsRequested(context, WorkTaskStatus.CodeRed))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.Implementing), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.RepairRequired),
+                    context => IsRequested(context, WorkTaskStatus.RepairRequired))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.ReviewReady),
+                    context => IsRequested(context, WorkTaskStatus.ReviewReady))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.CodeRed),
+                    context => IsRequested(context, WorkTaskStatus.CodeRed))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.Validating), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.Implementing),
+                    context => IsRequested(context, WorkTaskStatus.Implementing))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.CodeRed),
+                    context => IsRequested(context, WorkTaskStatus.CodeRed))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.RepairRequired), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.Blocked), nameof(WorkTaskStatus.Claimed),
+                    context => IsRequested(context, WorkTaskStatus.Claimed))
+                .Transition(nameof(WorkTaskStatus.Blocked), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.Blocked), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.CodeRed), nameof(WorkTaskStatus.Blocked),
+                    context => IsRequested(context, WorkTaskStatus.Blocked))
+                .Transition(nameof(WorkTaskStatus.CodeRed), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.CodeRed), nameof(WorkTaskStatus.Failed),
+                    context => IsRequested(context, WorkTaskStatus.Failed))
+                .Transition(nameof(WorkTaskStatus.ReviewReady), nameof(WorkTaskStatus.HandedOff),
+                    context => IsRequested(context, WorkTaskStatus.HandedOff))
+                .Transition(nameof(WorkTaskStatus.ReviewReady), nameof(WorkTaskStatus.Stopped),
+                    context => IsRequested(context, WorkTaskStatus.Stopped))
+                .Transition(nameof(WorkTaskStatus.CodeRed), nameof(WorkTaskStatus.Investigating),
+                    context => context is WorkTaskLifecycleContext lifecycle &&
+                        lifecycle.AllowApprovedRecovery &&
+                        IsRequested(context, WorkTaskStatus.Investigating));
             builder.BuildDefinition();
         }
     }
@@ -189,15 +253,6 @@ internal sealed class FsmApiWorkTaskLifecycle : IDisposable
         context is WorkTaskLifecycleContext lifecycle &&
         StringComparer.Ordinal.Equals(lifecycle.RequestedState, target.ToString());
 
-    private static void Add(dynamic builder, WorkTaskStatus source, params WorkTaskStatus[] targets)
-    {
-        foreach (var target in targets)
-        {
-            var captured = target;
-            builder.Transition(source.ToString(), captured.ToString(),
-                context => IsRequested(context, captured));
-        }
-    }
 }
 
 internal sealed class WorkTaskLifecycleContext(string taskId) : IStateContext
