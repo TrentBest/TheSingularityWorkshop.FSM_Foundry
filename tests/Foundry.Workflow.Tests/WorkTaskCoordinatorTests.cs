@@ -135,6 +135,26 @@ public sealed class WorkTaskCoordinatorTests
         Assert.Throws<InvalidOperationException>(() =>
             coordinator.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "attempt beyond budget"));
         Assert.Equal(1, coordinator.GetSnapshot("foundry-8").Attempt);
+
+        // Restart must authenticate the persisted approval again; presence and shape
+        // of receipt metadata alone must never authorize replay of the guarded FSM edge.
+        using var restored = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
+        restored.Restore(recovered);
+        Assert.Equal(WorkTaskStatus.Investigating, restored.GetSnapshot("foundry-8").Status);
+
+        using var noVerifier = new WorkTaskCoordinator();
+        Assert.Throws<UnauthorizedAccessException>(() => noVerifier.Restore(recovered));
+
+        var tamperedEvent = recovered.Events[^1] with
+        {
+            ApprovalReceipt = recovered.Events[^1].ApprovalReceipt! with { Signature = "tampered-signature" }
+        };
+        var tampered = recovered with
+        {
+            Events = recovered.Events.Take(recovered.Events.Count - 1).Append(tamperedEvent).ToArray()
+        };
+        using var tamperedRestore = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
+        Assert.Throws<UnauthorizedAccessException>(() => tamperedRestore.Restore(tampered));
     }
 
     [Fact]
