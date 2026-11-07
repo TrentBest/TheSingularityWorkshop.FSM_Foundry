@@ -47,7 +47,7 @@ Status labels in this table are scoped to the active feature branch unless expli
 
 ## Verification notes
 
-PR #26's code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Those runs passed workflow tests, builds, the separate-process FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. Because they were push/PR events, they skipped the `workflow_dispatch`-only candidate checkout verification and provenance artifact steps. The current documentation commits follow that tested code head and need a fresh exact-head CI run.
+PR #26's code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Those runs passed workflow tests, builds, the separate-process FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. Because they were push/PR events, they skipped the `workflow_dispatch`-only candidate checkout verification and provenance artifact steps. The latest documentation head `071505bcdb93b7eac876e928f7faf0a1f01a641c` passed exact-head CI run [#42424488301](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42424488301). This verifies the documentation commit's build/test workflow; the dispatch-only candidate checkout/provenance path remains unexercised.
 
 ## Update rule
 
