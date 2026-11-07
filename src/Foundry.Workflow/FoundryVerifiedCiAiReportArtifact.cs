@@ -62,7 +62,7 @@ public sealed class FoundryVerifiedCiAiReportArtifact
             throw new InvalidOperationException("CiAi report request or artifact is cancelled, expired, or outside its validity window.");
         if (!string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase))
             throw new FormatException("CiAi report artifact media type must be application/json.");
-        if (expectedSizeBytes is < 1 or > 16 * 1024 * 1024 ||
+        if (expectedSizeBytes is < 1 or > 1024 * 1024 ||
             bytes.IsEmpty || bytes.Length != expectedSizeBytes)
             throw new InvalidDataException("CiAi report artifact is empty, oversized, or has an unexpected byte length.");
         if (expectedDigest is not { Length: 64 } || !expectedDigest.All(Uri.IsHexDigit))
