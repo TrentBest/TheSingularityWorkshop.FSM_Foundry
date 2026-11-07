@@ -12,6 +12,7 @@ public sealed class PersistentWorkTaskCoordinator : IDisposable
     private readonly JsonlWorkTaskStore _store;
     private readonly JsonlWorkTaskRepairAttemptJournal? _repairAttemptJournal;
     private Exception? _persistenceFailure;
+    private bool _disposed;
 
     public PersistentWorkTaskCoordinator(JsonlWorkTaskStore store,
         JsonlWorkTaskRepairAttemptJournal? repairAttemptJournal = null,
@@ -20,8 +21,18 @@ public sealed class PersistentWorkTaskCoordinator : IDisposable
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _repairAttemptJournal = repairAttemptJournal;
         _coordinator = new WorkTaskCoordinator(recoveryReceiptVerifier);
-        foreach (var snapshot in _store.GetAll())
-            _coordinator.Restore(snapshot);
+        try
+        {
+            foreach (var snapshot in _store.GetAll())
+                _coordinator.Restore(snapshot);
+        }
+        catch
+        {
+            // A later invalid record must not leak handles created while replaying
+            // earlier records. The partially restored coordinator is never published.
+            _coordinator.Dispose();
+            throw;
+        }
     }
 
     public WorkTaskSnapshot Submit(WorkTaskRequest request)
@@ -105,7 +116,16 @@ public sealed class PersistentWorkTaskCoordinator : IDisposable
         }
     }
 
-    public void Dispose() => _coordinator.Dispose();
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            _coordinator.Dispose();
+        }
+    }
 
 
     private WorkTaskSnapshot Persist(WorkTaskSnapshot snapshot, bool create = false)
@@ -125,6 +145,8 @@ public sealed class PersistentWorkTaskCoordinator : IDisposable
 
     private void EnsureHealthy()
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(PersistentWorkTaskCoordinator));
         if (_persistenceFailure is not null)
             throw new InvalidOperationException(
                 "Task dispatch is disabled because a prior journal write failed. Restart and restore from durable state before continuing.",
