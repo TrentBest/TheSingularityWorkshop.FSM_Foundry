@@ -131,6 +131,21 @@ public sealed class AutonomousDevelopmentStatusProjectionTests
     }
 
     [Fact]
+    public void ProjectionAcceptsExpiredClaimReassignmentAsSameStateLeaseEvent()
+    {
+        var coordinator = CreateCoordinator();
+        coordinator.Claim("task-1", "agent-a", TimeSpan.FromMinutes(1), Start);
+        var reclaimed = coordinator.Claim("task-1", "agent-b", TimeSpan.FromMinutes(5), Start.AddMinutes(2));
+
+        var projection = AutonomousDevelopmentStatusProjection.Create(reclaimed, Start.AddMinutes(3));
+
+        Assert.Equal(WorkTaskStatus.Claimed, projection.Status);
+        Assert.Equal(2, projection.EventSequence);
+        Assert.Equal("agent-b", projection.AgentId);
+        Assert.True(projection.LeaseActive);
+    }
+
+    [Fact]
     public void ProjectionRejectsFutureDatedEvents()
     {
         var coordinator = CreateCoordinator();
