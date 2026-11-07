@@ -8,6 +8,63 @@ public sealed class WorkTaskCoordinatorTests
     private static readonly DateTimeOffset Now = new(2026, 10, 30, 20, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void PersistentCoordinatorDisposesIdempotentlyAndRejectsFurtherOperations()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var store = new JsonlWorkTaskStore(path);
+            using (var original = new WorkTaskCoordinator())
+                store.Create(original.Submit(Request()));
+
+            var persistent = new PersistentWorkTaskCoordinator(store);
+            persistent.Dispose();
+            persistent.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => persistent.GetSnapshot("foundry-8"));
+            Assert.Throws<ObjectDisposedException>(() => persistent.Submit(Request(taskId: "another-task")));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void PersistentCoordinatorDisposesPartialRestoreWhenLaterApprovalCannotBeAuthenticated()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var store = new JsonlWorkTaskStore(path);
+            using (var original = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier()))
+            {
+                store.Create(original.Submit(Request(taskId: "a-first-task")));
+                original.Submit(Request());
+                var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
+                original.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+                original.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
+                original.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now.AddSeconds(3), "validate");
+                original.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now.AddSeconds(4), "blocked");
+                var incident = TestIncident();
+                var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence);
+                var recovered = original.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
+                    Now.AddMinutes(1), "approved recovery");
+                store.Create(original.GetSnapshot("a-first-task"));
+                store.Create(recovered);
+            }
+
+            Assert.Throws<UnauthorizedAccessException>(() => new PersistentWorkTaskCoordinator(store));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void SubmitValidatesAndRetainsVersionedTaskProvenance()
     {
         var coordinator = new WorkTaskCoordinator();
