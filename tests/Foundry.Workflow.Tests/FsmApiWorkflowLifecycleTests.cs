@@ -6,6 +6,26 @@ namespace Foundry.Workflow.Tests;
 public sealed class FsmApiWorkflowLifecycleTests
 {
     [Fact]
+    public void IllegalTransitionIsRejectedWithoutChangingFsmApiAuthoritativeState()
+    {
+        using var lifecycle = new FsmApiWorkflowLifecycle();
+        var runId = Guid.NewGuid();
+        lifecycle.CreateRun(runId);
+
+        Assert.Equal(WorkflowRunStatus.Accepted, lifecycle.GetStatus(runId));
+
+        // Succeeded is not an outgoing edge from Accepted. The FSM_API engine must
+        // reject the request and retain Accepted as the authoritative state.
+        Assert.Throws<InvalidOperationException>(() =>
+            lifecycle.Transition(runId, WorkflowRunStatus.Succeeded));
+
+        Assert.Equal(WorkflowRunStatus.Accepted, lifecycle.GetStatus(runId));
+
+        lifecycle.Transition(runId, WorkflowRunStatus.Running);
+        Assert.Equal(WorkflowRunStatus.Running, lifecycle.GetStatus(runId));
+    }
+
+    [Fact]
     public async Task SeparateCoordinatorsUseIndependentFsmApiProcessingGroups()
     {
         var firstRegistry = new WorkflowHandlerRegistry();
