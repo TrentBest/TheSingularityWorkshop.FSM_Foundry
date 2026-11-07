@@ -243,6 +243,12 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 PriorTurnId = request.PriorTurnId,
                 PriorCandidateCommitSha = request.PriorCandidateCommitSha,
                 IdempotencyKey = request.IdempotencyKey,
+                AcceptedReportSchemaVersion = request.AcceptedCiAiReport?.SchemaVersion,
+                AcceptedReportIdentity = request.AcceptedCiAiReport?.ReportIdentity,
+                AcceptedReportSha256 = request.AcceptedCiAiReport?.ReportSha256,
+                AcceptedReportWorkflowRunId = request.AcceptedCiAiReport?.WorkflowRunId,
+                AcceptedReportRunAttempt = request.AcceptedCiAiReport?.RunAttempt,
+                AcceptedReportCandidateCommitSha = request.AcceptedCiAiReport?.CandidateCommitSha,
                 Diagnosis = "The required action is rejected in terminal state.",
                 PatchIntent = "Propose a narrowly scoped correction."
             });
