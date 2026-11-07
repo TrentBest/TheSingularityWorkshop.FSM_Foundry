@@ -25,6 +25,10 @@ on:
         description: Exact candidate commit to verify
         required: true
         type: string
+      trusted_workflow_sha:
+        description: Exact trusted development commit containing this workflow
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -47,9 +51,12 @@ jobs:
           CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
           TRUSTED_REF: ${{ github.ref }}
           TRUSTED_SHA: ${{ github.sha }}
+          EXPECTED_TRUSTED_SHA: ${{ github.event.inputs.trusted_workflow_sha }}
         run: |
           test "$TRUSTED_REF" = "refs/heads/development"
           [[ "$TRUSTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$EXPECTED_TRUSTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          test "$TRUSTED_SHA" = "$EXPECTED_TRUSTED_SHA"
           [[ "$CANDIDATE_REF" == agents/* ]]
           [[ "$CANDIDATE_REF" != *..* ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
