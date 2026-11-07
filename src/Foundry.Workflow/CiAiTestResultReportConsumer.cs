@@ -17,9 +17,9 @@ public sealed record CiAiRepairFeedbackResult(
 /// HeadlessAi context remains untrusted proposal input.
 /// </summary>
 /// <summary>
-— Host-accepted, byte-exact CiAi report context for one subsequent HeadlessAi repair turn.
-— The report remains opaque to HeadlessAi; Foundry preserves the accepted bytes and trusted lineage.
-— </summary>
+/// Host-accepted, byte-exact CiAi report context for one subsequent HeadlessAi repair turn.
+/// The report remains opaque to HeadlessAi; Foundry preserves the accepted bytes and trusted lineage.
+/// </summary>
 public sealed record FoundryAcceptedCiAiReportContext
 {
     public const string RequiredSchema = "ciai.test-results.v1";
