@@ -75,7 +75,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                     Repository = Repository,
                     AuthorizedBranch = "work/task-1",
                     BaseCommitSha = BaseSha,
-                    CandidateCommitSha = BaseSha,
+                    CandidateCommitSha = CandidateSha,
                     RequestFingerprint = priorFingerprint,
                     ProviderId = "fake-provider",
                     ModelId = "fake-model",
@@ -92,16 +92,22 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 """{"type":"object","required":["diagnosis","patchIntent"]}""",
                 new[] { feedback.Consumed!.HeadlessAiEvidence },
                 priorTurnId: "turn-initial-1",
-                priorCandidateCommitSha: BaseSha);
+                priorCandidateCommitSha: CandidateSha,
+                acceptedCiAiReport: feedback.Consumed!.AcceptedReport);
 
             Assert.Equal("task-1", turn.TaskId);
             Assert.Equal("correlation-1", turn.CorrelationId);
             Assert.Equal("turn-repair-1", turn.TurnId);
             Assert.Equal(WorkTaskStatus.RepairRequired, tasks.GetSnapshot("task-1").Status);
             Assert.Equal("turn-initial-1", client.Request!.PriorTurnId);
-            Assert.Equal(BaseSha, client.Request.PriorCandidateCommitSha);
+            Assert.Equal(CandidateSha, client.Request.PriorCandidateCommitSha);
             Assert.Single(client.Request.Evidence);
             Assert.Equal(CandidateSha, client.Request.Evidence[0].CommitSha);
+            Assert.NotNull(client.Request.AcceptedCiAiReport);
+            Assert.Equal("sha256:" + feedback.Consumed.ReportSha256,
+                client.Request.AcceptedCiAiReport!.ReportIdentity);
+            Assert.Equal(feedback.Consumed.AcceptedReport.CanonicalReportJson,
+                client.Request.AcceptedCiAiReport.CanonicalReportJson);
         }
         finally
         {
@@ -192,7 +198,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Results = new[] { failedResult },
             ObservedAt
         };
-        return JsonSerializer.SerializeToUtf8Bytes(report);
+        return JsonSerializer.SerializeToUtf8Bytes(report, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
