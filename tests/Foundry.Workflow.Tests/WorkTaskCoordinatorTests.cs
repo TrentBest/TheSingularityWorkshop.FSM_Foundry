@@ -41,7 +41,7 @@ public sealed class WorkTaskCoordinatorTests
             using (var original = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier()))
             {
                 store.Create(original.Submit(Request(taskId: "a-first-task")));
-                original.Submit(Request());
+                store.Create(original.Submit(Request()));
                 var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
                 original.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
                 original.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
@@ -51,8 +51,7 @@ public sealed class WorkTaskCoordinatorTests
                 var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence);
                 var recovered = original.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
                     Now.AddMinutes(1), "approved recovery");
-                store.Create(original.GetSnapshot("a-first-task"));
-                store.Create(recovered);
+                store.Append(recovered);
             }
 
             Assert.Throws<UnauthorizedAccessException>(() => new PersistentWorkTaskCoordinator(store));
