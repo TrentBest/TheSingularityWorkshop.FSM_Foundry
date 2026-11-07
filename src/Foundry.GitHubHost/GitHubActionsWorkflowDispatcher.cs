@@ -75,6 +75,8 @@ public sealed record GitHubActionsDispatchReceipt(
     string WorkflowPath,
     string Branch,
     string CandidateSha,
+    string TrustedWorkflowRef,
+    string TrustedWorkflowSha,
     DateTimeOffset DispatchedAt);
 
 /// <summary>An exact workflow run and attempt correlated to one host dispatch receipt.</summary>
@@ -104,12 +106,14 @@ public sealed record GitHubActionsAttemptEvidence(
 public sealed class GitHubActionsWorkflowDispatcher
 {
     private const string ApiVersion = "2022-11-28";
+    private const string TrustedWorkflowRef = "development";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _http;
     private readonly IGitHubAccessTokenProvider _tokens;
     private readonly GitHubRepositoryOperationPolicy _repositoryPolicy;
     private readonly GitHubActionsWorkflowAllowlist _workflows;
     private readonly IGitHubActionsDispatchJournal _journal;
+    private readonly string _trustedWorkflowSha;
     private readonly Func<DateTimeOffset> _clock;
 
     public GitHubActionsWorkflowDispatcher(
@@ -118,6 +122,7 @@ public sealed class GitHubActionsWorkflowDispatcher
         GitHubRepositoryOperationPolicy repositoryPolicy,
         GitHubActionsWorkflowAllowlist workflows,
         IGitHubActionsDispatchJournal journal,
+        string trustedWorkflowSha,
         Func<DateTimeOffset>? clock = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -125,6 +130,9 @@ public sealed class GitHubActionsWorkflowDispatcher
         _repositoryPolicy = repositoryPolicy ?? throw new ArgumentNullException(nameof(repositoryPolicy));
         _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
+        if (trustedWorkflowSha is not { Length: 40 } || !trustedWorkflowSha.All(Uri.IsHexDigit))
+            throw new ArgumentException("A full trusted development workflow SHA is required.", nameof(trustedWorkflowSha));
+        _trustedWorkflowSha = trustedWorkflowSha;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         if (_http.BaseAddress is null ||
             !string.Equals(_http.BaseAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
@@ -150,17 +158,19 @@ public sealed class GitHubActionsWorkflowDispatcher
         var workflow = _workflows.Demand(workflowKey);
         var token = await GetTokenAsync(repository, cancellationToken).ConfigureAwait(false);
         await DemandExactCandidateTipAsync(repository, branch, candidateSha, token, cancellationToken).ConfigureAwait(false);
+        await DemandExactCandidateTipAsync(repository, TrustedWorkflowRef, _trustedWorkflowSha, token, cancellationToken).ConfigureAwait(false);
 
         var requestId = Guid.NewGuid().ToString("N");
         var dispatchTime = _clock();
         _journal.Begin(requestId, taskId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
-            branch, candidateSha, dispatchTime);
+            branch, candidateSha, TrustedWorkflowRef, _trustedWorkflowSha, dispatchTime);
         var payload = JsonSerializer.Serialize(new
         {
-            @ref = branch,
+            @ref = TrustedWorkflowRef,
             inputs = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["foundry_request_id"] = requestId,
+                ["candidate_ref"] = branch,
                 ["candidate_sha"] = candidateSha
             }
         }, JsonOptions);
@@ -172,7 +182,7 @@ public sealed class GitHubActionsWorkflowDispatcher
 
         return new GitHubActionsDispatchReceipt(
             requestId, taskId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
-            branch, candidateSha, acknowledgedAt);
+            branch, candidateSha, TrustedWorkflowRef, _trustedWorkflowSha, acknowledgedAt);
     }
 
     /// <summary>
@@ -186,7 +196,9 @@ public sealed class GitHubActionsWorkflowDispatcher
         _repositoryPolicy.DemandRepository(receipt.Repository);
         GitHubRepositoryOperationPolicy.DemandCandidateBranch(receipt.Branch);
         if (receipt.RequestId is not { Length: 32 } || !receipt.RequestId.All(Uri.IsHexDigit) ||
-            receipt.CandidateSha is not { Length: 40 } || !receipt.CandidateSha.All(Uri.IsHexDigit))
+            receipt.CandidateSha is not { Length: 40 } || !receipt.CandidateSha.All(Uri.IsHexDigit) ||
+            receipt.TrustedWorkflowRef != TrustedWorkflowRef ||
+            receipt.TrustedWorkflowSha is not { Length: 40 } || !receipt.TrustedWorkflowSha.All(Uri.IsHexDigit))
             throw new ArgumentException("Dispatch receipt identity is invalid.", nameof(receipt));
 
         var workflow = _workflows.DemandByFileAndPath(receipt.WorkflowFile, receipt.WorkflowPath);
@@ -196,10 +208,12 @@ public sealed class GitHubActionsWorkflowDispatcher
             !string.Equals(durable.WorkflowFile, receipt.WorkflowFile, StringComparison.Ordinal) ||
             !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
             !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
-            !string.Equals(durable.CandidateSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(durable.CandidateSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(durable.TrustedWorkflowRef, receipt.TrustedWorkflowRef, StringComparison.Ordinal) ||
+            !string.Equals(durable.TrustedWorkflowSha, receipt.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("Dispatch receipt does not match the durable dispatch intent.");
         var token = await GetTokenAsync(receipt.Repository, cancellationToken).ConfigureAwait(false);
-        var query = $"repos/{receipt.Repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/runs?event=workflow_dispatch&branch={Uri.EscapeDataString(receipt.Branch)}&head_sha={receipt.CandidateSha}&per_page=100";
+        var query = $"repos/{receipt.Repository}/actions/workflows/{Uri.EscapeDataString(workflow.WorkflowFile)}/runs?event=workflow_dispatch&branch={Uri.EscapeDataString(receipt.TrustedWorkflowRef)}&head_sha={receipt.TrustedWorkflowSha}&per_page=100";
         using var response = await SendAsync(HttpMethod.Get, query, token, null, cancellationToken).ConfigureAwait(false);
         using var document = await ReadJsonAsync(response!, cancellationToken).ConfigureAwait(false);
         if (!document.RootElement.TryGetProperty("total_count", out var totalRuns) ||
@@ -218,8 +232,8 @@ public sealed class GitHubActionsWorkflowDispatcher
             var title = GetString(run, "display_title");
             if (!string.Equals(path, receipt.WorkflowPath, StringComparison.Ordinal) ||
                 !string.Equals(eventName, "workflow_dispatch", StringComparison.Ordinal) ||
-                !string.Equals(branch, receipt.Branch, StringComparison.Ordinal) ||
-                !string.Equals(sha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(branch, receipt.TrustedWorkflowRef, StringComparison.Ordinal) ||
+                !string.Equals(sha, receipt.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(title, "Foundry CI " + receipt.RequestId, StringComparison.Ordinal))
                 continue;
 
@@ -261,7 +275,7 @@ public sealed class GitHubActionsWorkflowDispatcher
         var record = _journal.Get(requestId);
         return new GitHubActionsDispatchReceipt(record.RequestId, record.TaskId, record.Repository,
             record.WorkflowFile, record.WorkflowPath, record.Branch, record.CandidateSha,
-            record.AcknowledgedAt ?? record.CreatedAt);
+            record.TrustedWorkflowRef, record.TrustedWorkflowSha, record.AcknowledgedAt ?? record.CreatedAt);
     }
 
     /// <summary>
@@ -276,8 +290,8 @@ public sealed class GitHubActionsWorkflowDispatcher
         ArgumentNullException.ThrowIfNull(correlation);
         ArgumentNullException.ThrowIfNull(requiredJobNames);
         if (correlation.RunId <= 0 || correlation.RunAttempt <= 0 ||
-            !string.Equals(correlation.HeadSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(correlation.HeadBranch, receipt.Branch, StringComparison.Ordinal) ||
+            !string.Equals(correlation.HeadSha, receipt.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(correlation.HeadBranch, receipt.TrustedWorkflowRef, StringComparison.Ordinal) ||
             !string.Equals(correlation.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("Run correlation does not match the dispatch receipt.");
         var durable = _journal.Get(receipt.RequestId);
@@ -287,6 +301,8 @@ public sealed class GitHubActionsWorkflowDispatcher
             !string.Equals(durable.WorkflowPath, receipt.WorkflowPath, StringComparison.Ordinal) ||
             !string.Equals(durable.Branch, receipt.Branch, StringComparison.Ordinal) ||
             !string.Equals(durable.CandidateSha, receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(durable.TrustedWorkflowRef, receipt.TrustedWorkflowRef, StringComparison.Ordinal) ||
+            !string.Equals(durable.TrustedWorkflowSha, receipt.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
             durable.State is not (GitHubActionsDispatchState.Correlated or GitHubActionsDispatchState.Verified) ||
             durable.RunId != correlation.RunId || durable.RunAttempt != correlation.RunAttempt)
             throw new UnauthorizedAccessException("Required-job verification is not bound to the durable exact run attempt.");
@@ -308,8 +324,8 @@ public sealed class GitHubActionsWorkflowDispatcher
                 actualAttempt != correlation.RunAttempt ||
                 !string.Equals(GetString(run, "path"), receipt.WorkflowPath, StringComparison.Ordinal) ||
                 !string.Equals(GetString(run, "event"), "workflow_dispatch", StringComparison.Ordinal) ||
-                !string.Equals(GetString(run, "head_branch"), receipt.Branch, StringComparison.Ordinal) ||
-                !string.Equals(GetString(run, "head_sha"), receipt.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(GetString(run, "head_branch"), receipt.TrustedWorkflowRef, StringComparison.Ordinal) ||
+                !string.Equals(GetString(run, "head_sha"), receipt.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(GetString(run, "display_title"), "Foundry CI " + receipt.RequestId, StringComparison.Ordinal))
                 throw new InvalidDataException("GitHub's exact run-attempt metadata does not match the durable dispatch receipt.");
             correlation = correlation with
