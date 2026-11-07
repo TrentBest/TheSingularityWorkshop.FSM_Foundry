@@ -74,9 +74,8 @@ public sealed class CiAiTestResultReportConsumerTests
             AcceptedCiAiReport = consumed.AcceptedReport
         };
         repairRequest.Validate(Now);
-        Assert.Throws<InvalidDataException>(() =>
-            (consumed.AcceptedReport with { CanonicalReportJson = consumed.AcceptedReport.CanonicalReportJson + " " })
-                .Validate(Repository, CandidateSha, null));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            consumed.AcceptedReport.Validate("other/repository", CandidateSha, null));
     }
 
     [Fact]
