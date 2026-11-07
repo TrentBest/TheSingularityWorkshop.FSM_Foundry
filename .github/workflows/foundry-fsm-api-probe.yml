@@ -29,10 +29,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: foundry-ci-proof-${{ github.workflow }}-${{ github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   fsm-api-proof:
     name: Build, execute, and capture state evidence
@@ -47,51 +43,22 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
-          EXPECTED_CANDIDATE_REF: ${{ inputs.candidate_ref }}
-          EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-          TRUSTED_WORKFLOW_REF: ${{ github.ref }}
-          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+          CANDIDATE_REF: ${{ github.event.inputs.candidate_ref }}
+          CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
+          TRUSTED_REF: ${{ github.ref }}
+          TRUSTED_SHA: ${{ github.sha }}
         run: |
-          if [[ "$TRUSTED_WORKFLOW_REF" != "refs/heads/development" || ! "$TRUSTED_WORKFLOW_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Dispatch did not originate from the trusted development workflow ref."
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_CANDIDATE_REF" =~ ^agents/[A-Za-z0-9._/-]{1,180}$ || "$EXPECTED_CANDIDATE_REF" == *..* ]]; then
-            echo "Candidate ref is outside the authorized branch namespace."
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Candidate SHA must be a full 40-character hexadecimal commit."
-            exit 1
-          fi
-          mapfile -t refs < <(git ls-remote --exit-code origin "refs/heads/${EXPECTED_CANDIDATE_REF}")
-          if [[ "${#refs[@]}" -ne 1 ]]; then
-            echo "Candidate ref did not resolve to exactly one remote ref."
-            exit 1
-          fi
-          actual="$(cut -f1 <<< "${refs[0]}")"
-          if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
-            echo "Candidate ref resolves to $actual, expected $EXPECTED_CANDIDATE_SHA."
-            exit 1
-          fi
-
-      - name: Check out exact candidate commit
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ inputs.candidate_sha }}
-
-      - name: Verify checked-out candidate SHA
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        env:
-          EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: |
+          test "$TRUSTED_REF" = "refs/heads/development"
+          [[ "$TRUSTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$CANDIDATE_REF" == agents/* ]]
+          [[ "$CANDIDATE_REF" != *..* ]]
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          git fetch --no-tags origin "refs/heads/$CANDIDATE_REF"
+          actual="$(git rev-parse FETCH_HEAD)"
+          test "$actual" = "$CANDIDATE_SHA"
+          git checkout --detach "$CANDIDATE_SHA"
           actual="$(git rev-parse HEAD)"
-          if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
-            echo "Checked out $actual, expected $EXPECTED_CANDIDATE_SHA."
-            exit 1
-          fi
+          test "$actual" = "$CANDIDATE_SHA"
 
       - name: Check out pinned HeadlessAi source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
