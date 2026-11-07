@@ -86,6 +86,14 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 });
             var turnCoordinator = new FoundryHeadlessAiTurnCoordinator(
                 tasks, client, turnJournal, new FixedTimeProvider(Now.AddMinutes(1)));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => turnCoordinator.InvokeAsync(
+                "task-1", leaseId, "work/task-1", RepairCandidateSha,
+                "experiences-developer", "Repair the exact failing candidate using the supplied CiAi evidence.",
+                "Return a bounded patch proposal; do not claim authorization.",
+                """{"type":"object","required":["diagnosis","patchIntent"]}""",
+                new[] { feedback.Consumed!.HeadlessAiEvidence },
+                priorTurnId: "turn-initial-1",
+                priorCandidateCommitSha: CandidateSha));
             var turn = await turnCoordinator.InvokeAsync(
                 "task-1", leaseId, "work/task-1", RepairCandidateSha,
                 "experiences-developer", "Repair the exact failing candidate using the supplied CiAi evidence.",
