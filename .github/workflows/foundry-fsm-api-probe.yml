@@ -69,7 +69,29 @@ jobs:
             echo "Candidate ref did not resolve to exactly one remote ref."
             exit 1
           fi
-          actual="${refs[0]%%
+          actual="$(printf '%s\\n' "${refs[0]}" | cut -f1)"
+          if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
+            echo "Candidate ref resolves to $actual, expected $EXPECTED_CANDIDATE_SHA."
+            exit 1
+          fi
+
+      - name: Check out exact candidate commit
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+
+      - name: Verify checked-out candidate SHA
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          EXPECTED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_CANDIDATE_SHA" ]]; then
+            echo "Checked out $actual, expected $EXPECTED_CANDIDATE_SHA."
+            exit 1
+          fi
 
       - name: Check out pinned HeadlessAi source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
