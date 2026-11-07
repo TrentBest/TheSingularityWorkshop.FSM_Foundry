@@ -56,6 +56,18 @@ Foundry validates the structural consistency of the verdict with required-check 
 
 This slice connects the verified report to Foundry's durable local task/attempt lifecycle and the existing HeadlessAi turn bridge, but it is not the complete CODE RED loop. It does not host HTTPS, authenticate JWTs, download provider artifacts, verify ZIP archives, safely extract TRX, create CI reports, automatically invoke HeadlessAi, authorize repository commands, or provide distributed persistence. The current Foundry JSONL journals remain local-filesystem, single-process stores.
 
+### Canonical v1 byte contract
+
+The consumer accepts the exact canonical bytes emitted by CiAi's `CiTestResultReport.ToCanonicalUtf8Bytes()`:
+
+- UTF-8 without BOM, compact JSON, no trailing newline.
+- camelCase property names; nested test-result fields are camelCase as well.
+- String enum values and explicit null-valued properties.
+- The producer's `ReportIdentity` is `sha256:` plus lowercase SHA-256 over these exact bytes; the body does not contain the derived identity.
+- The shared maximum report size is 1 MiB. The verified artifact factory and report consumer both enforce this bound before parsing.
+
+Foundry hashes and validates the exact retrieved bytes, then stores the digest as the evidence payload identity. It does not reserialize the report to compute a different identity, and it does not reinterpret CiAi's verdict. Unknown reason codes remain bounded diagnostic data; they do not change the verdict.
+
 ## 04 — See it in a minute
 
 The executable contract tests cover:
