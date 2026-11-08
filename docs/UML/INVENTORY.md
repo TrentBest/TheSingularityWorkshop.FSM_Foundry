@@ -22,18 +22,18 @@ The current source tree contains three distinct areas: the sequential workflow r
 | HeadlessAi bridge | `HeadlessAiTurnBridge.cs`, `JsonlHeadlessAiTurnJournal.cs` | `HEADLESSAI_TURN_BRIDGE.md` | Implemented; fake executor and durable replay tests |
 | HeadlessAi host adapter | `HeadlessAiAgentTurnClient.cs`, console composition root | `HEADLESSAI_HOST_ADAPTER.md` | Source adapter/console compile; live provider turn not verified |
 | CiAi dispatch/reconciliation | `CiAiDispatchSubmissionCoordinator.cs`, `CiAiDispatchRunReconciler.cs`, `CiAiDispatchRunMarker.cs` | `CIAI_ARTIFACT_CALLBACK_CONTRACT.md` | Host-neutral contract/core implemented; live CiAi transport remains |
-| GitHub repository adapter | `GitHubRepositoryOperationAdapter.cs`, `JsonlGitHubRepositoryStagingStore.cs` | `REPOSITORY_OPERATION_ADAPTER.md` | Implemented on feature branch; fake-HTTP/local-store tests |
-| GitHub Actions dispatcher | `GitHubActionsWorkflowDispatcher.cs`, `GitHubActionsDispatchJournal.cs` | `REPOSITORY_OPERATION_ADAPTER.md` | Dispatch/correlation/required-job verification implemented; live dispatch and artifact retrieval remain |
+| GitHub repository adapter | `GitHubRepositoryOperationAdapter.cs`, `JsonlGitHubRepositoryStagingStore.cs` | `GitHubRepositoryOperationAdapter.md`, `GitHubHostAdapterUML.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Implemented on feature branch; fake-HTTP/local-store tests; live provider proof remains |
+| GitHub Actions dispatcher | `GitHubActionsWorkflowDispatcher.cs`, `GitHubActionsDispatchJournal.cs` | `GitHubActionsWorkflowDispatcher.md`, `GitHubHostAdapterUML.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Dispatch/correlation/exact-attempt required-job verification implemented; live dispatch and host artifact retrieval remain |
 
 ## View coverage
 
 | View | Current status | Evidence needed for completion |
 |---|---|---|
 | Architecture/component | Source-grounded architecture diagram in `docs/ARCHITECTURE.md` | Keep diagram synchronized with component ownership and real integration joins |
-| Class neighborhoods | Manual views: workflow coordinator, task coordinator, CODE RED recovery receipt, and initial probe | Capability dispatcher neighborhood added; agent bridge and GitHub adapter neighborhoods remain |
+| Class neighborhoods | Manual views: workflow coordinator, task coordinator, CODE RED recovery receipt, and initial probe | Capability dispatcher and GitHub host adapter neighborhoods added; agent bridge remains |
 | Sequence: successful workflow | Workflow behavior documented; coordinator UML exists | Add tested sequence trace with exact source revision |
 | Sequence: failure/recovery | CODE RED recovery success and fail-closed branches documented in `CodeRedRecoveryApprovalReceiptUML.md` | Add stale-lease and indeterminate external-effect sequences |
-| Activity/control flow | Partial in workflow semantics | Authorization flow added; repair decision flow remains |
+| Activity/control flow | Partial in workflow semantics | Authorization and GitHub dispatch flows added; repair decision flow remains |
 | State lifecycle | Workflow and task state vocabularies documented | Add source-derived diagrams for both separate lifecycle owners |
 | Use cases | Initial target/use cases documented | Validate live host scenarios and human review interactions |
 | Data model and lineage | Task, operation, dispatch, and evidence contracts documented | Diagram the exact candidate/run/attempt/artifact lineage |
