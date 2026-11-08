@@ -3,7 +3,7 @@
 
 # Foundry UML and Source Documentation
 
-**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, workflow execution coordinator, governed task coordinator, and CODE RED recovery authorization. The architecture guide contains a component/authority-flow diagram for the expanded governed-work domain. Dedicated neighborhoods for the capability/dispatcher boundary now exist; the HeadlessAi bridge and GitHub operations remain to be added. Automated generation and stale-view detection are not implemented.
+**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, workflow execution coordinator, governed task coordinator, and CODE RED recovery authorization. The architecture guide contains a component/authority-flow diagram for the expanded governed-work domain. Dedicated neighborhoods for the capability/dispatcher boundary and GitHub host adapter now exist; the HeadlessAi bridge remains to be added. Automated generation and stale-view detection are not implemented.
 
 ## Principles
 
@@ -37,15 +37,15 @@ Only add a view when there is sufficient evidence. Mark unimplemented flows as t
 
 - [WorkflowExecutionCoordinator neighborhood](WorkflowExecutionCoordinatorUML.md) — retained run lifecycle and its relationship to the existing runner.
 - [WorkTaskCoordinator neighborhood](WorkTaskCoordinatorUML.md) — governed task lifecycle and exact CI evidence decision.
-- [CODE RED recovery authorization neighborhood and sequence](CodeRedRecoveryApprovalReceiptUML.md) — signed receipt scope, host trust boundary, persistent recovery path, and fail-closed branches.\n- [Repository operation authorization neighborhood and sequence](RepositoryOperationAuthorizationUML.md) — host capability scope, double-demand dispatch boundary, audit intent, and adapter invocation.
+- [CODE RED recovery authorization neighborhood and sequence](CodeRedRecoveryApprovalReceiptUML.md) — signed receipt scope, host trust boundary, persistent recovery path, and fail-closed branches.\n- [Repository operation authorization neighborhood and sequence](RepositoryOperationAuthorizationUML.md) — host capability scope, double-demand dispatch boundary, audit intent, and adapter invocation.\n- [GitHub host adapter neighborhood and sequences](GitHubHostAdapterUML.md) — candidate branch/read/stage/commit path plus trusted-source CI dispatch and exact-attempt verification.
 - [Coordinator source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md) — purpose, public commands, limits, and tests.
 - [WorkTaskCoordinator source companion](../../src/Foundry.Workflow/WorkTaskCoordinator.md) — task envelope, leases, evidence-gated transitions, recovery, and persistence boundary.
-- [CODE RED recovery receipt source companion](../../src/Foundry.Workflow/CodeRedRecoveryApprovalReceipt.md) — canonical signing payload, receipt scope, verification, replay, and host responsibilities.\n- [WorkTaskCapabilityRegistry source companion](../../src/Foundry.Workflow/WorkTaskCapabilityRegistry.md) — lease-bound grants, exact operation scope, CODE RED invalidation, and limits.\n- [AuthorizedRepositoryOperationDispatcher source companion](../../src/Foundry.Workflow/AuthorizedRepositoryOperationDispatcher.md) — typed operations, pre-transport recheck, audit boundary, and workflow bridge.
+- [CODE RED recovery receipt source companion](../../src/Foundry.Workflow/CodeRedRecoveryApprovalReceipt.md) — canonical signing payload, receipt scope, verification, replay, and host responsibilities.\n- [WorkTaskCapabilityRegistry source companion](../../src/Foundry.Workflow/WorkTaskCapabilityRegistry.md) — lease-bound grants, exact operation scope, CODE RED invalidation, and limits.\n- [AuthorizedRepositoryOperationDispatcher source companion](../../src/Foundry.Workflow/AuthorizedRepositoryOperationDispatcher.md) — typed operations, pre-transport recheck, audit boundary, and workflow bridge.\n- [GitHubRepositoryOperationAdapter source companion](../../src/Foundry.GitHubHost/GitHubRepositoryOperationAdapter.md) — repository allowlist, token provider, candidate branch policy, staged writes, and commits.\n- [GitHubActionsWorkflowDispatcher source companion](../../src/Foundry.GitHubHost/GitHubActionsWorkflowDispatcher.md) — trusted workflow source, request-ID correlation, exact-attempt checks, and unresolved dispatch recovery.
 - [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — state-execution proof.
 - [Fox/Sheepdog neighborhood](FoundryFoxSheepdogUML.md) — deterministic multi-state demonstration.
 - [Architecture diagram](../ARCHITECTURE.md#1-system-shape) — current component and authority flow; it is an authored architecture view grounded in the source ownership boundaries, not generated UML.
 
-The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The task coordinator, CODE RED recovery authorization, and repository-operation authorization now have dedicated neighborhoods and tested sequences. The agent bridge and GitHub operations still need dedicated views.
+The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The task coordinator, CODE RED recovery authorization, repository-operation authorization, and GitHub host adapter now have dedicated neighborhoods and tested sequences. The HeadlessAi bridge still needs a dedicated view.
 
 ## Validation expectations
 
