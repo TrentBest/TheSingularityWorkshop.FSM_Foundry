@@ -15,6 +15,8 @@
 - [Workflow semantics](docs/WORKFLOW_SEMANTICS.md) — sequential execution, validation, outcomes, and bounded context.
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — JSON data channel, bounds, and ownership.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelope, lease fencing, state transitions, journals, CODE RED, and exact-CI decisions.
+- [CODE RED recovery receipt](src/Foundry.Workflow/CodeRedRecoveryApprovalReceipt.md) — signed recovery scope, canonical payload, verifier boundary, and single-use audit.
+- [CODE RED recovery UML](docs/UML/CodeRedRecoveryApprovalReceiptUML.md) — source/test-derived recovery neighborhood and sequence.
 - [Repository operation boundary](docs/REPOSITORY_OPERATION_ADAPTER.md) — typed operations, host capabilities, GitHub adapter, dispatch reconciliation, and candidate-checkout provenance.
 - [HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — lease-gated turns, provenance, duplicate suppression, and recovery.
 - [HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — source-pinned adapter and manual host composition.
