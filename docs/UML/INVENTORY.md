@@ -3,7 +3,7 @@
 
 # UML and Source Documentation Inventory
 
-**Inventory scope:** `feature/foundry-host-repository-operation-gate`. The earlier 2026-10-23 inventory covered only the FSM_API probe and Fox/Sheepdog demonstration and is superseded by this expanded source inventory.
+**Inventory scope:** feature/foundry-host-repository-operation-gate. The earlier 2026-10-23 inventory covered only the FSM_API probe and Fox/Sheepdog demonstration and is superseded by this expanded source inventory.
 
 ## Source inventory
 
@@ -11,29 +11,29 @@ The current source tree contains three distinct areas: the sequential workflow r
 
 | Source area | Representative source | Companion / UML | Status |
 |---|---|---|---|
-| FSM_API probe | `Foundry.FsmApiProbe/Program.cs` | `Program.md`, `FoundryFsmApiProbeUML.md` | Implemented; deterministic CI probe |
-| Fox/Sheepdog scenario | `Foundry.FoxSheepdog/Program.cs` | `Program.md`, `FoundryFoxSheepdogUML.md` | Implemented; repeatable trace/SVG evidence |
-| Workflow definition/validation | `WorkflowDefinition.cs`, `WorkflowValidator.cs` | `WORKFLOW_SEMANTICS.md` | Implemented and tested |
-| Workflow execution | `WorkflowRunner.cs`, `WorkflowExecutionCoordinator.cs`, `WorkflowExecutionContext.cs` | `WorkflowExecutionCoordinatorUML.md`, workflow guides | Implemented and tested; manual UML exists for coordinator |
-| Governed task lifecycle | `WorkTaskCoordinator.cs`, `PersistentWorkTaskCoordinator.cs`, `JsonlWorkTaskStore.cs` | `WorkTaskCoordinator.md`, `WorkTaskCoordinatorUML.md`, `WORK_TASK_LIFECYCLE.md` | Implemented; deterministic lifecycle/persistence tests; coordinator neighborhood and evidence/recovery sequences documented |
-| Capability authorization | `WorkTaskCapabilityRegistry.cs`, `AuthorizedRepositoryOperationDispatcher.cs` | `WorkTaskCapabilityRegistry.md`, `AuthorizedRepositoryOperationDispatcher.md`, `RepositoryOperationAuthorizationUML.md` | Implemented; deterministic capability and fake-adapter authorization tests; live provider proof remains separate |
-| CODE RED incidents/recovery | `CodeRedIncident.cs`, `CodeRedRecoveryApprovalReceipt.cs`, `PersistentCodeRedRecoveryCoordinator.cs`, `JsonlCodeRedIncidentStore.cs` | `WORK_TASK_LIFECYCLE.md`, `CodeRedRecoveryApprovalReceipt.md`, `CodeRedRecoveryApprovalReceiptUML.md` | Implemented; signed receipt, stale-sequence, replay, and local serialization tests |
-| Repair decisions/evidence | `WorkTaskRepairDecisionPolicy.cs`, `WorkTaskRepairAttemptJournal.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; exact-run provenance and bounded decision tests |
-| HeadlessAi bridge | `HeadlessAiTurnBridge.cs`, `JsonlHeadlessAiTurnJournal.cs` | `HEADLESSAI_TURN_BRIDGE.md` | Implemented; fake executor and durable replay tests |
-| HeadlessAi host adapter | `HeadlessAiAgentTurnClient.cs`, console composition root | `HEADLESSAI_HOST_ADAPTER.md` | Source adapter/console compile; live provider turn not verified |
-| CiAi dispatch/reconciliation | `CiAiDispatchSubmissionCoordinator.cs`, `CiAiDispatchRunReconciler.cs`, `CiAiDispatchRunMarker.cs` | `CIAI_ARTIFACT_CALLBACK_CONTRACT.md` | Host-neutral contract/core implemented; live CiAi transport remains |
-| GitHub repository adapter | `GitHubRepositoryOperationAdapter.cs`, `JsonlGitHubRepositoryStagingStore.cs` | `GitHubRepositoryOperationAdapter.md`, `GitHubHostAdapterUML.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Implemented on feature branch; fake-HTTP/local-store tests; live provider proof remains |
-| GitHub Actions dispatcher | `GitHubActionsWorkflowDispatcher.cs`, `GitHubActionsDispatchJournal.cs` | `GitHubActionsWorkflowDispatcher.md`, `GitHubHostAdapterUML.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Dispatch/correlation/exact-attempt required-job verification implemented; live dispatch and host artifact retrieval remain |
+| FSM_API probe | Foundry.FsmApiProbe/Program.cs | Program.md, FoundryFsmApiProbeUML.md | Implemented; deterministic CI probe |
+| Fox/Sheepdog scenario | Foundry.FoxSheepdog/Program.cs | Program.md, FoundryFoxSheepdogUML.md | Implemented; repeatable trace/SVG evidence |
+| Workflow definition/validation | WorkflowDefinition.cs, WorkflowValidator.cs | WORKFLOW_SEMANTICS.md | Implemented and tested |
+| Workflow execution | WorkflowRunner.cs, WorkflowExecutionCoordinator.cs, WorkflowExecutionContext.cs | WorkflowExecutionCoordinatorUML.md, workflow guides | Implemented and tested; manual UML exists for coordinator |
+| Governed task lifecycle | WorkTaskCoordinator.cs, PersistentWorkTaskCoordinator.cs, JsonlWorkTaskStore.cs | WorkTaskCoordinator.md, WorkTaskCoordinatorUML.md, WORK_TASK_LIFECYCLE.md | Implemented; deterministic lifecycle/persistence tests; coordinator neighborhood and evidence/recovery sequences documented |
+| Capability authorization | WorkTaskCapabilityRegistry.cs, AuthorizedRepositoryOperationDispatcher.cs | WorkTaskCapabilityRegistry.md, AuthorizedRepositoryOperationDispatcher.md, RepositoryOperationAuthorizationUML.md | Implemented; deterministic capability and fake-adapter authorization tests; live provider proof remains separate |
+| CODE RED incidents/recovery | CodeRedIncident.cs, CodeRedRecoveryApprovalReceipt.cs, PersistentCodeRedRecoveryCoordinator.cs, JsonlCodeRedIncidentStore.cs | WORK_TASK_LIFECYCLE.md, CodeRedRecoveryApprovalReceipt.md, CodeRedRecoveryApprovalReceiptUML.md | Implemented; signed receipt, stale-sequence, replay, and local serialization tests |
+| Repair decisions/evidence | WorkTaskRepairDecisionPolicy.cs, WorkTaskRepairAttemptJournal.cs | WORK_TASK_LIFECYCLE.md | Implemented; exact-run provenance and bounded decision tests |
+| HeadlessAi bridge | HeadlessAiTurnBridge.cs, JsonlHeadlessAiTurnJournal.cs | HEADLESSAI_TURN_BRIDGE.md, HeadlessAiTurnBridgeUML.md | Implemented; deterministic fake-client tests and durable replay tests; no live provider proof |
+| HeadlessAi host adapter | HeadlessAiAgentTurnClient.cs, console composition root | HEADLESSAI_HOST_ADAPTER.md | Source adapter/console compile; fake HTTP integration tests; live provider turn not verified |
+| CiAi dispatch/reconciliation | CiAiDispatchSubmissionCoordinator.cs, CiAiDispatchRunReconciler.cs, CiAiDispatchRunMarker.cs | CIAI_ARTIFACT_CALLBACK_CONTRACT.md | Host-neutral contract/core implemented; live CiAi transport remains |
+| GitHub repository adapter | GitHubRepositoryOperationAdapter.cs, JsonlGitHubRepositoryStagingStore.cs | GitHubRepositoryOperationAdapter.md, GitHubHostAdapterUML.md, REPOSITORY_OPERATION_ADAPTER.md | Implemented on feature branch; fake-HTTP/local-store tests; live provider proof remains |
+| GitHub Actions dispatcher | GitHubActionsWorkflowDispatcher.cs, GitHubActionsDispatchJournal.cs | GitHubActionsWorkflowDispatcher.md, GitHubHostAdapterUML.md, REPOSITORY_OPERATION_ADAPTER.md | Dispatch/correlation/exact-attempt required-job verification implemented; live dispatch and host artifact retrieval remain |
 
 ## View coverage
 
 | View | Current status | Evidence needed for completion |
 |---|---|---|
-| Architecture/component | Source-grounded architecture diagram in `docs/ARCHITECTURE.md` | Keep diagram synchronized with component ownership and real integration joins |
-| Class neighborhoods | Manual views: workflow coordinator, task coordinator, CODE RED recovery receipt, and initial probe | Capability dispatcher and GitHub host adapter neighborhoods added; agent bridge remains |
+| Architecture/component | Source-grounded architecture diagram in docs/ARCHITECTURE.md | Keep diagram synchronized with component ownership and real integration joins |
+| Class neighborhoods | Manual views: workflow coordinator, task coordinator, CODE RED recovery receipt, HeadlessAi bridge, and initial probe | Capability dispatcher and GitHub host adapter neighborhoods added; broader source coverage remains |
 | Sequence: successful workflow | Workflow behavior documented; coordinator UML exists | Add tested sequence trace with exact source revision |
-| Sequence: failure/recovery | CODE RED recovery success and fail-closed branches documented in `CodeRedRecoveryApprovalReceiptUML.md` | Add stale-lease and indeterminate external-effect sequences |
-| Activity/control flow | Partial in workflow semantics | Authorization and GitHub dispatch flows added; repair decision flow remains |
+| Sequence: failure/recovery | CODE RED recovery and HeadlessAi indeterminate/stale-lease branches documented in their UML pages | Add stale-lease and indeterminate external-effect sequences for remaining adapters |
+| Activity/control flow | Partial in workflow semantics | Authorization, HeadlessAi, and GitHub dispatch flows added; repair decision flow remains |
 | State lifecycle | Workflow and task state vocabularies documented | Add source-derived diagrams for both separate lifecycle owners |
 | Use cases | Initial target/use cases documented | Validate live host scenarios and human review interactions |
 | Data model and lineage | Task, operation, dispatch, and evidence contracts documented | Diagram the exact candidate/run/attempt/artifact lineage |
