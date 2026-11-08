@@ -17,7 +17,7 @@ The current source tree contains three distinct areas: the sequential workflow r
 | Workflow execution | `WorkflowRunner.cs`, `WorkflowExecutionCoordinator.cs`, `WorkflowExecutionContext.cs` | `WorkflowExecutionCoordinatorUML.md`, workflow guides | Implemented and tested; manual UML exists for coordinator |
 | Governed task lifecycle | `WorkTaskCoordinator.cs`, `PersistentWorkTaskCoordinator.cs`, `JsonlWorkTaskStore.cs` | `WorkTaskCoordinator.md`, `WorkTaskCoordinatorUML.md`, `WORK_TASK_LIFECYCLE.md` | Implemented; deterministic lifecycle/persistence tests; coordinator neighborhood and evidence/recovery sequences documented |
 | Capability authorization | `WorkTaskCapabilityRegistry.cs`, `AuthorizedRepositoryOperationDispatcher.cs` | `DOMAIN.md`, `REPOSITORY_OPERATION_ADAPTER.md` | Implemented; fake-adapter authorization tests |
-| CODE RED incidents/recovery | `CodeRedIncident.cs`, `CodeRedRecoveryApprovalReceipt.cs`, `PersistentCodeRedRecoveryCoordinator.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; signed receipt/replay tests |
+| CODE RED incidents/recovery | `CodeRedIncident.cs`, `CodeRedRecoveryApprovalReceipt.cs`, `PersistentCodeRedRecoveryCoordinator.cs`, `JsonlCodeRedIncidentStore.cs` | `WORK_TASK_LIFECYCLE.md`, `CodeRedRecoveryApprovalReceipt.md`, `CodeRedRecoveryApprovalReceiptUML.md` | Implemented; signed receipt, stale-sequence, replay, and local serialization tests |
 | Repair decisions/evidence | `WorkTaskRepairDecisionPolicy.cs`, `WorkTaskRepairAttemptJournal.cs` | `WORK_TASK_LIFECYCLE.md` | Implemented; exact-run provenance and bounded decision tests |
 | HeadlessAi bridge | `HeadlessAiTurnBridge.cs`, `JsonlHeadlessAiTurnJournal.cs` | `HEADLESSAI_TURN_BRIDGE.md` | Implemented; fake executor and durable replay tests |
 | HeadlessAi host adapter | `HeadlessAiAgentTurnClient.cs`, console composition root | `HEADLESSAI_HOST_ADAPTER.md` | Source adapter/console compile; live provider turn not verified |
@@ -30,9 +30,9 @@ The current source tree contains three distinct areas: the sequential workflow r
 | View | Current status | Evidence needed for completion |
 |---|---|---|
 | Architecture/component | Source-grounded architecture diagram in `docs/ARCHITECTURE.md` | Keep diagram synchronized with component ownership and real integration joins |
-| Class neighborhoods | Partial: workflow coordinator, task coordinator, and initial probe | Add capability dispatcher, incident/recovery, agent bridge, and GitHub adapter neighborhoods |
+| Class neighborhoods | Manual views: workflow coordinator, task coordinator, CODE RED recovery receipt, and initial probe | Add capability dispatcher, agent bridge, and GitHub adapter neighborhoods |
 | Sequence: successful workflow | Workflow behavior documented; coordinator UML exists | Add tested sequence trace with exact source revision |
-| Sequence: failure/recovery | Contract semantics documented | Add failure, stale lease, CODE RED recovery, and indeterminate external-effect sequences |
+| Sequence: failure/recovery | CODE RED recovery success and fail-closed branches documented in `CodeRedRecoveryApprovalReceiptUML.md` | Add stale-lease and indeterminate external-effect sequences |
 | Activity/control flow | Partial in workflow semantics | Add source-derived repair decision and authorization flows |
 | State lifecycle | Workflow and task state vocabularies documented | Add source-derived diagrams for both separate lifecycle owners |
 | Use cases | Initial target/use cases documented | Validate live host scenarios and human review interactions |
