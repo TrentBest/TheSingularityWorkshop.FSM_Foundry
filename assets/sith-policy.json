@@ -10,6 +10,7 @@
     "docs/foundry-domain-theory-foundation",
     "feature/autonomous-development-status-projection",
     "feature/foundry-ciai-report-consumer",
+    "feature/foundry-codered-fsm-api-lifecycle",
     "feature/foundry-codered-vertical-proof",
     "feature/foundry-fsm-api-runtime-integration",
     "feature/foundry-github-host-adapter-design",
@@ -24,9 +25,9 @@
     "master",
     "work/explicit-workflow-timeouts"
   ],
-  "branch_count": 17,
+  "branch_count": 18,
   "status": "NON-COMPLIANT",
-  "evaluated_at": "2026-11-07T11:04:55Z",
-  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42366637707",
-  "triggering_commit": "d3d920c3e75a4c70ffaf0248aea7894556a24c03"
+  "evaluated_at": "2026-11-08T11:17:38Z",
+  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42475085838",
+  "triggering_commit": "e4ecc69c98b4d307990cd9624654b8f4ea2e2551"
 }
