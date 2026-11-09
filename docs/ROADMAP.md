@@ -76,7 +76,9 @@
 
 ## Evidence and branch hygiene
 
-PR #26 code head `9e55326f2bc075019b2810c9f58221832f144a9b` passed exact-head push run [#42423025239](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423025239) and PR run [#42423029278](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42423029278). Both covered workflow tests, builds, FSM_API probe, repeated Fox/Sheepdog execution and comparison, and ordinary evidence upload. They did not execute the dispatch-only candidate checkout/provenance steps. The latest documentation head `071505bcdb93b7eac876e928f7faf0a1f01a641c` passed exact-head CI run [#42424488301](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42424488301). This verifies the documentation commit's build/test workflow; it does not execute the dispatch-only candidate checkout/provenance path.
+PR #26 latest head `3ebf6e0b097e208255190ba496dac04959802260` passed exact-head push CI run [#42467586819](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42467586819). The run completed successfully and exercised the ordinary push build/test path, including the workflow tests, builds, separate-process FSM_API probe, repeated Fox/Sheepdog execution/comparison, and evidence upload. Because the event was `push`, the `workflow_dispatch`-only trusted-source/candidate-checkout/provenance path was skipped. This run therefore does not prove live dispatch, candidate artifact retrieval, or host-side artifact validation.
+
+PR #26 remains open and draft. Its recorded base SHA is `8bd3487a96af2cd7d667f62c4566a499bafe30dc`, while the current `development` branch tip is `dc1324f9bfcc61e6de32f7c52d7686025976f00b`. The PR is reported as not mergeable/dirty and needs non-destructive branch reconciliation before review can proceed. No canonical branch was modified as part of this documentation work.
 
 A green CI run is evidence, not permission to merge, release, deploy, or publish.
 
