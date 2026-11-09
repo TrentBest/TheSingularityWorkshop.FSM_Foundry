@@ -57,7 +57,7 @@ Status labels in this table are scoped to the active feature branch unless expli
 
 ## Verification notes
 
-PR #26 latest head `17b18128c7624c09fa417c3b66f745a1109242c3` passed exact-head push CI run [#42557642333](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42557642333). The run completed successfully and validates the ordinary build/test path, separate-process FSM_API probe, repeated Fox/Sheepdog execution/comparison, and evidence upload. It was a `push` event, so the `workflow_dispatch`-only candidate checkout/provenance steps were skipped. A live authorized dispatch and host-side artifact retrieval/validation remain unproven.
+PR #26 documentation head `17b18128c7624c09fa417c3b66f745a1109242c3` passed exact-head push CI run [#42557642333](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42557642333). Current feature head `371c9a284d289b1c52585ed00f9509e6aa6670b0` is a reconciliation merge commit containing current `development` at `dc1324f9bfcc61e6de32f7c52d7686025976f00b` plus the active feature work. The run completed successfully and validates the ordinary build/test path, separate-process FSM_API probe, repeated Fox/Sheepdog execution/comparison, and evidence upload. It was a `push` event, so the `workflow_dispatch`-only candidate checkout/provenance steps were skipped. A live authorized dispatch and host-side artifact retrieval/validation remain unproven. Push/PR validation for the reconciliation head is running; the Sith Policy check correctly flags the temporary feature branch until it is merged and the temporary branch is removed under owner authorization.
 
 ## Update rule
 
