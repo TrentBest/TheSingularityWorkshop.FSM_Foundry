@@ -19,15 +19,14 @@
     "feature/foundry-host-repository-operation-gate",
     "feature/foundry-hub-execution-contract",
     "feature/foundry-pinned-artifact-transport",
-    "feature/foundry-workflow-context-v2",
     "fix/code-red-expired-lease-reclaim",
     "identity/fsm-foundry-repo-reference-alignment",
     "master",
     "work/explicit-workflow-timeouts"
   ],
-  "branch_count": 18,
+  "branch_count": 17,
   "status": "NON-COMPLIANT",
-  "evaluated_at": "2026-11-08T11:17:38Z",
-  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42475085838",
-  "triggering_commit": "e4ecc69c98b4d307990cd9624654b8f4ea2e2551"
+  "evaluated_at": "2026-11-09T04:19:25Z",
+  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42561151907",
+  "triggering_commit": "2319912dd79631951eb04cbeee562c7bd3abc137"
 }
