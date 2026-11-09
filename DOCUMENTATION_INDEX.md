@@ -20,6 +20,7 @@
 - [Repository capability registry](src/Foundry.Workflow/WorkTaskCapabilityRegistry.md) — lease-bound grant scope, invalidation, and limits.
 - [Repository operation dispatcher](src/Foundry.Workflow/AuthorizedRepositoryOperationDispatcher.md) — typed operation boundary, revalidation, audit, and workflow integration.
 - [Repository operation authorization UML](docs/UML/RepositoryOperationAuthorizationUML.md) — capability/dispatcher class neighborhood and transport sequence.
+- [Repair decision policy UML](docs/UML/WorkTaskRepairDecisionPolicyUML.md) — exact CI provenance checks, bounded retry decisions, CODE RED escalation, and attempt-journal semantics.
 - [GitHub repository adapter](src/Foundry.GitHubHost/GitHubRepositoryOperationAdapter.md) — concrete GitHub repository operations, token boundary, staging, and commit verification.
 - [GitHub Actions dispatcher](src/Foundry.GitHubHost/GitHubActionsWorkflowDispatcher.md) — trusted workflow source, durable dispatch correlation, and exact-attempt verification.
 - [GitHub host adapter UML](docs/UML/GitHubHostAdapterUML.md) — repository operation and CI dispatch sequences.
@@ -56,7 +57,7 @@ Status labels in this table are scoped to the active feature branch unless expli
 
 ## Verification notes
 
-PR #26's latest documentation head `058c4c6c04fa613318c591218bb07ccbd2904729` passed exact-head CI run [#42467475333](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42467475333). The run validates the workflow build/test path for the HeadlessAi bridge UML and corrected documentation inventory. The trusted `workflow_dispatch`-only candidate checkout/provenance path remains unexercised by push/PR CI and still requires an authorized live dispatch. Earlier exact-head runs on the implementation also passed ordinary workflow tests, builds, the separate-process FSM_API probe, repeated Fox/Sheepdog execution/comparison, and evidence upload; those results do not substitute for the dispatch-only runtime proof.
+PR #26 latest head `3ebf6e0b097e208255190ba496dac04959802260` passed exact-head push CI run [#42467586819](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/42467586819). The run completed successfully and validates the ordinary build/test path, separate-process FSM_API probe, repeated Fox/Sheepdog execution/comparison, and evidence upload. It was a `push` event, so the `workflow_dispatch`-only candidate checkout/provenance steps were skipped. A live authorized dispatch and host-side artifact retrieval/validation remain unproven.
 
 ## Update rule
 
