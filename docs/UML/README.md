@@ -3,7 +3,7 @@
 
 # Foundry UML and Source Documentation
 
-**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, workflow execution coordinator, governed task coordinator, CODE RED recovery authorization, HeadlessAi turn bridge, capability/dispatcher boundary, and GitHub host adapter. The architecture guide contains a component/authority-flow diagram for the expanded governed-work domain. Automated generation and stale-view detection are not implemented.
+**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, workflow execution coordinator, governed task coordinator, CODE RED recovery authorization, bounded repair decision policy, HeadlessAi turn bridge, capability/dispatcher boundary, and GitHub host adapter. The architecture guide contains a component/authority-flow diagram for the expanded governed-work domain. Automated generation and stale-view detection are not implemented.
 
 ## Principles
 
@@ -41,6 +41,7 @@ Only add a view when there is sufficient evidence. Mark unimplemented flows as t
 - [Repository operation authorization neighborhood and sequence](RepositoryOperationAuthorizationUML.md) — host capability scope, double-demand dispatch boundary, audit intent, and adapter invocation.
 - [GitHub host adapter neighborhood and sequences](GitHubHostAdapterUML.md) — candidate branch/read/stage/commit path plus trusted-source CI dispatch and exact-attempt verification.
 - [HeadlessAi turn bridge neighborhood and sequences](HeadlessAiTurnBridgeUML.md) — lease gate, immutable request snapshot, durable at-most-once invocation, provenance validation, and stale-lease recovery.
+- [WorkTaskRepairDecisionPolicy flow](WorkTaskRepairDecisionPolicyUML.md) — exact evidence identity, attempt ordering, bounded repair decisions, and CODE RED stop conditions.
 - [Coordinator source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md) — purpose, public commands, limits, and tests.
 - [WorkTaskCoordinator source companion](../../src/Foundry.Workflow/WorkTaskCoordinator.md) — task envelope, leases, evidence-gated transitions, recovery, and persistence boundary.
 - [CODE RED recovery receipt source companion](../../src/Foundry.Workflow/CodeRedRecoveryApprovalReceipt.md) — canonical signing payload, receipt scope, verification, replay, and host responsibilities.
@@ -54,7 +55,7 @@ Only add a view when there is sufficient evidence. Mark unimplemented flows as t
 - [Fox/Sheepdog neighborhood](FoundryFoxSheepdogUML.md) — deterministic multi-state demonstration.
 - [Architecture diagram](../ARCHITECTURE.md#1-system-shape) — current component and authority flow; it is an authored architecture view grounded in the source ownership boundaries, not generated UML.
 
-The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The workflow, task, CODE RED, HeadlessAi, repository-authorization, and GitHub host neighborhoods now have dedicated manual views. UML generation, stale-view detection, and automatic source synchronization remain unimplemented.
+The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The workflow, task, CODE RED, repair-decision, HeadlessAi, repository-authorization, and GitHub host neighborhoods now have dedicated manual views. UML generation, stale-view detection, and automatic source synchronization remain unimplemented.
 
 ## Validation expectations
 
