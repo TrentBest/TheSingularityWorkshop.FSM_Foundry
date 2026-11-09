@@ -3,7 +3,7 @@
 
 # WorkflowExecutionCoordinator — UML Neighborhood
 
-**Status:** source-grounded view of the PR #10 feature-branch implementation; the timeout extension is not yet part of `development`. The combined lifecycle and timeout tests passed [feature-branch CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768).
+**Status:** source-grounded view of the current `development` implementation at `dc1324f9bfcc61e6de32f7c52d7686025976f00b`. The timeout outcome and cancellation-precedence behavior are implemented and tested on the canonical development branch; exact-head CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed.
 
 ## Neighborhood
 
@@ -107,4 +107,4 @@ sequenceDiagram
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>

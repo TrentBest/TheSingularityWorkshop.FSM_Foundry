@@ -24,7 +24,7 @@ The coordinator is in-process and in-memory. It does not provide durable run his
 
 ## Verification
 
-See [WorkflowExecutionCoordinatorTests](../../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs) for lifecycle, cancellation, finite/infinite timeout, invalid timeout values, caller-cancellation precedence, non-cooperative handlers, invalid workflows, and single-start behavior. The feature-branch implementation passed [Foundry CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768), including the workflow test suite and build.
+See [WorkflowExecutionCoordinatorTests](../../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs) for lifecycle, cancellation, finite/infinite timeout, invalid timeout values, caller-cancellation precedence, non-cooperative handlers, invalid workflows, and single-start behavior. The current implementation is present on `development` at `dc1324f9bfcc61e6de32f7c52d7686025976f00b`; exact-head development CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed.
 
 ## UML
 
@@ -33,4 +33,4 @@ See the [WorkflowExecutionCoordinator neighborhood](../../docs/UML/WorkflowExecu
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>

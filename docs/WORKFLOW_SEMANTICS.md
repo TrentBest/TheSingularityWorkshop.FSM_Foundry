@@ -3,7 +3,7 @@
 
 # Workflow Semantics — Version 1
 
-**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and retained run lifecycle passed development CI run #84; the optional timeout extension and its cancellation-precedence tests passed feature-branch [Foundry CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768). This feature-branch extension is not yet part of `development`. This does not describe persisted manifests, distributed execution, or a general automation engine.
+**Status:** implementation-backed theory for the current Foundry workflow runtime. The sequential runner, retained run lifecycle, bounded per-run JSON context, optional timeout outcome, and cancellation-precedence behavior are present on `development` at `dc1324f9bfcc61e6de32f7c52d7686025976f00b`; exact-head development CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed. This does not describe persisted manifests, distributed execution, or a general automation engine.
 
 ## The execution model
 
@@ -110,9 +110,9 @@ Context is in-memory only and is not part of durable task or workflow journals. 
 - [Runner tests](../tests/Foundry.Workflow.Tests/WorkflowRunnerTests.cs)
 - [Lifecycle tests](../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 
-Development CI run #84 passed the original runner/lifecycle tests. Feature-branch [CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768) passed the timeout/cancellation tests, full workflow test suite, build, separate-process FSM_API probe, repeatable fox/sheepdog scenario, and evidence artifact upload. This document must be revised if the contract or tests change.
+Development exact-head CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed on `dc1324f9bfcc61e6de32f7c52d7686025976f00b`, covering the current workflow runtime, tests, build, FSM_API probe, and deterministic Fox/Sheepdog evidence. The timeout outcome and cancellation-precedence behavior are therefore part of the current development implementation, not merely a feature-branch extension. This document must be revised if the contract or tests change.
 
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
