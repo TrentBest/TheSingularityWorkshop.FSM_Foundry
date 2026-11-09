@@ -95,6 +95,7 @@ sequenceDiagram
 - The existing runner remains the sole sequential step executor and definition validator.
 - `WorkflowResult` remains the workflow outcome; `WorkflowRunStatus` adds lifecycle states such as `Accepted` and `Running`.
 - The snapshot is observational and immutable. A presentation layer must send commands through the coordinator rather than mutate state.
+- The supplied `WorkflowExecutionContext` is retained by reference; the coordinator does not freeze or clone it on submission. The host must stop mutating/sharing it after acceptance. This is a convention, not an enforced ownership-transfer boundary.
 - FSM_COS `RuntimeAssembly` and WebPage process-group updates are separate contracts; this diagram does not claim they are workflow definitions or results.
 
 ## Source and tests

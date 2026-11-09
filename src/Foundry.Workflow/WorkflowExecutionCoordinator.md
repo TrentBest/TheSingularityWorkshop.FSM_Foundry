@@ -20,7 +20,7 @@ The runner is a single awaited invocation. A Hub presentation or headless host n
 - `Cancel(runId)` requests cooperative cancellation, including cancellation before start.
 - `DisposeAsync()` cancels outstanding work and waits for its completion.
 
-The coordinator is in-process and in-memory. It does not provide durable run history, a persisted queue, retries, or a cross-process transport. Timeouts request cooperative cancellation; they do not forcibly stop handlers that ignore their cancellation token. If caller cancellation and timeout are both requested before the terminal lifecycle transition, caller cancellation takes precedence. Timeout and linked cancellation sources are released after execution; caller-cancellation sources remain until coordinator disposal.
+The coordinator is in-process and in-memory. It does not provide durable run history, a persisted queue, retries, or a cross-process transport. `Submit(definition, context)` retains the supplied context reference without cloning or freezing it; any holder can still call `SetOutput` after acceptance. Hosts must treat submission as an ownership handoff and stop mutating/sharing the context. That handoff is currently a host convention, not an enforced API invariant. Timeouts request cooperative cancellation; they do not forcibly stop handlers that ignore their cancellation token. If caller cancellation and timeout are both requested before the terminal lifecycle transition, caller cancellation takes precedence. Timeout and linked cancellation sources are released after execution; caller-cancellation sources remain until coordinator disposal.
 
 ## Verification
 

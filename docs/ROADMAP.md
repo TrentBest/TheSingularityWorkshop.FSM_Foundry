@@ -65,6 +65,7 @@
 ## Cross-cutting requirements
 
 - Preserve the boundary between workflow-run lifecycle and governed-task lifecycle.
+- Harden workflow-context ownership: `WorkflowExecutionCoordinator.Submit` currently retains the caller-supplied context by reference without freezing or snapshotting it; host-side non-mutation after acceptance is a convention rather than an enforced invariant.
 - Keep `WorkflowRunner` as the only sequential executor.
 - Keep FSM_API responsible for FSM mechanics; do not add a parallel mutable transition graph.
 - Keep FSM_COS composition separate from Foundry execution.

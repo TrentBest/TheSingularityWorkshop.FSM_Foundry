@@ -66,7 +66,7 @@ The context carries JSON data only:
 - Handlers can write outputs once with `SetOutput<T>`; later handlers read them through `GetOutput<T>` / `TryGetOutput<T>`.
 - Inputs cannot be replaced by outputs, and duplicate output keys are rejected.
 - The combined context is limited to 128 entries, 64 KiB per serialized JSON value, 1 MiB aggregate serialized value bytes, and JSON depth 32. Keys are non-empty, control-free, and at most 128 characters.
-- A context is intended for one accepted run. Hosts should create a fresh context for each run; outputs are mutable run state.
+- A context is intended for one accepted run. Hosts should create a fresh context for each run; outputs are mutable run state. `Submit` retains the exact context instance supplied by the caller: it does not clone or freeze the context. Inputs were cloned when the context was constructed, but any holder of the context reference can still call `SetOutput` after submission. Treat submission as a convention-based ownership handoff: the host must stop mutating and sharing the context after acceptance. Enforced ownership transfer or an immutable submission snapshot is not implemented.
 - Context values do not select handlers or grant filesystem, network, process, GitHub, CI, or publishing authority. The host-owned registry remains the allowlist of operations.
 
 Context is in-memory only and is not part of durable task or workflow journals. It is not restored after process loss and does not change sequential execution, retries, compensation, or lifecycle semantics. See the [Workflow Execution Context guide](WORKFLOW_EXECUTION_CONTEXT.md) for the API and examples.
