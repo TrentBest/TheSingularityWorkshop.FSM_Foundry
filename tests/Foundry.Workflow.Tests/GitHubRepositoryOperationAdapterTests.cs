@@ -341,8 +341,10 @@ public sealed class GitHubRepositoryOperationAdapterTests
             actionsDispatcher: actions);
         var operation = new RequestRepositoryCiOperation(
             "task-123", Repository, "agents/task-123", CandidateSha, "proof");
+        var executionContext = new TheSingularityWorkshop.Foundry.RepositoryOperationExecutionContext(
+            new string('1', 32), new string('2', 32), "task-123", "correlation-123");
 
-        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+        var result = await adapter.ExecuteAsync(operation, executionContext, CancellationToken.None);
 
         Assert.Equal(CandidateSha, result.RequestedCandidateSha);
         Assert.Equal(CandidateSha, result.ResultingCandidateSha);
