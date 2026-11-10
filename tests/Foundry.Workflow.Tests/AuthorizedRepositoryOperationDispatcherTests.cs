@@ -101,6 +101,10 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         Assert.NotNull(entry.RequestPayloadSha256);
         Assert.Equal(64, entry.RequestPayloadSha256!.Length);
         Assert.Equal("fake-operation-1", entry.OperationReference);
+        Assert.Equal("correlation-8", entry.CorrelationId);
+        Assert.Equal(32, entry.OperationId.Length);
+        Assert.Equal(32, entry.IdempotencyKey.Length);
+        Assert.NotEqual(entry.OperationId, entry.IdempotencyKey);
         var journalText = File.ReadAllText(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
         Assert.DoesNotContain(privateContent, journalText, StringComparison.Ordinal);
         var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
@@ -124,6 +128,23 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         Assert.Null(entry.FailureType);
         Assert.Null(entry.OperationReference);
         Assert.Null(entry.ResultingCandidateSha);
+    }
+
+    [Fact]
+    public void OperationAndIdempotencyIdentitiesAreGeneratedOnceAndSurviveJournalReplay()
+    {
+        using var fixture = new Fixture();
+        var operation = new RequestRepositoryCiOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "trusted-workflow");
+        var pending = fixture.Journal.Begin(operation, "correlation-8", Now.AddMinutes(1));
+
+        var reopened = new JsonlRepositoryOperationJournal(Path.Combine(fixture.JournalDirectory, "operations.jsonl"));
+        var replayed = Assert.Single(reopened.GetAll());
+
+        Assert.Equal(pending.OperationId, replayed.OperationId);
+        Assert.Equal(pending.IdempotencyKey, replayed.IdempotencyKey);
+        Assert.Equal("correlation-8", replayed.CorrelationId);
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, replayed.Status);
     }
 
     [Fact]
