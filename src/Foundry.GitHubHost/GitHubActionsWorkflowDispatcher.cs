@@ -291,13 +291,17 @@ public sealed class GitHubActionsWorkflowDispatcher
     }
 
     /// <summary>Rehydrates a receipt after process restart without issuing another dispatch.</summary>
-    public GitHubActionsDispatchReceipt GetDispatchReceipt(string requestId)
-    {
-        var record = _journal.Get(requestId);
-        return new GitHubActionsDispatchReceipt(record.RequestId, record.TaskId, record.Repository,
+    public GitHubActionsDispatchReceipt GetDispatchReceipt(string requestId) =>
+        CreateReceipt(_journal.Get(requestId));
+
+    /// <summary>Recovers an existing dispatch by the operation identity persisted before transport.</summary>
+    public GitHubActionsDispatchReceipt GetDispatchReceiptForOperation(string operationId) =>
+        CreateReceipt(_journal.GetByOperationId(operationId));
+
+    private static GitHubActionsDispatchReceipt CreateReceipt(GitHubActionsDispatchRecord record) =>
+        new(record.RequestId, record.TaskId, record.Repository,
             record.WorkflowFile, record.WorkflowPath, record.Branch, record.CandidateSha,
             record.TrustedWorkflowRef, record.TrustedWorkflowSha, record.AcknowledgedAt ?? record.CreatedAt);
-    }
 
     /// <summary>
     /// Reads the exact run attempt's jobs endpoint and verifies every configured required job.
