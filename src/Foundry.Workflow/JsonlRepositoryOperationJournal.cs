@@ -34,15 +34,19 @@ public sealed record RepositoryOperationAuditEntry(
     DateTimeOffset? CompletedAt,
     string? OperationReference,
     string? ResultingCandidateSha,
-    string? FailureType)
+    string? FailureType,
+    string IdempotencyKey,
+    string CorrelationId)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 }
 
 /// <summary>Storage port for durable repository-operation audit records.</summary>
 public interface IRepositoryOperationAuditJournal
 {
     RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt);
+    RepositoryOperationAuditEntry Begin(
+        RepositoryOperation operation, string correlationId, DateTimeOffset startedAt);
     RepositoryOperationAuditEntry Complete(string operationId, RepositoryOperationResult result, DateTimeOffset completedAt);
     RepositoryOperationAuditEntry Fail(string operationId, Exception exception, DateTimeOffset failedAt);
     IReadOnlyList<RepositoryOperationAuditEntry> GetAll();
@@ -83,13 +87,19 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
     }
 
     /// <summary>Persists a non-secret Pending record before any external side effect is invoked.</summary>
-    public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt)
+    public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt) =>
+        Begin(operation, operation?.TaskId ?? throw new ArgumentNullException(nameof(operation)), startedAt);
+
+    public RepositoryOperationAuditEntry Begin(
+        RepositoryOperation operation, string correlationId, DateTimeOffset startedAt)
     {
         ArgumentNullException.ThrowIfNull(operation);
+        RepositoryOperation.RequireText(correlationId, nameof(correlationId), 128);
         if (startedAt == default)
             throw new ArgumentException("An operation start timestamp is required.", nameof(startedAt));
 
         var operationId = Guid.NewGuid().ToString("N");
+        var idempotencyKey = Guid.NewGuid().ToString("N");
         var entry = new RepositoryOperationAuditEntry(
             RepositoryOperationAuditEntry.CurrentSchemaVersion,
             0,
@@ -107,7 +117,9 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
             null,
             null,
             null,
-            null);
+            null,
+            idempotencyKey,
+            correlationId);
 
         lock (_gate)
         {
@@ -323,7 +335,7 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
 
     private static void ValidateRecord(RepositoryOperationAuditEntry entry)
     {
-        if (entry.SchemaVersion != RepositoryOperationAuditEntry.CurrentSchemaVersion ||
+        if (entry.SchemaVersion is not (1 or RepositoryOperationAuditEntry.CurrentSchemaVersion) ||
             entry.Sequence < 1 || string.IsNullOrEmpty(entry.OperationId) || entry.OperationId.Length != 32 ||
             !Guid.TryParseExact(entry.OperationId, "N", out _) ||
             entry.StartedAt == default ||
@@ -331,6 +343,13 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
             !Enum.IsDefined(action) || !Enum.IsDefined(entry.Status))
             throw new ArgumentException("Repository operation audit schema, identity, or state is invalid.");
         RepositoryOperation.RequireText(entry.TaskId, nameof(entry.TaskId), 128);
+        if (entry.SchemaVersion == RepositoryOperationAuditEntry.CurrentSchemaVersion)
+        {
+            if (entry.IdempotencyKey is not { Length: 32 } ||
+                !Guid.TryParseExact(entry.IdempotencyKey, "N", out _))
+                throw new ArgumentException("Repository operation idempotency identity is invalid.");
+            RepositoryOperation.RequireText(entry.CorrelationId, nameof(entry.CorrelationId), 128);
+        }
         RepositoryOperation.RequireText(entry.Repository, nameof(entry.Repository), 256);
         RepositoryOperation.RequireText(entry.Branch, nameof(entry.Branch), 256);
         RepositoryOperation.RequireSha(entry.CandidateSha, nameof(entry.CandidateSha));
@@ -364,7 +383,8 @@ public sealed class JsonlRepositoryOperationJournal : IRepositoryOperationAuditJ
         left.Repository == right.Repository && left.Branch == right.Branch &&
         left.OperationType == right.OperationType && left.Action == right.Action &&
         left.CandidateSha == right.CandidateSha && left.Path == right.Path &&
-        left.RequestPayloadSha256 == right.RequestPayloadSha256 && left.StartedAt == right.StartedAt;
+        left.RequestPayloadSha256 == right.RequestPayloadSha256 && left.StartedAt == right.StartedAt &&
+        left.IdempotencyKey == right.IdempotencyKey && left.CorrelationId == right.CorrelationId;
 
     private static string GetOperationType(RepositoryOperation operation) => operation switch
     {
