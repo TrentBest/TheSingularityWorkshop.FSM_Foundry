@@ -177,44 +177,52 @@ public sealed class AuthorizedRepositoryOperationDispatcher
 
         _capabilities.Demand(capabilityId, task, operation.Branch, operation.CandidateSha,
             operation.Action, operation.Path, now);
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Persist intent before invoking the host: a crash after the external side effect leaves
-        // a Pending record that must be reconciled, not replayed automatically.
+        // Persist intent before waiting for the per-task reservation. A crash or ambiguous
+        // transport outcome leaves Pending for explicit reconciliation, never automatic replay.
         var audit = _journal.Begin(operation, now);
-        RepositoryOperationResult result;
+        var transportStarted = false;
         try
         {
-            // Recheck after the durable write to close the journal-I/O time-of-check window.
-            var latestTask = _tasks.GetSnapshot(operation.TaskId);
-            if (!string.Equals(latestTask.Request.Repository, operation.Repository, StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("Operation repository no longer matches the durable task.");
-            _capabilities.Demand(capabilityId, latestTask, operation.Branch, operation.CandidateSha,
-                operation.Action, operation.Path, _clock());
-            cancellationToken.ThrowIfCancellationRequested();
+            return await _tasks.ExecuteSerializedAsync(operation.TaskId, async token =>
+            {
+                // Lifecycle mutations for this task use the same reservation. This final
+                // demand therefore remains valid through adapter completion and audit commit.
+                var latestTask = _tasks.GetSnapshot(operation.TaskId);
+                if (!string.Equals(latestTask.Request.Repository, operation.Repository, StringComparison.OrdinalIgnoreCase))
+                    throw new UnauthorizedAccessException("Operation repository no longer matches the durable task.");
+                _capabilities.Demand(capabilityId, latestTask, operation.Branch, operation.CandidateSha,
+                    operation.Action, operation.Path, _clock());
+                token.ThrowIfCancellationRequested();
 
-            result = await _adapter.ExecuteAsync(operation, cancellationToken).ConfigureAwait(false);
-            ArgumentNullException.ThrowIfNull(result);
-            if (string.IsNullOrWhiteSpace(result.OperationReference) ||
-                result.OperationReference.Length > 512 || result.OperationReference.Any(char.IsControl) ||
-                !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
-                result.ResultingCandidateSha is not { Length: 40 } ||
-                !result.ResultingCandidateSha.All(Uri.IsHexDigit))
-                throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
+                transportStarted = true;
+                RepositoryOperationResult result = await _adapter.ExecuteAsync(operation, token).ConfigureAwait(false);
+                ArgumentNullException.ThrowIfNull(result);
+                if (string.IsNullOrWhiteSpace(result.OperationReference) ||
+                    result.OperationReference.Length > 512 || result.OperationReference.Any(char.IsControl) ||
+                    !string.Equals(result.RequestedCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+                    result.ResultingCandidateSha is not { Length: 40 } ||
+                    !result.ResultingCandidateSha.All(Uri.IsHexDigit))
+                    throw new InvalidOperationException("Repository adapter returned invalid operation provenance.");
 
-            if (operation is not CreateRepositoryCommitOperation &&
-                !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Only an explicit commit operation may advance the authorized candidate SHA.");
+                if (operation is not CreateRepositoryCommitOperation &&
+                    !string.Equals(result.ResultingCandidateSha, operation.CandidateSha, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Only an explicit commit operation may advance the authorized candidate SHA.");
+
+                // Do not persist adapter Detail: it is host-controlled text and may contain secrets.
+                _journal.Complete(audit.OperationId, result, _clock());
+                return result;
+            }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            _journal.Fail(audit.OperationId, exception, _clock());
+            // Before transport starts, failure is known and can be terminal. Once the adapter
+            // is invoked, an exception/cancellation may follow a remote side effect; retain
+            // Pending so the host must reconcile rather than misreporting failure or retrying.
+            if (!transportStarted)
+                _journal.Fail(audit.OperationId, exception, _clock());
             throw;
         }
-
-        // Do not persist adapter Detail: it is host-controlled text and may contain secrets.
-        _journal.Complete(audit.OperationId, result, _clock());
-        return result;
     }
 }
