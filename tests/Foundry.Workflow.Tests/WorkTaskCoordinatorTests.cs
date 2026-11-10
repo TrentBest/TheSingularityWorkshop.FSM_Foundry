@@ -174,6 +174,27 @@ public sealed class WorkTaskCoordinatorTests
 
 
     [Fact]
+    public void RejectedValidationTransitionDoesNotConsumeAttemptOrMutateTaskHistory()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var claimed = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(5), Now);
+        var before = coordinator.GetSnapshot("foundry-8");
+
+        Assert.Equal(WorkTaskStatus.Claimed, before.Status);
+        Assert.Equal(0, before.Attempt);
+        Assert.Throws<InvalidOperationException>(() =>
+            coordinator.Transition("foundry-8", claimed.Lease!.LeaseId,
+                WorkTaskStatus.Validating, Now.AddSeconds(1), "invalid direct validation"));
+
+        var after = coordinator.GetSnapshot("foundry-8");
+        Assert.Equal(before.Status, after.Status);
+        Assert.Equal(before.Attempt, after.Attempt);
+        Assert.Equal(before.Lease, after.Lease);
+        Assert.Equal(before.Events, after.Events);
+    }
+
+    [Fact]
     public void RetryBudgetCannotBeBypassedThroughCodeRed()
     {
         var coordinator = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
