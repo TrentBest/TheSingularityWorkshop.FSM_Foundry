@@ -8,6 +8,71 @@ public sealed class WorkTaskCoordinatorTests
     private static readonly DateTimeOffset Now = new(2026, 10, 30, 20, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void PersistentCoordinatorDisposesIdempotentlyAndRejectsFurtherOperations()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var store = new JsonlWorkTaskStore(path);
+            using (var original = new WorkTaskCoordinator())
+                store.Create(original.Submit(Request()));
+
+            var persistent = new PersistentWorkTaskCoordinator(store);
+            persistent.Dispose();
+            persistent.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => persistent.GetSnapshot("foundry-8"));
+            Assert.Throws<ObjectDisposedException>(() => persistent.Submit(Request(taskId: "another-task")));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void PersistentCoordinatorDisposesPartialRestoreWhenLaterApprovalCannotBeAuthenticated()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var store = new JsonlWorkTaskStore(path);
+            using (var original = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier()))
+            {
+                store.Create(original.Submit(Request(taskId: "a-first-task")));
+                store.Create(original.Submit(Request()));
+                var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!.LeaseId;
+                store.Append(original.GetSnapshot("foundry-8"));
+                original.Transition("foundry-8", lease, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+                store.Append(original.GetSnapshot("foundry-8"));
+                original.Transition("foundry-8", lease, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
+                store.Append(original.GetSnapshot("foundry-8"));
+                original.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now.AddSeconds(3), "validate");
+                store.Append(original.GetSnapshot("foundry-8"));
+                original.Transition("foundry-8", lease, WorkTaskStatus.CodeRed, Now.AddSeconds(4), "blocked");
+                store.Append(original.GetSnapshot("foundry-8"));
+                var incident = TestIncident();
+                var receipt = TestReceipt(taskEventSequence: 5, incidentSequence: incident.Sequence) with
+                {
+                    IssuedAt = Now.AddSeconds(5),
+                    ExpiresAt = Now.AddMinutes(6)
+                };
+                var recovered = original.RecoverFromCodeRed("foundry-8", lease, incident, receipt,
+                    Now.AddMinutes(1), "approved recovery");
+                store.Append(recovered);
+            }
+
+            Assert.Throws<UnauthorizedAccessException>(() => new PersistentWorkTaskCoordinator(store));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void SubmitValidatesAndRetainsVersionedTaskProvenance()
     {
         var coordinator = new WorkTaskCoordinator();
@@ -32,6 +97,46 @@ public sealed class WorkTaskCoordinatorTests
         Assert.Throws<InvalidOperationException>(() =>
             coordinator.Transition("foundry-8", claimed.Lease!.LeaseId,
                 WorkTaskStatus.Investigating, Now.AddMinutes(3), "stale owner"));
+    }
+
+    [Fact]
+    public void ExpiredCodeRedLeaseCannotBeReclaimedAndLeavesHistoryUnchanged()
+    {
+        using var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var lease = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(1), Now).Lease!;
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Implementing, Now.AddSeconds(2), "implement");
+        coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.Validating, Now.AddSeconds(3), "validate");
+        var codeRed = coordinator.Transition("foundry-8", lease.LeaseId, WorkTaskStatus.CodeRed,
+            Now.AddSeconds(4), "validation blocked");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            coordinator.Claim("foundry-8", "agent-b", TimeSpan.FromMinutes(1), Now.AddMinutes(2)));
+
+        var after = coordinator.GetSnapshot("foundry-8");
+        Assert.Equal(WorkTaskStatus.CodeRed, after.Status);
+        Assert.Equal(codeRed.Lease, after.Lease);
+        Assert.Equal(codeRed.Events, after.Events);
+    }
+
+    [Fact]
+    public void RestoreReplaysDurableTaskHistoryIntoFsmApiBeforeResuming()
+    {
+        using var original = new WorkTaskCoordinator();
+        original.Submit(Request());
+        var lease = original.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(10), Now).Lease!;
+        var investigating = original.Transition("foundry-8", lease.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddSeconds(1), "inspect");
+
+        using var restored = new WorkTaskCoordinator();
+        restored.Restore(investigating);
+
+        Assert.Equal(WorkTaskStatus.Investigating, restored.GetSnapshot("foundry-8").Status);
+        var resumed = restored.Transition("foundry-8", lease.LeaseId,
+            WorkTaskStatus.Implementing, Now.AddSeconds(2), "resume after replay");
+        Assert.Equal(WorkTaskStatus.Implementing, resumed.Status);
+        Assert.Equal(3, resumed.Events.Count);
     }
 
     [Fact]
@@ -69,6 +174,27 @@ public sealed class WorkTaskCoordinatorTests
 
 
     [Fact]
+    public void RejectedValidationTransitionDoesNotConsumeAttemptOrMutateTaskHistory()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var claimed = coordinator.Claim("foundry-8", "agent-a", TimeSpan.FromMinutes(5), Now);
+        var before = coordinator.GetSnapshot("foundry-8");
+
+        Assert.Equal(WorkTaskStatus.Claimed, before.Status);
+        Assert.Equal(0, before.Attempt);
+        Assert.Throws<InvalidOperationException>(() =>
+            coordinator.Transition("foundry-8", claimed.Lease!.LeaseId,
+                WorkTaskStatus.Validating, Now.AddSeconds(1), "invalid direct validation"));
+
+        var after = coordinator.GetSnapshot("foundry-8");
+        Assert.Equal(before.Status, after.Status);
+        Assert.Equal(before.Attempt, after.Attempt);
+        Assert.Equal(before.Lease, after.Lease);
+        Assert.Equal(before.Events, after.Events);
+    }
+
+    [Fact]
     public void RetryBudgetCannotBeBypassedThroughCodeRed()
     {
         var coordinator = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
@@ -95,6 +221,26 @@ public sealed class WorkTaskCoordinatorTests
         Assert.Throws<InvalidOperationException>(() =>
             coordinator.Transition("foundry-8", lease, WorkTaskStatus.Validating, Now, "attempt beyond budget"));
         Assert.Equal(1, coordinator.GetSnapshot("foundry-8").Attempt);
+
+        // Restart must authenticate the persisted approval again; presence and shape
+        // of receipt metadata alone must never authorize replay of the guarded FSM edge.
+        using var restored = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
+        restored.Restore(recovered);
+        Assert.Equal(WorkTaskStatus.Investigating, restored.GetSnapshot("foundry-8").Status);
+
+        using var noVerifier = new WorkTaskCoordinator();
+        Assert.Throws<UnauthorizedAccessException>(() => noVerifier.Restore(recovered));
+
+        var tamperedEvent = recovered.Events[^1] with
+        {
+            ApprovalReceipt = recovered.Events[^1].ApprovalReceipt! with { Signature = "tampered-signature" }
+        };
+        var tampered = recovered with
+        {
+            Events = recovered.Events.Take(recovered.Events.Count - 1).Append(tamperedEvent).ToArray()
+        };
+        using var tamperedRestore = new WorkTaskCoordinator(new TestRecoveryReceiptVerifier());
+        Assert.Throws<UnauthorizedAccessException>(() => tamperedRestore.Restore(tampered));
     }
 
     [Fact]
