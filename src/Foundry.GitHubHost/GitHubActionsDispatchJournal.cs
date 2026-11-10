@@ -200,10 +200,19 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             }
             if (record.SchemaVersion is not (2 or 3) || record.Sequence != _sequence + 1)
                 throw new InvalidDataException("Dispatch journal schema or sequence is invalid.");
-            ValidateIdentity(record.RequestId, record.TaskId, record.Repository, record.WorkflowFile,
-                record.WorkflowPath, record.Branch, record.CandidateSha, record.TrustedWorkflowRef,
-                record.TrustedWorkflowSha, record.OperationId, record.IdempotencyKey, record.CorrelationId,
-                record.CreatedAt);
+            if (record.SchemaVersion == 2)
+            {
+                ValidateLegacyIdentity(record.RequestId, record.TaskId, record.Repository, record.WorkflowFile,
+                    record.WorkflowPath, record.Branch, record.CandidateSha, record.TrustedWorkflowRef,
+                    record.TrustedWorkflowSha, record.CreatedAt);
+            }
+            else
+            {
+                ValidateIdentity(record.RequestId, record.TaskId, record.Repository, record.WorkflowFile,
+                    record.WorkflowPath, record.Branch, record.CandidateSha, record.TrustedWorkflowRef,
+                    record.TrustedWorkflowSha, record.OperationId, record.IdempotencyKey, record.CorrelationId,
+                    record.CreatedAt);
+            }
             if (!_records.TryGetValue(record.RequestId, out var previous))
             {
                 if (record.State != GitHubActionsDispatchState.Dispatching ||
@@ -277,6 +286,25 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                 Thread.Sleep(20);
             }
         }
+    }
+
+    private static void ValidateLegacyIdentity(
+        string requestId, string taskId, string repository, string workflowFile, string workflowPath,
+        string branch, string candidateSha, string trustedWorkflowRef, string trustedWorkflowSha,
+        DateTimeOffset createdAt)
+    {
+        if (requestId is not { Length: 32 } || !requestId.All(Uri.IsHexDigit) ||
+            string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl) ||
+            string.IsNullOrWhiteSpace(repository) || repository.Length > 200 || repository.Any(char.IsControl) ||
+            string.IsNullOrWhiteSpace(workflowFile) || workflowFile.Length > 128 ||
+            string.IsNullOrWhiteSpace(workflowPath) || workflowPath.Length > 256 ||
+            !workflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(branch) || branch.Length > 200 || branch.Any(char.IsControl) ||
+            candidateSha is not { Length: 40 } || !candidateSha.All(Uri.IsHexDigit) ||
+            trustedWorkflowRef != "development" ||
+            trustedWorkflowSha is not { Length: 40 } || !trustedWorkflowSha.All(Uri.IsHexDigit) ||
+            createdAt == default)
+            throw new ArgumentException("Legacy dispatch journal identity is invalid.");
     }
 
     private static void ValidateIdentity(
