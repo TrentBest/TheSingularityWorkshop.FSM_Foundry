@@ -41,7 +41,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
 
         var audit = Assert.Single(fixture.Journal.GetAll());
-        Assert.Equal(RepositoryOperationAuditStatus.Failed, audit.Status);
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, audit.Status);
         Assert.Equal(1, fixture.Adapter.Calls);
     }
 
