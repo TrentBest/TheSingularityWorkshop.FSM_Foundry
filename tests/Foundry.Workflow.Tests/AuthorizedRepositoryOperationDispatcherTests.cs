@@ -448,10 +448,15 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
 
         var dispatch = dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)).AsTask();
         await adapter.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var transition = Task.Run(() => fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
-            WorkTaskStatus.Investigating, Now.AddMinutes(2), "Transition queued behind dispatch."));
+        var transitionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var transition = Task.Run(() =>
+        {
+            transitionStarted.TrySetResult();
+            return fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
+                WorkTaskStatus.Investigating, Now.AddMinutes(2), "Transition queued behind dispatch.");
+        });
 
-        await Task.Delay(100);
+        await transitionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.False(transition.IsCompleted);
 
         adapter.Release.TrySetResult();
