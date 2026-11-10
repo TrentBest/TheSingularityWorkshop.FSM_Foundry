@@ -30,7 +30,9 @@ public sealed class GitHubRepositoryOperationAdapterTests
         var operation = new CreateRepositoryBranchOperation(
             "task-123", Repository, "agents/task-123", CandidateSha);
 
-        var result = await adapter.ExecuteAsync(operation, CancellationToken.None);
+        var executionContext = new TheSingularityWorkshop.Foundry.RepositoryOperationExecutionContext(
+            new string('1', 32), new string('2', 32), "task-123", "correlation-123");
+        var result = await adapter.ExecuteAsync(operation, executionContext, CancellationToken.None);
 
         Assert.Equal(CandidateSha, result.RequestedCandidateSha);
         Assert.Equal(CandidateSha, result.ResultingCandidateSha);
@@ -350,10 +352,18 @@ public sealed class GitHubRepositoryOperationAdapterTests
         Assert.Equal("development", payload.RootElement.GetProperty("ref").GetString());
         var inputs = payload.RootElement.GetProperty("inputs");
         Assert.Equal("agents/task-123", inputs.GetProperty("candidate_ref").GetString());
-        var requestId = inputs.GetProperty("foundry_request_id").GetString()!;
+        var requestId = inputs.GetProperty("request_id").GetString()!;
+        Assert.Equal(new string('1', 32), inputs.GetProperty("operation_id").GetString());
+        Assert.Equal(new string('2', 32), inputs.GetProperty("idempotency_key").GetString());
+        Assert.Equal("task-123", inputs.GetProperty("task_id").GetString());
+        Assert.Equal("correlation-123", inputs.GetProperty("correlation_id").GetString());
+        Assert.NotEqual(requestId, inputs.GetProperty("operation_id").GetString());
         Assert.Equal("github:actions-dispatch:" + requestId, result.OperationReference);
         var journalRecord = dispatchJournal.Get(requestId);
         Assert.Equal("task-123", journalRecord.TaskId);
+        Assert.Equal(new string('1', 32), journalRecord.OperationId);
+        Assert.Equal(new string('2', 32), journalRecord.IdempotencyKey);
+        Assert.Equal("correlation-123", journalRecord.CorrelationId);
         Assert.Equal("development", journalRecord.TrustedWorkflowRef);
         Assert.Equal(TrustedWorkflowSha, journalRecord.TrustedWorkflowSha);
         Assert.Equal(GitHubActionsDispatchState.Acknowledged, journalRecord.State);
