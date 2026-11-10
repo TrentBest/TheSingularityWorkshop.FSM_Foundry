@@ -120,8 +120,8 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
 
         var entry = Assert.Single(fixture.Journal.GetAll());
-        Assert.Equal(RepositoryOperationAuditStatus.Failed, entry.Status);
-        Assert.Equal(typeof(InvalidOperationException).FullName, entry.FailureType);
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, entry.Status);
+        Assert.Null(entry.FailureType);
         Assert.Null(entry.OperationReference);
         Assert.Null(entry.ResultingCandidateSha);
     }
@@ -433,6 +433,74 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             DateTimeOffset failedAt) => _inner.Fail(operationId, exception, failedAt);
 
         public IReadOnlyList<RepositoryOperationAuditEntry> GetAll() => _inner.GetAll();
+    }
+
+    [Fact]
+    public async Task LifecycleTransitionWaitsUntilAuthorizedAdapterAndAuditComplete()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var adapter = new PausingAdapter();
+        var dispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, adapter, fixture.Journal, () => Now.AddMinutes(1));
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+
+        var dispatch = dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)).AsTask();
+        await adapter.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var transition = Task.Run(() => fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddMinutes(2), "Transition queued behind dispatch."));
+
+        await Task.Delay(100);
+        Assert.False(transition.IsCompleted);
+
+        adapter.Release.TrySetResult();
+        await dispatch.WaitAsync(TimeSpan.FromSeconds(5));
+        var transitioned = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(WorkTaskStatus.Investigating, transitioned.Status);
+        Assert.Equal(RepositoryOperationAuditStatus.Completed, Assert.Single(fixture.Journal.GetAll()).Status);
+    }
+
+    [Fact]
+    public async Task AdapterExceptionLeavesOperationPendingForReconciliationAndReleasesTaskReservation()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var adapter = new ThrowingAdapter();
+        var dispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, adapter, fixture.Journal, () => Now.AddMinutes(1));
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+
+        await Assert.ThrowsAsync<IOException>(async () =>
+            await dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(1)));
+
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, Assert.Single(fixture.Journal.GetAll()).Status);
+        var transitioned = fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddMinutes(2), "Reservation released after ambiguous transport.");
+        Assert.Equal(WorkTaskStatus.Investigating, transitioned.Status);
+    }
+
+    private sealed class PausingAdapter : IRepositoryOperationAdapter
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<RepositoryOperationResult> ExecuteAsync(
+            RepositoryOperation operation, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            return new RepositoryOperationResult("paused-operation", operation.CandidateSha, operation.CandidateSha);
+        }
+    }
+
+    private sealed class ThrowingAdapter : IRepositoryOperationAdapter
+    {
+        public ValueTask<RepositoryOperationResult> ExecuteAsync(
+            RepositoryOperation operation, CancellationToken cancellationToken) =>
+            ValueTask.FromException<RepositoryOperationResult>(new IOException("Ambiguous remote outcome."));
     }
 
     private sealed class FakeAdapter : IRepositoryOperationAdapter
