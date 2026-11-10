@@ -263,6 +263,23 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task AnyLifecycleTransitionInvalidatesPreviouslyGrantedRepositoryMutation()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddMinutes(1), "Investigation started.");
+
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+            await fixture.Dispatcher.ExecuteAsync(capability.CapabilityId, operation, Now.AddMinutes(2)));
+        Assert.Equal(0, fixture.Adapter.Calls);
+        Assert.Empty(fixture.Journal.GetAll());
+    }
+
+    [Fact]
     public async Task ExpiredLeaseInvalidatesPreviouslyGrantedMutation()
     {
         using var fixture = new Fixture(leaseDuration: TimeSpan.FromMinutes(2));
