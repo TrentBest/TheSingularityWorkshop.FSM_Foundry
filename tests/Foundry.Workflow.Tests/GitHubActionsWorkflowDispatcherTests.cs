@@ -57,7 +57,11 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.Equal(TrustedWorkflowSha, inputs.GetProperty("trusted_workflow_sha").GetString());
 
         var reopened = new JsonlGitHubActionsDispatchJournal(journalPath);
-        Assert.Equal(GitHubActionsDispatchState.Acknowledged, reopened.Get(receipt.RequestId).State);
+        var durable = reopened.Get(receipt.RequestId);
+        Assert.Equal(GitHubActionsDispatchState.Acknowledged, durable.State);
+        Assert.Equal(new string('1', 32), durable.OperationId);
+        Assert.Equal(new string('2', 32), durable.IdempotencyKey);
+        Assert.Equal("correlation-123", durable.CorrelationId);
         var recoveredReceipt = CreateDispatcher(new StubHandler((_, _) => Json(HttpStatusCode.NotFound, "{}")), journalPath)
             .GetDispatchReceipt(receipt.RequestId);
         Assert.Equal(receipt.RequestId, recoveredReceipt.RequestId);
