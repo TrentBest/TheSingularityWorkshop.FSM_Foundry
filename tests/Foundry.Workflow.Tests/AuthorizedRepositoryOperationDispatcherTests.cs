@@ -108,7 +108,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
-    public async Task InvalidAdapterProvenanceIsRecordedAsFailure()
+    public async Task InvalidAdapterProvenanceRemainsPendingForReconciliation()
     {
         using var fixture = new Fixture();
         var capability = fixture.Grant(WorkTaskAction.ReadRepository);
@@ -460,6 +460,32 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
 
         Assert.Equal(WorkTaskStatus.Investigating, transitioned.Status);
         Assert.Equal(RepositoryOperationAuditStatus.Completed, Assert.Single(fixture.Journal.GetAll()).Status);
+    }
+
+    [Fact]
+    public async Task CancellationDuringTransportLeavesOperationPendingAndReleasesTaskReservation()
+    {
+        using var fixture = new Fixture();
+        var capability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var adapter = new PausingAdapter();
+        var dispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, adapter, fixture.Journal, () => Now.AddMinutes(1));
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+        using var cancellation = new CancellationTokenSource();
+
+        var dispatch = dispatcher.ExecuteAsync(capability.CapabilityId, operation,
+            Now.AddMinutes(1), cancellation.Token).AsTask();
+        await adapter.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await dispatch.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(RepositoryOperationAuditStatus.Pending, Assert.Single(fixture.Journal.GetAll()).Status);
+        var transitioned = fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddMinutes(2), "Reservation released after cancellation.");
+        Assert.Equal(WorkTaskStatus.Investigating, transitioned.Status);
     }
 
     [Fact]
