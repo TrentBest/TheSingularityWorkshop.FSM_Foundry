@@ -494,6 +494,43 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task DispatchReservationsDoNotBlockUnrelatedTasks()
+    {
+        using var fixture = new Fixture();
+        var firstCapability = fixture.Grant(WorkTaskAction.WriteFiles);
+        var pausingAdapter = new PausingAdapter();
+        var firstDispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, pausingAdapter, fixture.Journal, () => Now.AddMinutes(1));
+        var firstOperation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/first.cs", "first");
+
+        var firstDispatch = firstDispatcher.ExecuteAsync(firstCapability.CapabilityId,
+            firstOperation, Now.AddMinutes(1)).AsTask();
+        await pausingAdapter.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        fixture.Tasks.Submit(new WorkTaskRequest(1, "task-9", "correlation-9", Repository, 9,
+            "https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/issues/9",
+            BaseSha, new[] { "src/Foundry.Workflow" }, 3));
+        var secondTask = fixture.Tasks.Claim("task-9", "agent-b", TimeSpan.FromMinutes(20), Now);
+        var secondCapability = fixture.Capabilities.Grant(secondTask, "work/task-9", CandidateSha,
+            new[] { "src/Foundry.Workflow" }, new[] { WorkTaskAction.WriteFiles },
+            Now, TimeSpan.FromMinutes(10));
+        var secondAdapter = new FakeAdapter();
+        var secondDispatcher = new AuthorizedRepositoryOperationDispatcher(
+            fixture.Tasks, fixture.Capabilities, secondAdapter, fixture.Journal, () => Now.AddMinutes(1));
+        var secondOperation = new WriteRepositoryFileOperation("task-9", Repository, "work/task-9",
+            CandidateSha, "src/Foundry.Workflow/second.cs", "second");
+
+        await secondDispatcher.ExecuteAsync(secondCapability.CapabilityId, secondOperation,
+            Now.AddMinutes(1)).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, secondAdapter.Calls);
+        Assert.False(firstDispatch.IsCompleted);
+
+        pausingAdapter.Release.TrySetResult();
+        await firstDispatch.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task AdapterExceptionLeavesOperationPendingForReconciliationAndReleasesTaskReservation()
     {
         using var fixture = new Fixture();
