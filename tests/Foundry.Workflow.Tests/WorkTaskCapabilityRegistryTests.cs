@@ -125,6 +125,33 @@ public sealed class WorkTaskCapabilityRegistryTests
     }
 
     [Fact]
+    public void CapabilityIsInvalidatedByAnyTaskLifecycleTransition()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        coordinator.Submit(Request());
+        var claimed = coordinator.Claim("task-8", "agent-a", TimeSpan.FromMinutes(20), Now);
+        var registry = new WorkTaskCapabilityRegistry();
+        var implementationGrant = Grant(registry, claimed);
+
+        Demand(registry, implementationGrant, claimed, WorkTaskAction.WriteFiles,
+            "src/Foundry.Workflow/WorkTaskCoordinator.cs");
+
+        var investigating = coordinator.Transition("task-8", claimed.Lease!.LeaseId,
+            WorkTaskStatus.Investigating, Now.AddMinutes(1), "Investigation started.");
+
+        Assert.Throws<UnauthorizedAccessException>(() => Demand(registry, implementationGrant,
+            investigating, WorkTaskAction.WriteFiles, "src/Foundry.Workflow/WorkTaskCoordinator.cs",
+            Now.AddMinutes(2)));
+
+        var investigationGrant = registry.Grant(investigating, "work/task-8", CandidateSha,
+            new[] { "src/Foundry.Workflow" },
+            new[] { WorkTaskAction.ReadRepository, WorkTaskAction.WriteFiles },
+            Now.AddMinutes(1), TimeSpan.FromMinutes(5));
+        Demand(registry, investigationGrant, investigating, WorkTaskAction.WriteFiles,
+            "src/Foundry.Workflow/WorkTaskCoordinator.cs", Now.AddMinutes(2));
+    }
+
+    [Fact]
     public void CapabilityRejectsEscapingPathsAndScopeExpansion()
     {
         var registry = new WorkTaskCapabilityRegistry();
