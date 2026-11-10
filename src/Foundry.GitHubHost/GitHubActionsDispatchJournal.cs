@@ -22,6 +22,9 @@ public sealed record GitHubActionsDispatchRecord(
     string CandidateSha,
     string TrustedWorkflowRef,
     string TrustedWorkflowSha,
+    string OperationId,
+    string IdempotencyKey,
+    string CorrelationId,
     DateTimeOffset CreatedAt,
     GitHubActionsDispatchState State,
     DateTimeOffset? AcknowledgedAt,
@@ -37,7 +40,7 @@ public interface IGitHubActionsDispatchJournal
     GitHubActionsDispatchRecord Begin(
         string requestId, string taskId, string repository, string workflowFile, string workflowPath,
         string branch, string candidateSha, string trustedWorkflowRef, string trustedWorkflowSha,
-        DateTimeOffset createdAt);
+        string operationId, string idempotencyKey, string correlationId, DateTimeOffset createdAt);
     GitHubActionsDispatchRecord Acknowledge(string requestId, DateTimeOffset acknowledgedAt);
     GitHubActionsDispatchRecord Correlate(string requestId, long runId, int runAttempt);
     GitHubActionsDispatchRecord Verify(string requestId, long runId, int runAttempt);
@@ -70,10 +73,11 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
 
     public GitHubActionsDispatchRecord Begin(
         string requestId, string taskId, string repository, string workflowFile, string workflowPath,
-        string branch, string candidateSha, string trustedWorkflowRef, string trustedWorkflowSha, DateTimeOffset createdAt)
+        string branch, string candidateSha, string trustedWorkflowRef, string trustedWorkflowSha,
+        string operationId, string idempotencyKey, string correlationId, DateTimeOffset createdAt)
     {
         ValidateIdentity(requestId, taskId, repository, workflowFile, workflowPath, branch, candidateSha,
-            trustedWorkflowRef, trustedWorkflowSha, createdAt);
+            trustedWorkflowRef, trustedWorkflowSha, operationId, idempotencyKey, correlationId, createdAt);
         lock (_gate)
         {
             using var fileLock = AcquireLock();
@@ -87,8 +91,9 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                 throw new InvalidOperationException("An unresolved dispatch already exists for this workflow, branch, and candidate SHA; reconcile it before creating another dispatch.");
             if (_records.ContainsKey(requestId))
                 throw new InvalidOperationException("Dispatch request ID already exists.");
-            var record = new GitHubActionsDispatchRecord(2, _sequence + 1, requestId, taskId, repository,
-                workflowFile, workflowPath, branch, candidateSha, trustedWorkflowRef, trustedWorkflowSha, createdAt,
+            var record = new GitHubActionsDispatchRecord(3, _sequence + 1, requestId, taskId, repository,
+                workflowFile, workflowPath, branch, candidateSha, trustedWorkflowRef, trustedWorkflowSha,
+                operationId, idempotencyKey, correlationId, createdAt,
                 GitHubActionsDispatchState.Dispatching, null, null, null);
             Append(record);
             _records.Add(requestId, record);
@@ -193,11 +198,12 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             {
                 throw new InvalidDataException("Dispatch journal contains malformed JSON.", exception);
             }
-            if (record.SchemaVersion != 2 || record.Sequence != _sequence + 1)
+            if (record.SchemaVersion is not (2 or 3) || record.Sequence != _sequence + 1)
                 throw new InvalidDataException("Dispatch journal schema or sequence is invalid.");
             ValidateIdentity(record.RequestId, record.TaskId, record.Repository, record.WorkflowFile,
                 record.WorkflowPath, record.Branch, record.CandidateSha, record.TrustedWorkflowRef,
-                record.TrustedWorkflowSha, record.CreatedAt);
+                record.TrustedWorkflowSha, record.OperationId, record.IdempotencyKey, record.CorrelationId,
+                record.CreatedAt);
             if (!_records.TryGetValue(record.RequestId, out var previous))
             {
                 if (record.State != GitHubActionsDispatchState.Dispatching ||
@@ -214,6 +220,9 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                     !string.Equals(record.CandidateSha, previous.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(record.TrustedWorkflowRef, previous.TrustedWorkflowRef, StringComparison.Ordinal) ||
                     !string.Equals(record.TrustedWorkflowSha, previous.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(record.OperationId, previous.OperationId, StringComparison.Ordinal) ||
+                    !string.Equals(record.IdempotencyKey, previous.IdempotencyKey, StringComparison.Ordinal) ||
+                    !string.Equals(record.CorrelationId, previous.CorrelationId, StringComparison.Ordinal) ||
                     record.CreatedAt != previous.CreatedAt)
                     throw new InvalidDataException("Dispatch journal identity changed within one request.");
 
@@ -273,7 +282,7 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
     private static void ValidateIdentity(
         string requestId, string taskId, string repository, string workflowFile, string workflowPath,
         string branch, string candidateSha, string trustedWorkflowRef, string trustedWorkflowSha,
-        DateTimeOffset createdAt)
+        string operationId, string idempotencyKey, string correlationId, DateTimeOffset createdAt)
     {
         if (requestId is not { Length: 32 } || !requestId.All(Uri.IsHexDigit) ||
             string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl) ||
@@ -285,7 +294,10 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             candidateSha is not { Length: 40 } || !candidateSha.All(Uri.IsHexDigit) ||
             trustedWorkflowRef != "development" ||
             trustedWorkflowSha is not { Length: 40 } || !trustedWorkflowSha.All(Uri.IsHexDigit) ||
-            createdAt == default)
+            operationId is not { Length: 32 } || !Guid.TryParseExact(operationId, "N", out _) ||
+            idempotencyKey is not { Length: 32 } || !Guid.TryParseExact(idempotencyKey, "N", out _) ||
+            string.IsNullOrWhiteSpace(correlationId) || correlationId.Length > 128 ||
+            correlationId.Any(char.IsControl) || createdAt == default)
             throw new ArgumentException("Dispatch journal identity is invalid.");
     }
 }
