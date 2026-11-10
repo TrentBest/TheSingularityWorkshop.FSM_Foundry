@@ -23,23 +23,20 @@ Paths reject rooted, traversal, encoded-percent, backslash, colon, and empty-seg
 ## Dispatch sequence
 
 1. Validate operation and supplied time.
-2. Read the task snapshot from `PersistentWorkTaskCoordinator`.
-3. Require the durable task repository to match the operation repository.
-4. Demand capability scope against that snapshot.
-5. Check cancellation.
-6. Persist a Pending audit intent.
-7. Re-read the durable task snapshot and repository identity.
-8. Demand the same capability again using the current clock, closing the journal-write time-of-check window.
-9. Acquire the coordinator's per-task asynchronous reservation, shared with every lifecycle mutation for that task.
-10. Re-read the task and demand the capability again while holding that reservation.
-11. Check cancellation, invoke the host adapter, validate operation reference and candidate SHA provenance, and persist Completed—all before releasing the reservation.
-12. Persist Failed only when rejection is known to have occurred before adapter invocation. Once transport starts, exceptions, cancellation, invalid adapter results, and audit-completion failures retain Pending for explicit reconciliation because a remote side effect may already have occurred.
+2. Read the task snapshot, verify repository identity, and demand the host-issued capability.
+3. Check caller cancellation and persist a Pending audit intent.
+4. Acquire the coordinator's per-task asynchronous reservation, shared with every lifecycle mutation for that task.
+5. Re-read the task and demand the capability again while holding that reservation.
+6. Check the linked cancellation/deadline token, invoke the host adapter, validate operation reference and candidate SHA provenance, and persist Completed—all before releasing the reservation.
+7. Persist Failed only when rejection is known to have occurred before adapter invocation. Once transport starts, exceptions, cancellation, invalid adapter results, and audit-completion failures retain Pending for explicit reconciliation because a remote side effect may already have occurred.
 
 The reservation is keyed by task ID. Lifecycle mutations for that task wait until dispatch and audit completion finish; unrelated task IDs can proceed independently. The coordinator's global persistence lock is held only for short local state/journal operations, never across adapter I/O.
 
-The second demand is important: a task can transition while the audit intent is being reserved or while the dispatcher waits for the task reservation. The adapter is not called if the recheck fails. After the recheck succeeds, lifecycle transitions cannot overtake the in-flight operation.
+The reservation and transport cancellation budget is capped at two minutes and linked to the caller token. Host adapters must honor the supplied cancellation token and configure matching transport-level timeouts. If an adapter ignores cancellation, the reservation remains held rather than allowing a lifecycle transition to overtake an operation that may still be executing.
 
-A Pending audit entry is intentionally not a Failed entry when transport may have started. It is an unresolved external outcome and must be reconciled against the host provider before any retry. Cancellation releases the in-process reservation but does not imply remote cancellation or rollback.
+The initial demand rejects obviously unauthorized requests before reserving an audit entry. The final demand is authoritative: it closes both the audit-write and reservation-wait windows. The adapter is not called if that recheck fails.
+
+A Pending audit entry is intentionally not a Failed entry when transport may have started. It is an unresolved external outcome and must be reconciled against the host provider before any retry. Cancellation releases the in-process reservation only after the adapter has returned/canceled; it does not imply remote cancellation or rollback.
 
 ## Audit and crash semantics
 
