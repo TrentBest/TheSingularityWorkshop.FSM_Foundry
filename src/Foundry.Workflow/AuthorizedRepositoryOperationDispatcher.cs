@@ -143,6 +143,7 @@ public sealed record RepositoryOperationResult(
 /// </summary>
 public sealed class AuthorizedRepositoryOperationDispatcher
 {
+    private static readonly TimeSpan MaximumOperationDuration = TimeSpan.FromMinutes(2);
     private readonly PersistentWorkTaskCoordinator _tasks;
     private readonly WorkTaskCapabilityRegistry _capabilities;
     private readonly IRepositoryOperationAdapter _adapter;
@@ -183,6 +184,8 @@ public sealed class AuthorizedRepositoryOperationDispatcher
         // transport outcome leaves Pending for explicit reconciliation, never automatic replay.
         var audit = _journal.Begin(operation, now);
         var transportStarted = false;
+        using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        operationTimeout.CancelAfter(MaximumOperationDuration);
         try
         {
             return await _tasks.ExecuteSerializedAsync(operation.TaskId, async token =>
@@ -213,7 +216,7 @@ public sealed class AuthorizedRepositoryOperationDispatcher
                 // Do not persist adapter Detail: it is host-controlled text and may contain secrets.
                 _journal.Complete(audit.OperationId, result, _clock());
                 return result;
-            }, cancellationToken).ConfigureAwait(false);
+            }, operationTimeout.Token).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
