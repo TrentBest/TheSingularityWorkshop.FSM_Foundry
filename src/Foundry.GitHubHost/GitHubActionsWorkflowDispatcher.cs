@@ -1,3 +1,4 @@
+using TheSingularityWorkshop.Foundry;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -142,10 +143,24 @@ public sealed class GitHubActionsWorkflowDispatcher
             throw new ArgumentException("The GitHub API client must use the fixed https://api.github.com origin.", nameof(http));
     }
 
+    [Obsolete("Dispatch requires the persisted repository-operation execution context.")]
+    public ValueTask<GitHubActionsDispatchReceipt> DispatchAsync(
+        string taskId, string repository, string workflowKey, string branch, string candidateSha,
+        CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("A persisted operation ID, idempotency key, and task correlation ID are required.");
+
     public async ValueTask<GitHubActionsDispatchReceipt> DispatchAsync(
         string taskId, string repository, string workflowKey, string branch, string candidateSha,
+        RepositoryOperationExecutionContext executionContext,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(executionContext);
+        if (executionContext.TaskId != taskId ||
+            executionContext.OperationId is not { Length: 32 } || !Guid.TryParseExact(executionContext.OperationId, "N", out _) ||
+            executionContext.IdempotencyKey is not { Length: 32 } || !Guid.TryParseExact(executionContext.IdempotencyKey, "N", out _) ||
+            string.IsNullOrWhiteSpace(executionContext.CorrelationId) || executionContext.CorrelationId.Length > 128 ||
+            executionContext.CorrelationId.Any(char.IsControl))
+            throw new ArgumentException("Persisted repository-operation execution identity is invalid.", nameof(executionContext));
         _repositoryPolicy.DemandRepository(repository);
         GitHubRepositoryOperationPolicy.DemandCandidateBranch(branch);
         if (string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl))
@@ -163,13 +178,18 @@ public sealed class GitHubActionsWorkflowDispatcher
         var requestId = Guid.NewGuid().ToString("N");
         var dispatchTime = _clock();
         _journal.Begin(requestId, taskId, repository, workflow.WorkflowFile, workflow.ExpectedPath,
-            branch, candidateSha, TrustedWorkflowRef, _trustedWorkflowSha, dispatchTime);
+            branch, candidateSha, TrustedWorkflowRef, _trustedWorkflowSha,
+            executionContext.OperationId, executionContext.IdempotencyKey, executionContext.CorrelationId, dispatchTime);
         var payload = JsonSerializer.Serialize(new
         {
             @ref = TrustedWorkflowRef,
             inputs = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["foundry_request_id"] = requestId,
+                ["request_id"] = requestId,
+                ["operation_id"] = executionContext.OperationId,
+                ["idempotency_key"] = executionContext.IdempotencyKey,
+                ["task_id"] = taskId,
+                ["correlation_id"] = executionContext.CorrelationId,
                 ["candidate_ref"] = branch,
                 ["candidate_sha"] = candidateSha,
                 ["trusted_workflow_sha"] = _trustedWorkflowSha
