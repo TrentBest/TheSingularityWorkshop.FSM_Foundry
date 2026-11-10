@@ -46,7 +46,8 @@ public interface IRepositoryOperationAuditJournal
 {
     RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt);
     RepositoryOperationAuditEntry Begin(
-        RepositoryOperation operation, string correlationId, DateTimeOffset startedAt);
+        RepositoryOperation operation, string correlationId, DateTimeOffset startedAt) =>
+        Begin(operation, startedAt);
     RepositoryOperationAuditEntry Complete(string operationId, RepositoryOperationResult result, DateTimeOffset completedAt);
     RepositoryOperationAuditEntry Fail(string operationId, Exception exception, DateTimeOffset failedAt);
     IReadOnlyList<RepositoryOperationAuditEntry> GetAll();
