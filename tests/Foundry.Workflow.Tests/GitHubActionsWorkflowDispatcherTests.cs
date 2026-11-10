@@ -31,7 +31,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var journalPath = NewJournalPath();
         var dispatcher = CreateDispatcher(handler, journalPath);
 
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
 
         Assert.Equal("task-123", receipt.TaskId);
         Assert.Equal(Repository, receipt.Repository);
@@ -80,7 +80,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var firstDispatcher = CreateDispatcher(firstHandler, journalPath);
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            async () => await firstDispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
+            async () => await firstDispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context()));
         Assert.False(string.IsNullOrWhiteSpace(capturedRequestId));
         Assert.Equal(GitHubActionsDispatchState.Dispatching,
             new JsonlGitHubActionsDispatchJournal(journalPath).Get(capturedRequestId).State);
@@ -124,7 +124,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context()));
         Assert.DoesNotContain(handler.Requests, item => item.Method == HttpMethod.Post);
     }
 
@@ -185,7 +185,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
         correlationRequestId = receipt.RequestId;
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
@@ -252,7 +252,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
         correlationRequestId = receipt.RequestId;
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -276,10 +276,10 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.OK, """{"total_count":1,"workflow_runs":[]}""");
         });
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
-        await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context()));
         Assert.Single(handler.Requests.Where(item => item.Method == HttpMethod.Post));
     }
 
@@ -305,7 +305,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
                 """);
         });
         var dispatcher = CreateDispatcher(handler, journalPath);
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -355,7 +355,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
 
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
@@ -404,7 +404,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             return Json(HttpStatusCode.NotFound, "{}");
         });
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
-        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha);
+        var receipt = await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha, Context());
         var correlation = await dispatcher.FindCorrelatedRunAsync(receipt);
 
         await Assert.ThrowsAsync<InvalidDataException>(
@@ -419,9 +419,12 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         var dispatcher = CreateDispatcher(handler, NewJournalPath());
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            async () => await dispatcher.DispatchAsync("task-123", Repository, "arbitrary-workflow", Branch, CandidateSha));
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "arbitrary-workflow", Branch, CandidateSha, Context()));
         Assert.Empty(handler.Requests);
     }
+
+    private static TheSingularityWorkshop.Foundry.RepositoryOperationExecutionContext Context() =>
+        new(new string('1', 32), new string('2', 32), "task-123", "correlation-123");
 
     private static GitHubActionsWorkflowDispatcher CreateDispatcher(StubHandler handler, string journalPath)
     {
