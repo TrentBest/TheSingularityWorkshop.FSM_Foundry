@@ -30,12 +30,16 @@ Paths reject rooted, traversal, encoded-percent, backslash, colon, and empty-seg
 6. Persist a Pending audit intent.
 7. Re-read the durable task snapshot and repository identity.
 8. Demand the same capability again using the current clock, closing the journal-write time-of-check window.
-9. Check cancellation again, then invoke the host adapter.
-10. Validate operation reference, requested candidate SHA, and resulting full SHA.
-11. Reject candidate SHA movement for every operation except explicit commit.
-12. Persist Completed or Failed audit state. Adapter detail and exception messages are not persisted because they may contain secrets.
+9. Acquire the coordinator's per-task asynchronous reservation, shared with every lifecycle mutation for that task.
+10. Re-read the task and demand the capability again while holding that reservation.
+11. Check cancellation, invoke the host adapter, validate operation reference and candidate SHA provenance, and persist Completed—all before releasing the reservation.
+12. Persist Failed only when rejection is known to have occurred before adapter invocation. Once transport starts, exceptions, cancellation, invalid adapter results, and audit-completion failures retain Pending for explicit reconciliation because a remote side effect may already have occurred.
 
-The second demand is important: a task can transition to CODE RED while the durable audit intent is being reserved. The adapter must not be called if the recheck fails.
+The reservation is keyed by task ID. Lifecycle mutations for that task wait until dispatch and audit completion finish; unrelated task IDs can proceed independently. The coordinator's global persistence lock is held only for short local state/journal operations, never across adapter I/O.
+
+The second demand is important: a task can transition while the audit intent is being reserved or while the dispatcher waits for the task reservation. The adapter is not called if the recheck fails. After the recheck succeeds, lifecycle transitions cannot overtake the in-flight operation.
+
+A Pending audit entry is intentionally not a Failed entry when transport may have started. It is an unresolved external outcome and must be reconciled against the host provider before any retry. Cancellation releases the in-process reservation but does not imply remote cancellation or rollback.
 
 ## Audit and crash semantics
 
