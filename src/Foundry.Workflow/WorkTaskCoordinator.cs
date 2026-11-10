@@ -133,12 +133,13 @@ public sealed class WorkTaskCoordinator : IDisposable
                 throw new InvalidOperationException("Review readiness and repair authorization must be derived from exact CI evidence through ApplyRepairDecision.");
             if (next == WorkTaskStatus.Validating && state.Attempt >= state.Request.MaximumAttempts)
                 throw new InvalidOperationException("The configured validation attempt budget is exhausted.");
-            if (next == WorkTaskStatus.Validating)
-                state.Attempt++;
+            var startsValidationAttempt = next == WorkTaskStatus.Validating;
             if (next == WorkTaskStatus.RepairRequired && state.Attempt >= state.Request.MaximumAttempts)
                 next = WorkTaskStatus.Blocked;
             var previous = state.Status;
             state.SetStatus(next);
+            if (startsValidationAttempt)
+                state.Attempt++;
             if (next is WorkTaskStatus.HandedOff or WorkTaskStatus.Stopped or WorkTaskStatus.Failed)
                 state.Lease = null;
             state.AddEvent(previous, next, lease.AgentId, lease.LeaseId, now, reason);
