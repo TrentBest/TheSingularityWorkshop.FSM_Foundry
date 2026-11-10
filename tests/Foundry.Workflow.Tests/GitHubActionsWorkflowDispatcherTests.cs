@@ -110,6 +110,8 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         });
         var recoveryDispatcher = CreateDispatcher(recoveryHandler, journalPath);
         var recoveredReceipt = recoveryDispatcher.GetDispatchReceipt(capturedRequestId);
+        var recoveredByOperation = recoveryDispatcher.GetDispatchReceiptForOperation(new string('1', 32));
+        Assert.Equal(capturedRequestId, recoveredByOperation.RequestId);
 
         var correlation = await recoveryDispatcher.FindCorrelatedRunAsync(recoveredReceipt);
 
@@ -118,6 +120,20 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         Assert.Equal(GitHubActionsDispatchState.Correlated,
             new JsonlGitHubActionsDispatchJournal(journalPath).Get(capturedRequestId).State);
         Assert.DoesNotContain(recoveryHandler.Requests, item => item.Method == HttpMethod.Post);
+    }
+
+    [Fact]
+    public async Task DispatchWithoutPersistedExecutionContextFailsClosedBeforeNetwork()
+    {
+        var handler = new StubHandler((_, _) => Json(HttpStatusCode.OK, "{}"));
+        var dispatcher = CreateDispatcher(handler, NewJournalPath());
+
+#pragma warning disable CS0618
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await dispatcher.DispatchAsync("task-123", Repository, "proof", Branch, CandidateSha));
+#pragma warning restore CS0618
+
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]
