@@ -45,6 +45,7 @@ public interface IGitHubActionsDispatchJournal
     GitHubActionsDispatchRecord Correlate(string requestId, long runId, int runAttempt);
     GitHubActionsDispatchRecord Verify(string requestId, long runId, int runAttempt);
     GitHubActionsDispatchRecord Get(string requestId);
+    GitHubActionsDispatchRecord GetByOperationId(string operationId);
     IReadOnlyList<GitHubActionsDispatchRecord> GetUnresolved();
 }
 
@@ -91,6 +92,10 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
                 throw new InvalidOperationException("An unresolved dispatch already exists for this workflow, branch, and candidate SHA; reconcile it before creating another dispatch.");
             if (_records.ContainsKey(requestId))
                 throw new InvalidOperationException("Dispatch request ID already exists.");
+            if (_records.Values.Any(record =>
+                string.Equals(record.OperationId, operationId, StringComparison.Ordinal) ||
+                string.Equals(record.IdempotencyKey, idempotencyKey, StringComparison.Ordinal)))
+                throw new InvalidOperationException("This repository operation already has a durable dispatch intent; recover it by operation ID instead of creating another request.");
             var record = new GitHubActionsDispatchRecord(3, _sequence + 1, requestId, taskId, repository,
                 workflowFile, workflowPath, branch, candidateSha, trustedWorkflowRef, trustedWorkflowSha,
                 operationId, idempotencyKey, correlationId, createdAt,
@@ -144,6 +149,25 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             return _records.TryGetValue(requestId, out var record)
                 ? record
                 : throw new KeyNotFoundException("Dispatch request ID was not found in the durable journal.");
+        }
+    }
+
+    public GitHubActionsDispatchRecord GetByOperationId(string operationId)
+    {
+        if (operationId is not { Length: 32 } || !Guid.TryParseExact(operationId, "N", out _))
+            throw new ArgumentException("A valid operation ID is required.", nameof(operationId));
+        lock (_gate)
+        {
+            using var fileLock = AcquireLock();
+            Replay();
+            var matches = _records.Values.Where(record =>
+                string.Equals(record.OperationId, operationId, StringComparison.Ordinal)).ToArray();
+            return matches.Length switch
+            {
+                1 => matches[0],
+                0 => throw new KeyNotFoundException("No durable dispatch exists for the repository operation."),
+                _ => throw new InvalidDataException("Multiple dispatch records claim one repository operation ID.")
+            };
         }
     }
 
@@ -324,6 +348,9 @@ public sealed class JsonlGitHubActionsDispatchJournal : IGitHubActionsDispatchJo
             trustedWorkflowSha is not { Length: 40 } || !trustedWorkflowSha.All(Uri.IsHexDigit) ||
             operationId is not { Length: 32 } || !Guid.TryParseExact(operationId, "N", out _) ||
             idempotencyKey is not { Length: 32 } || !Guid.TryParseExact(idempotencyKey, "N", out _) ||
+            string.Equals(requestId, operationId, StringComparison.Ordinal) ||
+            string.Equals(requestId, idempotencyKey, StringComparison.Ordinal) ||
+            string.Equals(operationId, idempotencyKey, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(correlationId) || correlationId.Length > 128 ||
             correlationId.Any(char.IsControl) || createdAt == default)
             throw new ArgumentException("Dispatch journal identity is invalid.");
