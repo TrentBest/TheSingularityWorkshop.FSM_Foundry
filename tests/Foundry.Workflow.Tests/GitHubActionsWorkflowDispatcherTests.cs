@@ -46,7 +46,12 @@ public sealed class GitHubActionsWorkflowDispatcherTests
         using var body = JsonDocument.Parse(post.Body!);
         Assert.Equal(TrustedWorkflowRef, body.RootElement.GetProperty("ref").GetString());
         var inputs = body.RootElement.GetProperty("inputs");
-        Assert.Equal(receipt.RequestId, inputs.GetProperty("foundry_request_id").GetString());
+        Assert.Equal(receipt.RequestId, inputs.GetProperty("request_id").GetString());
+        Assert.Equal(new string('1', 32), inputs.GetProperty("operation_id").GetString());
+        Assert.Equal(new string('2', 32), inputs.GetProperty("idempotency_key").GetString());
+        Assert.Equal("task-123", inputs.GetProperty("task_id").GetString());
+        Assert.Equal("correlation-123", inputs.GetProperty("correlation_id").GetString());
+        Assert.NotEqual(receipt.RequestId, inputs.GetProperty("operation_id").GetString());
         Assert.Equal(Branch, inputs.GetProperty("candidate_ref").GetString());
         Assert.Equal(CandidateSha, inputs.GetProperty("candidate_sha").GetString());
         Assert.Equal(TrustedWorkflowSha, inputs.GetProperty("trusted_workflow_sha").GetString());
@@ -71,7 +76,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Post && path.EndsWith("/dispatches", StringComparison.Ordinal))
             {
                 using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
-                capturedRequestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                capturedRequestId = body.RootElement.GetProperty("inputs").GetProperty("request_id").GetString()!;
                 // Simulate GitHub accepting the dispatch while the response is lost in transit.
                 return Json(HttpStatusCode.InternalServerError, "{}");
             }
@@ -324,7 +329,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Post)
             {
                 using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
-                requestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                requestId = body.RootElement.GetProperty("inputs").GetProperty("request_id").GetString()!;
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             }
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
@@ -374,7 +379,7 @@ public sealed class GitHubActionsWorkflowDispatcherTests
             if (request.Method == HttpMethod.Post)
             {
                 using var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
-                requestId = body.RootElement.GetProperty("inputs").GetProperty("foundry_request_id").GetString()!;
+                requestId = body.RootElement.GetProperty("inputs").GetProperty("request_id").GetString()!;
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             }
             if (request.Method == HttpMethod.Get && path.Contains("/actions/workflows/", StringComparison.Ordinal))
