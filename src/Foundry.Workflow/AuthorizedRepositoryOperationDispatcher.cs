@@ -121,10 +121,17 @@ public sealed record RequestRepositoryCiOperation : RepositoryOperation
 /// enforce their configured repository, branch, workflow, and network policy. For mutations,
 /// the adapter must verify that the resulting commit is based on the authorized candidate SHA.
 /// </summary>
+public sealed record RepositoryOperationExecutionContext(
+    string OperationId, string IdempotencyKey, string TaskId, string CorrelationId);
+
 public interface IRepositoryOperationAdapter
 {
     ValueTask<RepositoryOperationResult> ExecuteAsync(
         RepositoryOperation operation, CancellationToken cancellationToken);
+
+    ValueTask<RepositoryOperationResult> ExecuteAsync(
+        RepositoryOperation operation, RepositoryOperationExecutionContext context,
+        CancellationToken cancellationToken) => ExecuteAsync(operation, cancellationToken);
 }
 
 /// <summary>
@@ -182,7 +189,9 @@ public sealed class AuthorizedRepositoryOperationDispatcher
 
         // Persist intent before waiting for the per-task reservation. A crash or ambiguous
         // transport outcome leaves Pending for explicit reconciliation, never automatic replay.
-        var audit = _journal.Begin(operation, now);
+        var audit = _journal.Begin(operation, task.Request.CorrelationId, now);
+        var executionContext = new RepositoryOperationExecutionContext(
+            audit.OperationId, audit.IdempotencyKey, audit.TaskId, audit.CorrelationId);
         var transportStarted = false;
         using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         operationTimeout.CancelAfter(MaximumOperationDuration);
@@ -200,7 +209,8 @@ public sealed class AuthorizedRepositoryOperationDispatcher
                 token.ThrowIfCancellationRequested();
 
                 transportStarted = true;
-                RepositoryOperationResult result = await _adapter.ExecuteAsync(operation, token).ConfigureAwait(false);
+                RepositoryOperationResult result = await _adapter.ExecuteAsync(
+                    operation, executionContext, token).ConfigureAwait(false);
                 ArgumentNullException.ThrowIfNull(result);
                 if (string.IsNullOrWhiteSpace(result.OperationReference) ||
                     result.OperationReference.Length > 512 || result.OperationReference.Any(char.IsControl) ||
