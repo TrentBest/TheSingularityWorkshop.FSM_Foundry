@@ -239,6 +239,32 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     }
 
     [Fact]
+    public async Task LegacyAdapterCannotSilentlyAcceptIdentityAwareCiDispatch()
+    {
+        var adapter = new LegacyAdapter();
+        var operation = new RequestRepositoryCiOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "trusted-workflow");
+        var context = new RepositoryOperationExecutionContext(
+            Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), "task-8", "correlation-8");
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await adapter.ExecuteAsync(operation, context, CancellationToken.None));
+
+        Assert.Equal(0, adapter.Calls);
+    }
+
+    [Fact]
+    public void LegacyAuditJournalCannotSilentlyDropCorrelationIdentity()
+    {
+        IRepositoryOperationAuditJournal journal = new LegacyAuditJournal();
+        var operation = new WriteRepositoryFileOperation("task-8", Repository, "work/task-8",
+            CandidateSha, "src/Foundry.Workflow/file.cs", "content");
+
+        Assert.Throws<NotSupportedException>(() =>
+            journal.Begin(operation, "correlation-8", Now.AddMinutes(1)));
+    }
+
+    [Fact]
     public async Task WrongTaskRepositoryBranchAndCandidateAreRejectedBeforeTransport()
     {
         using var fixture = new Fixture();
@@ -578,6 +604,35 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         var transitioned = fixture.Tasks.Transition("task-8", fixture.Task.Lease!.LeaseId,
             WorkTaskStatus.Investigating, Now.AddMinutes(2), "Reservation released after ambiguous transport.");
         Assert.Equal(WorkTaskStatus.Investigating, transitioned.Status);
+    }
+
+    private sealed class LegacyAdapter : IRepositoryOperationAdapter
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<RepositoryOperationResult> ExecuteAsync(
+            RepositoryOperation operation, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return ValueTask.FromResult(new RepositoryOperationResult(
+                "legacy-operation", operation.CandidateSha, operation.CandidateSha));
+        }
+    }
+
+    private sealed class LegacyAuditJournal : IRepositoryOperationAuditJournal
+    {
+        public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt) =>
+            throw new InvalidOperationException("Legacy Begin must not be reached.");
+
+        public RepositoryOperationAuditEntry Complete(string operationId,
+            RepositoryOperationResult result, DateTimeOffset completedAt) =>
+            throw new NotImplementedException();
+
+        public RepositoryOperationAuditEntry Fail(string operationId, Exception exception,
+            DateTimeOffset failedAt) => throw new NotImplementedException();
+
+        public IReadOnlyList<RepositoryOperationAuditEntry> GetAll() =>
+            throw new NotImplementedException();
     }
 
     private sealed class PausingAdapter : IRepositoryOperationAdapter
