@@ -131,7 +131,10 @@ public interface IRepositoryOperationAdapter
 
     ValueTask<RepositoryOperationResult> ExecuteAsync(
         RepositoryOperation operation, RepositoryOperationExecutionContext context,
-        CancellationToken cancellationToken) => ExecuteAsync(operation, cancellationToken);
+        CancellationToken cancellationToken) => operation is RequestRepositoryCiOperation
+            ? ValueTask.FromException<RepositoryOperationResult>(new NotSupportedException(
+                "This repository adapter does not support identity-aware CI dispatch."))
+            : ExecuteAsync(operation, cancellationToken);
 }
 
 /// <summary>
