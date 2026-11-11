@@ -47,7 +47,8 @@ public interface IRepositoryOperationAuditJournal
     RepositoryOperationAuditEntry Begin(RepositoryOperation operation, DateTimeOffset startedAt);
     RepositoryOperationAuditEntry Begin(
         RepositoryOperation operation, string correlationId, DateTimeOffset startedAt) =>
-        Begin(operation, startedAt);
+        throw new NotSupportedException(
+            "This audit journal does not support correlation-aware durable operation identities.");
     RepositoryOperationAuditEntry Complete(string operationId, RepositoryOperationResult result, DateTimeOffset completedAt);
     RepositoryOperationAuditEntry Fail(string operationId, Exception exception, DateTimeOffset failedAt);
     IReadOnlyList<RepositoryOperationAuditEntry> GetAll();
