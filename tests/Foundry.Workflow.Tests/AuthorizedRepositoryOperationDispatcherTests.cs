@@ -241,7 +241,8 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
     [Fact]
     public async Task LegacyAdapterCannotSilentlyAcceptIdentityAwareCiDispatch()
     {
-        var adapter = new LegacyAdapter();
+        var legacyAdapter = new LegacyAdapter();
+        IRepositoryOperationAdapter adapter = legacyAdapter;
         var operation = new RequestRepositoryCiOperation("task-8", Repository, "work/task-8",
             CandidateSha, "trusted-workflow");
         var context = new RepositoryOperationExecutionContext(
@@ -250,7 +251,7 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
         await Assert.ThrowsAsync<NotSupportedException>(async () =>
             await adapter.ExecuteAsync(operation, context, CancellationToken.None));
 
-        Assert.Equal(0, adapter.Calls);
+        Assert.Equal(0, legacyAdapter.Calls);
     }
 
     [Fact]
