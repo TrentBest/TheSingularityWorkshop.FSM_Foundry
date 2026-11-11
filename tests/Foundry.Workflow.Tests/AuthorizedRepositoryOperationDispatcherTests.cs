@@ -672,5 +672,14 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             return ValueTask.FromResult(new RepositoryOperationResult(
                 "fake-operation-1", operation.CandidateSha, ResultingCandidateSha ?? operation.CandidateSha));
         }
+
+        public ValueTask<RepositoryOperationResult> ExecuteAsync(
+            RepositoryOperation operation,
+            RepositoryOperationExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            return ExecuteAsync(operation, cancellationToken);
+        }
     }
 }
