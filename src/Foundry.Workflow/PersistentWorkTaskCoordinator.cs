@@ -8,6 +8,7 @@ namespace TheSingularityWorkshop.Foundry;
 public sealed class PersistentWorkTaskCoordinator
 {
     private readonly object _gate = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _taskGates = new(StringComparer.Ordinal);
     private readonly WorkTaskCoordinator _coordinator;
     private readonly JsonlWorkTaskStore _store;
     private readonly JsonlWorkTaskRepairAttemptJournal? _repairAttemptJournal;
@@ -26,47 +27,54 @@ public sealed class PersistentWorkTaskCoordinator
 
     public WorkTaskSnapshot Submit(WorkTaskRequest request)
     {
-        lock (_gate)
+        ArgumentNullException.ThrowIfNull(request);
+        return WithTaskLock(request.TaskId, () =>
         {
-            EnsureHealthy();
-            var snapshot = _coordinator.Submit(request);
-            return Persist(snapshot, create: true);
-        }
+            lock (_gate)
+            {
+                EnsureHealthy();
+                var snapshot = _coordinator.Submit(request);
+                return Persist(snapshot, create: true);
+            }
+        });
     }
 
-    public WorkTaskSnapshot Claim(string taskId, string agentId, TimeSpan leaseDuration, DateTimeOffset now)
-    {
-        lock (_gate)
+    public WorkTaskSnapshot Claim(string taskId, string agentId, TimeSpan leaseDuration, DateTimeOffset now) =>
+        WithTaskLock(taskId, () =>
         {
-            EnsureHealthy();
-            var snapshot = _coordinator.Claim(taskId, agentId, leaseDuration, now);
-            return Persist(snapshot);
-        }
-    }
+            lock (_gate)
+            {
+                EnsureHealthy();
+                var snapshot = _coordinator.Claim(taskId, agentId, leaseDuration, now);
+                return Persist(snapshot);
+            }
+        });
 
     public WorkTaskSnapshot Transition(string taskId, Guid leaseId, WorkTaskStatus next,
-        DateTimeOffset now, string reason)
-    {
-        lock (_gate)
+        DateTimeOffset now, string reason) =>
+        WithTaskLock(taskId, () =>
         {
-            EnsureHealthy();
-            var snapshot = _coordinator.Transition(taskId, leaseId, next, now, reason);
-            return Persist(snapshot);
-        }
-    }
+            lock (_gate)
+            {
+                EnsureHealthy();
+                var snapshot = _coordinator.Transition(taskId, leaseId, next, now, reason);
+                return Persist(snapshot);
+            }
+        });
 
     /// <summary>Verifies and durably records a host-approved CODE RED recovery.</summary>
     public WorkTaskSnapshot RecoverFromCodeRed(string taskId, Guid leaseId,
         CodeRedIncident incident, CodeRedRecoveryApprovalReceipt receipt,
-        DateTimeOffset now, string reason)
-    {
-        lock (_gate)
+        DateTimeOffset now, string reason) =>
+        WithTaskLock(taskId, () =>
         {
-            EnsureHealthy();
-            var snapshot = _coordinator.RecoverFromCodeRed(taskId, leaseId, incident, receipt, now, reason);
-            return Persist(snapshot);
-        }
-    }
+            lock (_gate)
+            {
+                EnsureHealthy();
+                var snapshot = _coordinator.RecoverFromCodeRed(taskId, leaseId, incident, receipt, now, reason);
+                return Persist(snapshot);
+            }
+        });
 
     /// <summary>
     /// Applies a repair decision using only the exact attempt history recovered from the
@@ -77,12 +85,14 @@ public sealed class PersistentWorkTaskCoordinator
         TimeSpan maximumDuration, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(currentAttempt);
-        lock (_gate)
+        return WithTaskLock(taskId, () =>
         {
-            EnsureHealthy();
-            var journal = _repairAttemptJournal ?? throw new InvalidOperationException(
-                "A durable repair-attempt journal is required before applying a persistent repair decision.");
-            return journal.ExecuteWithAttempts(taskId, history =>
+            lock (_gate)
+            {
+                EnsureHealthy();
+                var journal = _repairAttemptJournal ?? throw new InvalidOperationException(
+                    "A durable repair-attempt journal is required before applying a persistent repair decision.");
+                return journal.ExecuteWithAttempts(taskId, history =>
             {
                 if (history.Count == 0 || history[^1] != currentAttempt ||
                     currentAttempt.TaskId != taskId)
@@ -91,9 +101,53 @@ public sealed class PersistentWorkTaskCoordinator
                 var previousAttempts = history.Take(history.Count - 1).ToArray();
                 var snapshot = _coordinator.ApplyRepairDecision(taskId, leaseId, previousAttempts,
                     currentAttempt, expectation, maximumDuration, now);
-                return Persist(snapshot);
-            });
+                    return Persist(snapshot);
+                });
+            }
+        });
+    }
+
+    /// <summary>
+    /// Serializes a repository dispatch against lifecycle mutations for this task only.
+    /// The reservation remains held until the asynchronous host operation and its audit
+    /// completion have finished. Cancellation while waiting does not acquire the reservation.
+    /// </summary>
+    public async ValueTask<T> ExecuteSerializedAsync<T>(string taskId,
+        Func<CancellationToken, ValueTask<T>> operation, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var taskGate = GetTaskGate(taskId);
+        await taskGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return await operation(cancellationToken).ConfigureAwait(false);
         }
+        finally
+        {
+            taskGate.Release();
+        }
+    }
+
+    private T WithTaskLock<T>(string taskId, Func<T> operation)
+    {
+        var taskGate = GetTaskGate(taskId);
+        taskGate.Wait();
+        try
+        {
+            return operation();
+        }
+        finally
+        {
+            taskGate.Release();
+        }
+    }
+
+    private SemaphoreSlim GetTaskGate(string taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 || taskId.Any(char.IsControl))
+            throw new ArgumentException("Task identity must be non-empty, bounded, and control-free.", nameof(taskId));
+        return _taskGates.GetOrAdd(taskId, static _ => new SemaphoreSlim(1, 1));
     }
 
     public WorkTaskSnapshot GetSnapshot(string taskId)

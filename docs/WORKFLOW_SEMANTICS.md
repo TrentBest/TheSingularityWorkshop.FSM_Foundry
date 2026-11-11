@@ -3,7 +3,7 @@
 
 # Workflow Semantics — Version 1
 
-**Status:** implementation-backed theory for the first Foundry runtime slice. The sequential runner and retained run lifecycle passed development CI run #84; the optional timeout extension and its cancellation-precedence tests passed feature-branch [Foundry CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768). This feature-branch extension is not yet part of `development`. This does not describe persisted manifests, distributed execution, or a general automation engine.
+**Status:** implementation-backed theory for the current Foundry workflow runtime. The sequential runner, retained run lifecycle, bounded per-run JSON context, optional timeout outcome, and cancellation-precedence behavior are present on `development` at `dc1324f9bfcc61e6de32f7c52d7686025976f00b`; exact-head development CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed. This does not describe persisted manifests, distributed execution, or a general automation engine.
 
 ## The execution model
 
@@ -66,7 +66,7 @@ The context carries JSON data only:
 - Handlers can write outputs once with `SetOutput<T>`; later handlers read them through `GetOutput<T>` / `TryGetOutput<T>`.
 - Inputs cannot be replaced by outputs, and duplicate output keys are rejected.
 - The combined context is limited to 128 entries, 64 KiB per serialized JSON value, 1 MiB aggregate serialized value bytes, and JSON depth 32. Keys are non-empty, control-free, and at most 128 characters.
-- A context is intended for one accepted run. Hosts should create a fresh context for each run; outputs are mutable run state.
+- A context is intended for one accepted run. Hosts should create a fresh context for each run; outputs are mutable run state. `Submit` retains the exact context instance supplied by the caller: it does not clone or freeze the context. Inputs were cloned when the context was constructed, but any holder of the context reference can still call `SetOutput` after submission. Treat submission as a convention-based ownership handoff: the host must stop mutating and sharing the context after acceptance. Enforced ownership transfer or an immutable submission snapshot is not implemented.
 - Context values do not select handlers or grant filesystem, network, process, GitHub, CI, or publishing authority. The host-owned registry remains the allowlist of operations.
 
 Context is in-memory only and is not part of durable task or workflow journals. It is not restored after process loss and does not change sequential execution, retries, compensation, or lifecycle semantics. See the [Workflow Execution Context guide](WORKFLOW_EXECUTION_CONTEXT.md) for the API and examples.
@@ -110,9 +110,9 @@ Context is in-memory only and is not part of durable task or workflow journals. 
 - [Runner tests](../tests/Foundry.Workflow.Tests/WorkflowRunnerTests.cs)
 - [Lifecycle tests](../tests/Foundry.Workflow.Tests/WorkflowExecutionCoordinatorTests.cs)
 
-Development CI run #84 passed the original runner/lifecycle tests. Feature-branch [CI run #276](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/actions/runs/41170698768) passed the timeout/cancellation tests, full workflow test suite, build, separate-process FSM_API probe, repeatable fox/sheepdog scenario, and evidence artifact upload. This document must be revised if the contract or tests change.
+Development exact-head CI [run #41987903337](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/actions/runs/41987903337) passed on `dc1324f9bfcc61e6de32f7c52d7686025976f00b`, covering the current workflow runtime, tests, build, FSM_API probe, and deterministic Fox/Sheepdog evidence. The timeout outcome and cancellation-precedence behavior are therefore part of the current development implementation, not merely a feature-branch extension. This document must be revised if the contract or tests change.
 
 ---
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
