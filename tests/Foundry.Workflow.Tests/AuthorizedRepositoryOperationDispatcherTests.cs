@@ -446,6 +446,15 @@ public sealed class AuthorizedRepositoryOperationDispatcherTests
             return entry;
         }
 
+        public RepositoryOperationAuditEntry Begin(RepositoryOperation operation, string correlationId,
+            DateTimeOffset startedAt)
+        {
+            var entry = _inner.Begin(operation, correlationId, startedAt);
+            _tasks.Transition(_task.Request.TaskId, _task.Lease!.LeaseId, WorkTaskStatus.CodeRed,
+                Now.AddMinutes(1), "Capability revoked during audit reservation.");
+            return entry;
+        }
+
         public RepositoryOperationAuditEntry Complete(string operationId,
             RepositoryOperationResult result, DateTimeOffset completedAt) =>
             _inner.Complete(operationId, result, completedAt);
