@@ -84,7 +84,8 @@ The executable contract tests cover:
 
 - conversion of ActionableFailure into a provenance-bound repair attempt and HeadlessAi evidence;
 - conversion of CompletePass without caller-supplied success flags;
-- rejection of a candidate SHA that differs from the persisted dispatch; and
+- rejection of a candidate SHA that differs from the persisted dispatch;
+- rejection of nested source-artifact claims with an unregistered job key, malformed archive digest, or expired artifact; and
 - rejection of duplicate JSON properties;
 - idempotent durable attempt application; and
 - a same-task HeadlessAi repair turn carrying the CiAi evidence and prior-turn provenance.
