@@ -99,7 +99,7 @@ public sealed class CiAiArtifactNoticeIngressTests
 
             Assert.Equal(CiAiArtifactNoticeReceiptOutcome.Accepted, result.Outcome);
             Assert.Equal("request-1", result.ValidatedNotice.Request.Mapping.RequestId);
-            Assert.Equal(1, new JsonlCiAiArtifactNoticeReceiptLedger(receiptPath).GetAll().Count);
+            Assert.Single(new JsonlCiAiArtifactNoticeReceiptLedger(receiptPath).GetAll());
             Assert.Equal(result.Receipt.PayloadSha256,
                 Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Payload())).ToLowerInvariant());
         }
