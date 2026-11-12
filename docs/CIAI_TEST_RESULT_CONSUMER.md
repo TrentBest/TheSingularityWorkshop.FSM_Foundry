@@ -12,7 +12,7 @@ FoundryVerifiedCiAiReportArtifact is the provider-neutral, immutable Foundry con
 - a WorkTaskRepairAttempt whose evidence flags are derived exclusively from CiAi's named verdict; and
 - a bounded FoundryHeadlessAiEvidence context item for the next HeadlessAi turn.
 
-The consumer does not reference the CiAi assembly or the separate ingress implementation project. It consumes the versioned JSON contract and Foundry's persisted dispatch-mapping contract, keeping this slice independently buildable on development.
+The consumer does not reference the CiAi assembly. It consumes the versioned JSON contract and Foundry's persisted dispatch-mapping contract. The host-neutral ingress and retrieval contracts are now composed with this consumer on draft PR #15; see [the host composition](CIAI_ARTIFACT_HOST_COMPOSITION.md).
 
 ## 02 — Why
 
@@ -87,11 +87,11 @@ The executable contract tests cover:
 - idempotent durable attempt application; and
 - a same-task HeadlessAi repair turn carrying the CiAi evidence and prior-turn provenance.
 
-The tests use a deterministic verified-artifact fixture. They do not claim a live provider retrieval or production host integration.
+The consumer tests use deterministic verified-artifact fixtures. `CiAiArtifactHostCompositionTests` additionally composes a fake request authenticator and fake provider transport through durable notice receipt, exact byte retrieval/verification, report consumption, idempotent task application, and the same-task HeadlessAi repair request. This proves the host-neutral contracts compose; it does not claim a live provider retrieval or production host integration.
 
 ## 05 — Choose your next step
 
-- Integrate a production host adapter with authenticated callback ingress and a connection-time-safe artifact transport.
+- Implement the production host adapter with real JWT validation and connection-time-safe HTTPS/DNS transport.
 - Prove the full loop against the Experiences Minesweeper red artifact and a new exact-candidate green validation.
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
