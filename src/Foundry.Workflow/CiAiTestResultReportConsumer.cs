@@ -231,7 +231,7 @@ public static class CiAiTestResultReportConsumer
         // Bind its nested artifact claim back to the exact run/job registered by Foundry;
         // do not confuse this with the outer JSON report artifact verified by the notice.
         if (verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure")
-            ValidateSourceArtifactMetadata(properties, mapping, run, jobId, observedAt);
+            ValidateSourceArtifactMetadata(properties, mapping, run, observedAt);
 
 
         var reasonCodes = ReadReasonCodes(properties);
@@ -303,7 +303,6 @@ public static class CiAiTestResultReportConsumer
         Dictionary<string, JsonElement> properties,
         CiAiRequestTaskMapping mapping,
         CiAiDispatchRunBinding run,
-        long reportJobId,
         DateTimeOffset observedAt)
     {
         var sourceArtifactId = ReadInt64(properties, "sourceArtifactId");
@@ -317,8 +316,7 @@ public static class CiAiTestResultReportConsumer
         var payloadSize = ReadInt64(properties, "payloadSizeBytes");
 
         if (sourceArtifactId <= 0 || string.IsNullOrWhiteSpace(sourceArtifactName) ||
-            !string.Equals(sourceJobKey, mapping.JobName, StringComparison.Ordinal) ||
-            reportJobId != run.RunId && reportJobId <= 0)
+            !string.Equals(sourceJobKey, mapping.JobName, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("CiAi source artifact identity does not match the registered workflow job.");
 
         if (archiveDigest.Length != 71 ||
