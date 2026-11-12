@@ -227,6 +227,13 @@ public static class CiAiTestResultReportConsumer
         if (observedAt < run.BoundAt || observedAt > now || observedAt > artifact.ExpiresAt)
             throw new InvalidDataException("CiAi report observation time is outside the bound run and artifact validity window.");
 
+        // The authenticated, registered CiAi capability is the source-artifact attestor.
+        // Bind its nested artifact claim back to the exact run/job registered by Foundry;
+        // do not confuse this with the outer JSON report artifact verified by the notice.
+        if (verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure")
+            ValidateSourceArtifactMetadata(properties, mapping, run, jobId, observedAt);
+
+
         var reasonCodes = ReadReasonCodes(properties);
         var (failedResultDigests, failedSummary, counts) = ReadAndValidateResults(properties);
         ValidateResultCounters(properties, counts);
@@ -290,6 +297,43 @@ public static class CiAiTestResultReportConsumer
 
         return new CiAiConsumedTestResult(attempt, headlessEvidence, verdict,
             Array.AsReadOnly(reasonCodes.ToArray()), reportDigest, acceptedReport);
+    }
+
+    private static void ValidateSourceArtifactMetadata(
+        Dictionary<string, JsonElement> properties,
+        CiAiRequestTaskMapping mapping,
+        CiAiDispatchRunBinding run,
+        long reportJobId,
+        DateTimeOffset observedAt)
+    {
+        var sourceArtifactId = ReadInt64(properties, "sourceArtifactId");
+        var sourceArtifactName = ReadText(properties, "sourceArtifactName", 200);
+        var sourceJobKey = ReadText(properties, "sourceJobKey", 100);
+        var archiveDigest = ReadText(properties, "providerArchiveDigest", 71);
+        var archiveSize = ReadInt64(properties, "archiveSizeBytes");
+        var artifactCreatedAt = ReadTimestamp(properties, "artifactCreatedAt");
+        var artifactExpiresAt = ReadTimestamp(properties, "artifactExpiresAt");
+        var payloadDigest = ReadText(properties, "payloadSha256", 64);
+        var payloadSize = ReadInt64(properties, "payloadSizeBytes");
+
+        if (sourceArtifactId <= 0 || string.IsNullOrWhiteSpace(sourceArtifactName) ||
+            !string.Equals(sourceJobKey, mapping.JobName, StringComparison.Ordinal) ||
+            reportJobId != run.RunId && reportJobId <= 0)
+            throw new UnauthorizedAccessException("CiAi source artifact identity does not match the registered workflow job.");
+
+        if (archiveDigest.Length != 71 ||
+            !archiveDigest.StartsWith("sha256:", StringComparison.Ordinal) ||
+            !archiveDigest.AsSpan(7).ToString().All(Uri.IsHexDigit) ||
+            archiveSize is <= 0 or > 20 * 1024 * 1024)
+            throw new InvalidDataException("CiAi source archive digest or size is invalid.");
+
+        if (payloadDigest.Length != 64 || !payloadDigest.All(Uri.IsHexDigit) ||
+            payloadSize is <= 0 or > 16 * 1024 * 1024)
+            throw new InvalidDataException("CiAi source payload digest or size is invalid.");
+
+        if (artifactCreatedAt < run.BoundAt || artifactCreatedAt > observedAt ||
+            artifactExpiresAt <= artifactCreatedAt || artifactExpiresAt < observedAt)
+            throw new InvalidDataException("CiAi source artifact timestamps are outside the exact run observation window.");
     }
 
     private static void ValidateUniqueProperties(JsonElement element)
