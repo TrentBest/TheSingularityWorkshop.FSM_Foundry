@@ -173,6 +173,28 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void RejectsSourceArtifactClaimsThatDoNotMatchTheRegisteredJobOrArtifactBounds()
+    {
+        var wrongJobKey = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+        wrongJobKey["sourceJobKey"] = "unregistered-job";
+        var wrongJobBytes = JsonSerializer.SerializeToUtf8Bytes(wrongJobKey);
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(wrongJobBytes), CreateTask(), Now));
+
+        var invalidArchiveDigest = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+        invalidArchiveDigest["providerArchiveDigest"] = "sha256:not-a-valid-digest";
+        var invalidArchiveBytes = JsonSerializer.SerializeToUtf8Bytes(invalidArchiveDigest);
+        Assert.Throws<InvalidDataException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(invalidArchiveBytes), CreateTask(), Now));
+
+        var expiredSource = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+        expiredSource["artifactExpiresAt"] = "2026-10-31T10:44:00Z";
+        var expiredSourceBytes = JsonSerializer.SerializeToUtf8Bytes(expiredSource);
+        Assert.Throws<InvalidDataException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(expiredSourceBytes), CreateTask(), Now));
+    }
+
+    [Fact]
     public void RejectsDispatchBindingWhoseEventShaDiffersFromPersistedIntent()
     {
         var createdAt = DateTimeOffset.Parse("2026-10-31T10:00:00Z");
