@@ -77,7 +77,7 @@ public sealed class PinnedHttpsCiAiArtifactTransport : ICiAiArtifactTransport, I
         {
             var finalUri = response.RequestMessage?.RequestUri ?? validatedRetrievalUri;
             var redirected = (int)response.StatusCode is >= 300 and < 400 ||
-                !Uri.Equals(finalUri, validatedRetrievalUri);
+                !finalUri.Equals(validatedRetrievalUri);
             var mediaType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
             var content = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             return new CiAiArtifactTransportResponse(
