@@ -209,7 +209,7 @@ public sealed class CiAiTestResultReportConsumerTests
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
             createdAt, expiresAt, TrustedEventSha: EventSha)
-            { JobKey = includeJobKey ? "minesweeper-required-check" : null }.Validate();
+            { JobKey = "minesweeper-required-check" }.Validate();
         var mismatchedRun = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: CandidateSha);
@@ -259,7 +259,7 @@ public sealed class CiAiTestResultReportConsumerTests
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
             createdAt, expiresAt, TrustedEventSha: EventSha)
-            { JobKey = "minesweeper-required-check" }.Validate();
+            { JobKey = includeJobKey ? "minesweeper-required-check" : null }.Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
