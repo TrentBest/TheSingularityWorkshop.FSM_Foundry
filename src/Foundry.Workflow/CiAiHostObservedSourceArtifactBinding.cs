@@ -74,7 +74,8 @@ public sealed record CiAiHostObservedSourceArtifactBinding(
         static bool IsSha(string? value) => value is { Length: 40 } && value.All(Uri.IsHexDigit);
         static bool IsDigest(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
-        if (!Clean(Repository, 200) || Repository.Split('/') is not { Length: 2 } repositoryParts ||
+        var repositoryParts = Repository.Split('/');
+        if (!Clean(Repository, 200) || repositoryParts.Length != 2 ||
             repositoryParts.Any(part => !Clean(part, 100)) ||
             RunId <= 0 || RunAttempt <= 0 || !IsSha(CandidateSha) ||
             !Clean(WorkflowPath, 512) || !WorkflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
