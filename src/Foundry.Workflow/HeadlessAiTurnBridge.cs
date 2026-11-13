@@ -195,6 +195,7 @@ public sealed record FoundryHeadlessAiTurnResult
     public string? AcceptedReportSchemaVersion { get; init; }
     public string? AcceptedReportVerdict { get; init; }
     public string? AcceptedReportIdentity { get; init; }
+    public string? AcceptedReportNoticeIdentitySha256 { get; init; }
     public string? AcceptedReportSha256 { get; init; }
     public string? AcceptedReportWorkflowRunId { get; init; }
     public int? AcceptedReportRunAttempt { get; init; }
@@ -232,13 +233,14 @@ public sealed record FoundryHeadlessAiTurnResult
         if (accepted is null)
         {
             if (AcceptedReportSchemaVersion is not null || AcceptedReportVerdict is not null || AcceptedReportIdentity is not null ||
-                AcceptedReportSha256 is not null || AcceptedReportWorkflowRunId is not null ||
+                AcceptedReportSha256 is not null || AcceptedReportNoticeIdentitySha256 is not null || AcceptedReportWorkflowRunId is not null ||
                 AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null ||
                 AcceptedReportSourceArtifactIdentitySha256 is not null)
                 throw new InvalidOperationException("HeadlessAi returned accepted-report lineage for a turn that supplied no accepted report.");
         }
         else if (AcceptedReportSchemaVersion != accepted.SchemaVersion ||
             AcceptedReportIdentity != accepted.ReportIdentity ||
+            AcceptedReportNoticeIdentitySha256 != accepted.NoticeIdentitySha256 ||
             AcceptedReportSha256 != accepted.ReportSha256 ||
             AcceptedReportWorkflowRunId != accepted.WorkflowRunId ||
             AcceptedReportRunAttempt != accepted.RunAttempt ||
