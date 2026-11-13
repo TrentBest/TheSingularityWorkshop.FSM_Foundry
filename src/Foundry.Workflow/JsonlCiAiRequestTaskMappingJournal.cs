@@ -31,6 +31,9 @@ public sealed record CiAiRequestTaskMapping(
     DateTimeOffset ExpiresAt,
     string? TrustedEventSha = null)
 {
+    /// <summary>Configured required-check key; distinct from the provider's display job name.</summary>
+    public string? JobKey { get; init; }
+
     public const int CurrentSchemaVersion = 1;
 
     public CiAiRequestTaskMapping Validate()
@@ -59,7 +62,8 @@ public sealed record CiAiRequestTaskMapping(
             throw new ArgumentException("Workflow path is invalid.", nameof(WorkflowPath));
         if (!Clean(TrustedWorkflowRef, 255) || TrustedWorkflowRef != "refs/heads/development")
             throw new ArgumentException("Trusted workflow ref must be the registered development ref.", nameof(TrustedWorkflowRef));
-        if (!Clean(JobName, 128) || !Clean(ResolutionStepName, 128) || !Clean(VerificationStepName, 128))
+        if (!Clean(JobName, 128) || !Clean(ResolutionStepName, 128) || !Clean(VerificationStepName, 128) ||
+            (JobKey is not null && !Clean(JobKey, 100)))
             throw new ArgumentException("Registered job and step names are required.");
         ValidateHttpsOrigin(ArtifactOrigin, nameof(ArtifactOrigin), originOnly: true);
         ValidateHttpsOrigin(AcknowledgementDestination, nameof(AcknowledgementDestination), originOnly: false);
