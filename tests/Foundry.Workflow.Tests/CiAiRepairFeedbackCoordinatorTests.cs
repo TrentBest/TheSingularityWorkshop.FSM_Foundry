@@ -135,7 +135,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
             createdAt, expiresAt, TrustedEventSha: EventSha)
-            { JobKey = "minesweeper-required-check" }.Validate();
+            { JobKey = "minesweeper-required-check", SourceArtifactName = "minesweeper-test-results" }.Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
