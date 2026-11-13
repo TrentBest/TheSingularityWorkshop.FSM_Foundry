@@ -63,6 +63,11 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.Equal(feedback.Snapshot.Events.Count, duplicate.Snapshot.Events.Count);
             Assert.Single(attempts.GetAttempts("task-1"));
 
+            var changedBinding = CreateSourceBinding(
+                DateTimeOffset.Parse("2026-10-31T10:19:00Z"));
+            Assert.Throws<InvalidOperationException>(() => tasks.ApplyCiAiReport(
+                "task-1", leaseId, artifact, changedBinding, TimeSpan.FromHours(1), Now));
+
             var client = new RecordingHeadlessAiClient();
             var turnJournal = new JsonlHeadlessAiTurnJournal(Path.Combine(root, "turns.jsonl"));
             const string priorFingerprint = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -147,12 +152,12 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             expiresAt, RunId.ToString(), Now);
     }
 
-    private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding() =>
+    private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding(DateTimeOffset? jobStartedAt = null) =>
         new(
             Repository, RunId, RunAttempt, CandidateSha, WorkflowPath,
             JobId, "test-minesweeper", "minesweeper-required-check",
             7001, "minesweeper-test-results", "sha256:" + new string('a', 64), 512,
-            DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
+            jobStartedAt ?? DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
             DateTimeOffset.Parse("2026-10-31T10:30:00Z"),
             DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
             DateTimeOffset.Parse("2026-11-07T10:20:00Z"),
