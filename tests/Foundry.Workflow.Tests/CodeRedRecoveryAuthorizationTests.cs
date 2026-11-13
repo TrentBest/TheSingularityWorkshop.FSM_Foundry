@@ -109,7 +109,7 @@ public sealed class CodeRedRecoveryAuthorizationTests
     }
 
     [Fact]
-    public void IncidentUpdatesAreSerializedUntilPersistentRecoveryCommits()
+    public async Task IncidentUpdatesAreSerializedUntilPersistentRecoveryCommits()
     {
         var taskPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-task-{Guid.NewGuid():N}.jsonl");
         var incidentPath = Path.Combine(Path.GetTempPath(), $"foundry-recovery-incident-{Guid.NewGuid():N}.jsonl");
@@ -126,13 +126,13 @@ public sealed class CodeRedRecoveryAuthorizationTests
                 "task-recovery", lease, incident.IncidentId, receipt,
                 Now.AddMinutes(1), "approved recovery"));
 
-            Assert.True(verifier.VerificationEntered.Wait(TimeSpan.FromSeconds(5)));
-            using var updateStarted = new ManualResetEventSlim();
+            await verifier.VerificationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var updateStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var updated = incident.Update("Rechecking evidence", "A newer CI attempt arrived",
                 new string('b', 40), 1235, 2, Now.AddSeconds(30));
             var updateTask = Task.Run(() =>
             {
-                updateStarted.Set();
+                updateStarted.TrySetResult();
                 return incidents.Update(updated);
             });
             Assert.True(updateStarted.Wait(TimeSpan.FromSeconds(5)));
@@ -216,14 +216,14 @@ public sealed class CodeRedRecoveryAuthorizationTests
 
     private sealed class BlockingTestVerifier : ICodeRedRecoveryReceiptVerifier, IDisposable
     {
-        public ManualResetEventSlim VerificationEntered { get; } = new();
+        public TaskCompletionSource VerificationEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public ManualResetEventSlim AllowVerification { get; } = new();
 
         public bool IsTrustedIssuer(string issuer) => issuer == "trusted-host";
 
         public bool VerifySignature(string issuer, ReadOnlyMemory<byte> signingPayload, string signature)
         {
-            VerificationEntered.Set();
+            VerificationEntered.TrySetResult();
             if (!AllowVerification.Wait(TimeSpan.FromSeconds(10)))
                 return false;
             return issuer == "trusted-host" &&
@@ -233,7 +233,7 @@ public sealed class CodeRedRecoveryAuthorizationTests
 
         public void Dispose()
         {
-            VerificationEntered.Dispose();
+            
             AllowVerification.Dispose();
         }
     }
