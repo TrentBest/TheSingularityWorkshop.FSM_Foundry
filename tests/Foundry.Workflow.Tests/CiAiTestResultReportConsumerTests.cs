@@ -99,7 +99,6 @@ public sealed class CiAiTestResultReportConsumerTests
             AcceptedReportWorkflowRunId = consumed.AcceptedReport.WorkflowRunId,
             AcceptedReportRunAttempt = consumed.AcceptedReport.RunAttempt,
             AcceptedReportCandidateCommitSha = consumed.AcceptedReport.CandidateCommitSha,
-            AcceptedReportSourceArtifactIdentitySha256 = consumed.AcceptedReport.SourceArtifactIdentitySha256,
             AcceptedReportSourceArtifactIdentitySha256 = consumed.AcceptedReport.SourceArtifactIdentitySha256
         };
         acceptedResult.ValidateAgainst(repairRequest);
