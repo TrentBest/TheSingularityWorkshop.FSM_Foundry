@@ -197,7 +197,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var expiredSource = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
         expiredSource["artifactExpiresAt"] = "2026-10-31T10:44:00Z";
         var expiredSourceBytes = JsonSerializer.SerializeToUtf8Bytes(expiredSource);
-        Assert.Throws<InvalidDataException>(() =>
+        Assert.Throws<UnauthorizedAccessException>(() =>
             Consume(expiredSourceBytes));
     }
 
