@@ -94,6 +94,7 @@ public sealed class CiAiTestResultReportConsumerTests
             PriorCandidateCommitSha = repairRequest.PriorCandidateCommitSha,
             IdempotencyKey = repairRequest.IdempotencyKey,
             AcceptedReportSchemaVersion = consumed.AcceptedReport.SchemaVersion,
+            AcceptedReportVerdict = consumed.AcceptedReport.Verdict,
             AcceptedReportIdentity = consumed.AcceptedReport.ReportIdentity,
             AcceptedReportSha256 = consumed.AcceptedReport.ReportSha256,
             AcceptedReportWorkflowRunId = consumed.AcceptedReport.WorkflowRunId,
