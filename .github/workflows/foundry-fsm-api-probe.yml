@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: TrentBest/TheSingularityWorkshop.HeadlessAi
-          ref: c87386f0deb5f2f9f8a34dadc6811f2d59727c9f
+          ref: 5e1349b7b66fa0e06bf2793474da59706e359c1b
           path: headlessai
 
       - name: Set up .NET 8
