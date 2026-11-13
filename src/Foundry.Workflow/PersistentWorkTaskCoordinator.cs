@@ -135,6 +135,7 @@ public sealed class PersistentWorkTaskCoordinator
             if (prior is not null)
             {
                 if (!string.Equals(prior.EvidencePayloadSha256, reportDigest, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(prior.SourceArtifactIdentitySha256, sourceArtifactBinding?.IdentitySha256, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(prior.CandidateSha, mapping.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
                     prior.CorrelationId != mapping.CorrelationId ||
                     !string.Equals(prior.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase))
