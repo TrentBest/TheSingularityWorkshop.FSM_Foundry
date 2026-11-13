@@ -33,6 +33,9 @@ public sealed class FoundryAcceptedCiAiReportContext
     public string WorkflowRunId { get; }
     public int RunAttempt { get; }
     public string CandidateCommitSha { get; }
+    /// <summary>Host-observed nested source artifact provenance, distinct from the outer report artifact.</summary>
+    public CiAiHostObservedSourceArtifactBinding? SourceArtifactBinding { get; }
+    public string? SourceArtifactIdentitySha256 => SourceArtifactBinding?.IdentitySha256;
 
     internal FoundryAcceptedCiAiReportContext(
         string repository,
@@ -42,7 +45,8 @@ public sealed class FoundryAcceptedCiAiReportContext
         string reportSha256,
         string workflowRunId,
         int runAttempt,
-        string candidateCommitSha)
+        string candidateCommitSha,
+        CiAiHostObservedSourceArtifactBinding? sourceArtifactBinding)
     {
         Repository = repository;
         SchemaVersion = schemaVersion;
@@ -52,6 +56,7 @@ public sealed class FoundryAcceptedCiAiReportContext
         WorkflowRunId = workflowRunId;
         RunAttempt = runAttempt;
         CandidateCommitSha = candidateCommitSha;
+        SourceArtifactBinding = sourceArtifactBinding;
     }
 
     public void Validate(string repository, string currentCandidateSha, string? priorCandidateSha)
@@ -74,6 +79,14 @@ public sealed class FoundryAcceptedCiAiReportContext
             (priorCandidateSha is null ||
              !string.Equals(CandidateCommitSha, priorCandidateSha, StringComparison.OrdinalIgnoreCase)))
             throw new UnauthorizedAccessException("Accepted CiAi report candidate does not match the current or prior candidate.");
+        if (SourceArtifactBinding is not null &&
+            (!string.Equals(SourceArtifactBinding.Repository, Repository, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(SourceArtifactBinding.RunId.ToString(CultureInfo.InvariantCulture), WorkflowRunId, StringComparison.Ordinal) ||
+             SourceArtifactBinding.RunAttempt != RunAttempt ||
+             !string.Equals(SourceArtifactBinding.CandidateSha, CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+             SourceArtifactIdentitySha256 is not { Length: 64 } ||
+             !SourceArtifactIdentitySha256.All(Uri.IsHexDigit)))
+            throw new InvalidDataException("Accepted CiAi report nested source-artifact provenance does not match the outer report run lineage.");
         var bytes = new UTF8Encoding(false, true).GetBytes(CanonicalReportJson);
         if (bytes.Length > MaximumReportBytes)
             throw new InvalidDataException("Accepted CiAi report exceeds the shared one-megabyte limit.");
@@ -123,6 +136,7 @@ public static class CiAiTestResultReportConsumer
     public static CiAiConsumedTestResult Consume(
         FoundryVerifiedCiAiReportArtifact artifact,
         WorkTaskSnapshot task,
+        CiAiHostObservedSourceArtifactBinding? sourceArtifactBinding,
         DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(artifact);
@@ -134,6 +148,7 @@ public static class CiAiTestResultReportConsumer
         var mapping = request.Mapping.Validate();
         var run = request.RunBinding
             ?? throw new InvalidOperationException("CiAi report cannot be consumed before the dispatch is bound to an exact GitHub run.");
+        sourceArtifactBinding?.ValidateAgainst(mapping, run, now);
         if (request.Cancelled || now < mapping.CreatedAt || now > mapping.ExpiresAt ||
             artifact.ExpiresAt <= now)
             throw new InvalidOperationException("CiAi report artifact or dispatch intent is cancelled, expired, or outside its validity window.");
@@ -206,7 +221,8 @@ public static class CiAiTestResultReportConsumer
             ReadInt32(properties, "runAttempt") != run.RunAttempt)
             throw new UnauthorizedAccessException("CiAi report run identity does not match the exact persisted GitHub run binding.");
         var jobId = ReadInt64(properties, "jobId");
-        if (jobId <= 0 || ReadText(properties, "jobName", 200) != mapping.JobName)
+        var jobName = ReadText(properties, "jobName", 200);
+        if (jobId <= 0 || jobName != mapping.JobName)
             throw new UnauthorizedAccessException("CiAi report job identity does not match the registered workflow job.");
 
         var runUrl = ReadGitHubEvidenceUrl(properties, "runEvidenceUrl",
@@ -231,7 +247,12 @@ public static class CiAiTestResultReportConsumer
         // Bind its nested artifact claim back to the exact run/job registered by Foundry;
         // do not confuse this with the outer JSON report artifact verified by the notice.
         if (verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure")
-            ValidateSourceArtifactMetadata(properties, mapping, run, observedAt);
+        {
+            if (sourceArtifactBinding is null)
+                throw new UnauthorizedAccessException("A host-observed source-artifact binding is required before accepting complete CI evidence.");
+            ValidateSourceArtifactMetadata(properties, mapping, run, sourceArtifactBinding,
+                jobId, jobName, observedAt);
+        }
 
 
         var reasonCodes = ReadReasonCodes(properties);
@@ -266,7 +287,10 @@ public static class CiAiTestResultReportConsumer
             actionable,
             diagnosticsFingerprint,
             validatingEvent.OccurredAt,
-            observedAt).Validate();
+            observedAt)
+        {
+            SourceArtifactIdentitySha256 = sourceArtifactBinding?.IdentitySha256
+        }.Validate();
 
         var summary = BuildBoundedSummary(verdict, reasonCodes, failedSummary);
         var headlessEvidence = new FoundryHeadlessAiEvidence
@@ -292,7 +316,8 @@ public static class CiAiTestResultReportConsumer
             reportDigest,
             run.RunId.ToString(CultureInfo.InvariantCulture),
             run.RunAttempt,
-            mapping.CandidateSha);
+            mapping.CandidateSha,
+            sourceArtifactBinding);
         acceptedReport.Validate(mapping.Repository, mapping.CandidateSha, null);
 
         return new CiAiConsumedTestResult(attempt, headlessEvidence, verdict,
@@ -303,6 +328,9 @@ public static class CiAiTestResultReportConsumer
         Dictionary<string, JsonElement> properties,
         CiAiRequestTaskMapping mapping,
         CiAiDispatchRunBinding run,
+        CiAiHostObservedSourceArtifactBinding sourceBinding,
+        long reportJobId,
+        string reportJobName,
         DateTimeOffset observedAt)
     {
         var sourceArtifactId = ReadInt64(properties, "sourceArtifactId");
@@ -317,8 +345,13 @@ public static class CiAiTestResultReportConsumer
 
         if (sourceArtifactId <= 0 || string.IsNullOrWhiteSpace(sourceArtifactName) ||
             (string.IsNullOrWhiteSpace(mapping.JobKey) ||
-             !string.Equals(sourceJobKey, mapping.JobKey, StringComparison.Ordinal)))
-            throw new UnauthorizedAccessException("CiAi source artifact identity does not match the registered workflow job.");
+             !string.Equals(sourceJobKey, mapping.JobKey, StringComparison.Ordinal)) ||
+            reportJobId != sourceBinding.JobId ||
+            !string.Equals(reportJobName, sourceBinding.JobName, StringComparison.Ordinal) ||
+            sourceArtifactId != sourceBinding.ArtifactId ||
+            !string.Equals(sourceArtifactName, sourceBinding.ArtifactName, StringComparison.Ordinal) ||
+            !string.Equals(sourceJobKey, sourceBinding.JobKey, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("CiAi report source artifact ID/name or job ID/name/key does not match the independent host observation.");
 
         if (archiveDigest.Length != 71 ||
             !archiveDigest.StartsWith("sha256:", StringComparison.Ordinal) ||
@@ -330,9 +363,16 @@ public static class CiAiTestResultReportConsumer
             payloadSize is <= 0 or > 16 * 1024 * 1024)
             throw new InvalidDataException("CiAi source payload digest or size is invalid.");
 
-        if (artifactCreatedAt < run.BoundAt || artifactCreatedAt > observedAt ||
-            artifactExpiresAt <= artifactCreatedAt || artifactExpiresAt < observedAt)
-            throw new InvalidDataException("CiAi source artifact timestamps are outside the exact run observation window.");
+        if (!string.Equals(archiveDigest, sourceBinding.ProviderArchiveDigest, StringComparison.OrdinalIgnoreCase) ||
+            archiveSize != sourceBinding.ArchiveSizeBytes ||
+            artifactCreatedAt != sourceBinding.ArtifactCreatedAt ||
+            artifactExpiresAt != sourceBinding.ArtifactExpiresAt ||
+            !string.Equals(payloadDigest, sourceBinding.PayloadSha256, StringComparison.OrdinalIgnoreCase) ||
+            payloadSize != sourceBinding.PayloadSizeBytes)
+            throw new UnauthorizedAccessException("CiAi report archive/payload digest, size, or timestamps do not match the independent host-observed source binding.");
+
+        if (artifactCreatedAt > observedAt || artifactExpiresAt <= artifactCreatedAt || artifactExpiresAt < observedAt)
+            throw new InvalidDataException("CiAi source artifact timestamps are outside the exact observation and retention window.");
     }
 
     private static void ValidateUniqueProperties(JsonElement element)
