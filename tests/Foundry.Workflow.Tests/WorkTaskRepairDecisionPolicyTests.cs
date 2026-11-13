@@ -14,7 +14,8 @@ public sealed class WorkTaskRepairDecisionPolicyTests
             new string(candidate, 40), 1000 + number, 1, new string((char)('f' - number), 64),
             complete, successful, successful ? false : actionable,
             actionable && !successful ? new string(diagnostics, 64) : null,
-            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1));
+            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1))
+        { SourceArtifactIdentitySha256 = new string('c', 64) };
 
     private static WorkTaskRepairEvidenceExpectation Expectation(WorkTaskRepairAttempt attempt) =>
         new(attempt.TaskId, attempt.CorrelationId, attempt.Repository, attempt.Branch,
