@@ -9,6 +9,15 @@ namespace Foundry.Workflow.Tests;
 
 public sealed class CiAiTestResultReportConsumerTests
 {
+    [Fact]
+    public void HostObservedSourceBindingCannotBeConstructedByExternalConsumers()
+    {
+        var publicConstructors = typeof(CiAiHostObservedSourceArtifactBinding)
+            .GetConstructors(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        Assert.Empty(publicConstructors);
+    }
+
     private static readonly DateTimeOffset TaskStart = DateTimeOffset.Parse("2026-10-31T09:50:00Z");
     private static readonly DateTimeOffset ValidationStart = DateTimeOffset.Parse("2026-10-31T10:10:00Z");
     private static readonly DateTimeOffset RunBoundAt = DateTimeOffset.Parse("2026-10-31T10:15:00Z");
