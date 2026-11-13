@@ -273,6 +273,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 PriorCandidateCommitSha = request.PriorCandidateCommitSha,
                 IdempotencyKey = request.IdempotencyKey,
                 AcceptedReportSchemaVersion = request.AcceptedCiAiReport?.SchemaVersion,
+                AcceptedReportVerdict = request.AcceptedCiAiReport?.Verdict,
                 AcceptedReportIdentity = request.AcceptedCiAiReport?.ReportIdentity,
                 AcceptedReportSha256 = request.AcceptedCiAiReport?.ReportSha256,
                 AcceptedReportWorkflowRunId = request.AcceptedCiAiReport?.WorkflowRunId,
