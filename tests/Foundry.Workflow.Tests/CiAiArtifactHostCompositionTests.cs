@@ -246,7 +246,7 @@ public sealed class CiAiArtifactHostCompositionTests
             "https://ciai.example.test/api/v1/integrations/ciai/artifact-receipts",
             "ciai-ack-profile", Created, Created.AddHours(2),
             TrustedEventSha: EventSha)
-            { JobKey = "minesweeper-required-check" }.Validate();
+            { JobKey = "minesweeper-required-check", SourceArtifactName = "minesweeper-test-results" }.Validate();
         journal.CreateDispatchIntent(mapping);
         journal.BindRun("request-1", new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath,
