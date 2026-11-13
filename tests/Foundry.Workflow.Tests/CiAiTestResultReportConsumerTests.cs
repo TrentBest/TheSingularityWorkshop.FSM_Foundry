@@ -96,6 +96,7 @@ public sealed class CiAiTestResultReportConsumerTests
             AcceptedReportSchemaVersion = consumed.AcceptedReport.SchemaVersion,
             AcceptedReportVerdict = consumed.AcceptedReport.Verdict,
             AcceptedReportIdentity = consumed.AcceptedReport.ReportIdentity,
+            AcceptedReportNoticeIdentitySha256 = consumed.AcceptedReport.NoticeIdentitySha256,
             AcceptedReportSha256 = consumed.AcceptedReport.ReportSha256,
             AcceptedReportWorkflowRunId = consumed.AcceptedReport.WorkflowRunId,
             AcceptedReportRunAttempt = consumed.AcceptedReport.RunAttempt,
