@@ -143,7 +143,8 @@ public sealed class PersistentWorkTaskCoordinator
 
                 var alreadyApplied = task.Events.Any(item =>
                     item.CiRunId == run.RunId && item.CiRunAttempt == run.RunAttempt &&
-                    string.Equals(item.EvidencePayloadSha256, reportDigest, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(item.EvidencePayloadSha256, reportDigest, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.SourceArtifactIdentitySha256, sourceArtifactBinding?.IdentitySha256, StringComparison.OrdinalIgnoreCase));
                 if (alreadyApplied)
                     return new CiAiRepairFeedbackResult(task, null, IsDuplicateDelivery: true);
             }
