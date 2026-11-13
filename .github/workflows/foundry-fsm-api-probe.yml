@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: TrentBest/TheSingularityWorkshop.FSM_Serialization
-          ref: development
+          ref: 33e71045a8e756f31e9df3e06b38b132927aa107
           path: dependencies/FSM_Serialization
 
       - name: Set up .NET 8
