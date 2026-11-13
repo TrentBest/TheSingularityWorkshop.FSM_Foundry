@@ -87,8 +87,9 @@ public sealed record FoundryHeadlessAiTurnRequest
         if (AcceptedCiAiReport is not null)
         {
             AcceptedCiAiReport.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
-            if (Role == "repair" && AcceptedCiAiReport.SourceArtifactBinding is null)
-                throw new ArgumentException("HeadlessAi repair turns require both outer report identity and host-observed nested source-artifact provenance.", nameof(AcceptedCiAiReport));
+            if (Role == "repair" &&
+                (AcceptedCiAiReport.Verdict != "ActionableFailure" || AcceptedCiAiReport.SourceArtifactBinding is null))
+                throw new ArgumentException("HeadlessAi repair turns require an actionable report plus host-observed nested source-artifact provenance.", nameof(AcceptedCiAiReport));
             if (!Evidence.Any(item =>
                     item.WorkflowRunId == AcceptedCiAiReport.WorkflowRunId &&
                     item.Attempt == AcceptedCiAiReport.RunAttempt &&
@@ -192,6 +193,7 @@ public sealed record FoundryHeadlessAiTurnResult
     public string? PriorCandidateCommitSha { get; init; }
     public string? IdempotencyKey { get; init; }
     public string? AcceptedReportSchemaVersion { get; init; }
+    public string? AcceptedReportVerdict { get; init; }
     public string? AcceptedReportIdentity { get; init; }
     public string? AcceptedReportSha256 { get; init; }
     public string? AcceptedReportWorkflowRunId { get; init; }
@@ -229,7 +231,7 @@ public sealed record FoundryHeadlessAiTurnResult
         var accepted = request.AcceptedCiAiReport;
         if (accepted is null)
         {
-            if (AcceptedReportSchemaVersion is not null || AcceptedReportIdentity is not null ||
+            if (AcceptedReportSchemaVersion is not null || AcceptedReportVerdict is not null || AcceptedReportIdentity is not null ||
                 AcceptedReportSha256 is not null || AcceptedReportWorkflowRunId is not null ||
                 AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null ||
                 AcceptedReportSourceArtifactIdentitySha256 is not null)
