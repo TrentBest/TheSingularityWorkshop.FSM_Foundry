@@ -181,6 +181,10 @@ public sealed class CiAiTestResultReportConsumerTests
         Assert.Throws<UnauthorizedAccessException>(() =>
             CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(wrongJobBytes), CreateTask(), Now));
 
+        var missingJobKeyBytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(missingJobKeyBytes, includeJobKey: false), CreateTask(), Now));
+
         var invalidArchiveDigest = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
         invalidArchiveDigest["providerArchiveDigest"] = "sha256:not-a-valid-digest";
         var invalidArchiveBytes = JsonSerializer.SerializeToUtf8Bytes(invalidArchiveDigest);
@@ -205,7 +209,7 @@ public sealed class CiAiTestResultReportConsumerTests
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
             createdAt, expiresAt, TrustedEventSha: EventSha)
-            { JobKey = "minesweeper-required-check" }.Validate();
+            { JobKey = includeJobKey ? "minesweeper-required-check" : null }.Validate();
         var mismatchedRun = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: CandidateSha);
@@ -245,7 +249,7 @@ public sealed class CiAiTestResultReportConsumerTests
             new WorkTaskLease("agent", leaseId, Now.AddMinutes(10)), 1, events);
     }
 
-    private static FoundryVerifiedCiAiReportArtifact CreateVerifiedArtifact(byte[] bytes)
+    private static FoundryVerifiedCiAiReportArtifact CreateVerifiedArtifact(byte[] bytes, bool includeJobKey = true)
     {
         var createdAt = DateTimeOffset.Parse("2026-10-31T10:00:00Z");
         var expiresAt = DateTimeOffset.Parse("2026-10-31T12:00:00Z");
