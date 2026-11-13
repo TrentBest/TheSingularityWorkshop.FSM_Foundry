@@ -23,11 +23,14 @@ public sealed record WorkTaskRepairAttempt(
     DateTimeOffset StartedAt,
     DateTimeOffset ObservedAt)
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>SHA-256 fingerprint of the independently host-observed nested source-artifact identity.</summary>
+    public string? SourceArtifactIdentitySha256 { get; init; }
+
+    public const int CurrentSchemaVersion = 2;
 
     public WorkTaskRepairAttempt Validate()
     {
-        if (SchemaVersion != CurrentSchemaVersion ||
+        if (SchemaVersion is not (1 or CurrentSchemaVersion) ||
             string.IsNullOrWhiteSpace(TaskId) || TaskId.Length > 200 ||
             string.IsNullOrWhiteSpace(CorrelationId) || CorrelationId.Length > 200)
             throw new ArgumentException("Repair attempt schema and task identity are invalid.");
@@ -47,6 +50,10 @@ public sealed record WorkTaskRepairAttempt(
             throw new ArgumentOutOfRangeException(nameof(AttemptNumber), "Attempt, run, and run-attempt identities must be positive.");
         ValidateSha(CandidateSha, nameof(CandidateSha));
         ValidateDigest(EvidencePayloadSha256, nameof(EvidencePayloadSha256));
+        if (SourceArtifactIdentitySha256 is not null)
+            ValidateDigest(SourceArtifactIdentitySha256, nameof(SourceArtifactIdentitySha256));
+        if (SchemaVersion == CurrentSchemaVersion && EvidenceComplete && SourceArtifactIdentitySha256 is null)
+            throw new ArgumentException("Complete repair evidence requires a host-observed source-artifact identity fingerprint.");
         if (IsSuccessful && (!EvidenceComplete || HasActionableDiagnostics))
             throw new ArgumentException("Successful evidence must be complete and have no actionable failure diagnostics.");
         if (HasActionableDiagnostics && (!EvidenceComplete || IsSuccessful ||
@@ -107,6 +114,8 @@ public sealed class JsonlWorkTaskRepairAttemptJournal
     {
         ArgumentNullException.ThrowIfNull(attempt);
         attempt.Validate();
+        if (attempt.SchemaVersion != WorkTaskRepairAttempt.CurrentSchemaVersion)
+            throw new ArgumentException("New repair-attempt journal entries must use the current provenance schema.", nameof(attempt));
         lock (_gate)
         {
             if (!_attempts.TryGetValue(attempt.TaskId, out var history))
