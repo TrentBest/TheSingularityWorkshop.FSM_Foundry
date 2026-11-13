@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using TheSingularityWorkshop.Foundry;
+using TheSingularityWorkshop.HeadlessAi;
 using Xunit;
 
 namespace Foundry.Workflow.Tests;
@@ -57,6 +59,42 @@ public sealed class CiAiArtifactHostCompositionTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class CapturingProviderHandler : HttpMessageHandler
+    {
+        public string RequestBody { get; private set; } = string.Empty;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestBody = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            const string responseJson = """
+                {
+                  "id": "resp_composition_test",
+                  "model": "composition-model",
+                  "status": "completed",
+                  "output": [
+                    {
+                      "type": "message",
+                      "content": [
+                        {
+                          "type": "output_text",
+                          "text": "{\\"diagnosis\\":\\"The exact accepted CI report identifies an actionable failure.\\",\\"patchIntent\\":\\"Propose a narrow correction to the failing test path.\\"}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+            };
+        }
     }
 
     private sealed record PreparedTurn(string RequestFingerprint) : IFoundryHeadlessAiPreparedTurn;
@@ -229,6 +267,47 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.Equal(RunAttempt, client.Request.AcceptedCiAiReport.RunAttempt);
             Assert.Equal(CreateSourceBinding().IdentitySha256,
                 client.Request.AcceptedCiAiReport.SourceArtifactIdentitySha256);
+
+            // Exercise the concrete in-process adapter as well as the provider-neutral fake port above.
+            var providerHandler = new CapturingProviderHandler();
+            using var providerHttp = new HttpClient(providerHandler);
+            var profile = new HeadlessAiProfile(
+                "composition-test",
+                new Uri("https://api.openai.com/v1/responses"),
+                settings: new Dictionary<string, string> { ["model"] = "composition-model" });
+            var concreteClient = new HeadlessAiAgentTurnClient(new HeadlessAiAgentTurnExecutor(
+                new HeadlessAiAgentTemplate(profile, new OpenAiResponsesAdapter()),
+                providerHttp,
+                new FixedTimeProvider(Now.AddMinutes(1))));
+            var concreteRequest = new FoundryHeadlessAiTurnRequest
+            {
+                TaskId = "task-1",
+                CorrelationId = "correlation-1",
+                Repository = Repository,
+                AuthorizedBranch = "work/task-1",
+                BaseCommitSha = BaseSha,
+                CandidateCommitSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                IssueUrl = "https://github.com/owner/repo/issues/10",
+                IssueNumber = 10,
+                Role = "repair",
+                Instructions = "Diagnose the exact accepted CI failure and propose a bounded repair.",
+                CanonicalPrompt = "Use the accepted report to explain the failing candidate.",
+                ResponseSchema = """{"type":"object","required":["diagnosis","patchIntent"]}""",
+                ExpiresAt = Now.AddMinutes(20),
+                IdempotencyKey = "concrete-adapter-repair-turn",
+                PriorTurnId = "turn-initial-1",
+                PriorCandidateCommitSha = CandidateSha,
+                Evidence = new[] { feedback.Consumed.HeadlessAiEvidence },
+                AcceptedCiAiReport = feedback.Consumed.AcceptedReport
+            };
+            var concretePrepared = concreteClient.Prepare(concreteRequest, Now.AddMinutes(1));
+            var concreteResult = await concreteClient.ExecuteAsync(concreteRequest, concretePrepared);
+            Assert.Equal("sha256:" + reportDigest, concreteResult.AcceptedReportIdentity);
+            Assert.Equal(artifact.NoticeIdentitySha256, concreteResult.AcceptedReportNoticeIdentitySha256);
+            Assert.Equal(CreateSourceBinding().IdentitySha256, concreteResult.AcceptedReportSourceArtifactIdentitySha256);
+            Assert.Contains(artifact.NoticeIdentitySha256, providerHandler.RequestBody);
+            Assert.Contains("sha256:" + reportDigest, providerHandler.RequestBody);
+            Assert.Contains(CreateSourceBinding().IdentitySha256, providerHandler.RequestBody);
         }
         finally
         {
