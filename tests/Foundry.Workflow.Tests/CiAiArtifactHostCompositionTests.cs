@@ -177,6 +177,8 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.False(feedback.IsDuplicateDelivery);
             Assert.NotNull(feedback.Consumed);
             Assert.Equal(CandidateSha, feedback.Consumed!.Attempt.CandidateSha);
+            Assert.Equal(CreateSourceBinding().IdentitySha256, feedback.Consumed.Attempt.SourceArtifactIdentitySha256);
+            Assert.Equal(CreateSourceBinding().IdentitySha256, feedback.Consumed.AcceptedReport.SourceArtifactIdentitySha256);
             Assert.Equal(RunId, feedback.Consumed.Attempt.CiRunId);
             Assert.Equal(reportBytes, Encoding.UTF8.GetBytes(feedback.Consumed.AcceptedReport.CanonicalReportJson));
 
