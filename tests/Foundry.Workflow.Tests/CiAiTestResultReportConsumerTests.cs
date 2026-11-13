@@ -28,7 +28,7 @@ public sealed class CiAiTestResultReportConsumerTests
     public void ConsumesActionableReportIntoBoundAttemptAndHeadlessEvidence()
     {
         var bytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
-        var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
+        var consumed = Consume(bytes);
 
         Assert.Equal("ActionableFailure", consumed.Verdict);
         Assert.Equal("task-1", consumed.Attempt.TaskId);
@@ -44,6 +44,8 @@ public sealed class CiAiTestResultReportConsumerTests
         Assert.True(consumed.Attempt.HasActionableDiagnostics);
         Assert.NotNull(consumed.Attempt.DiagnosticsFingerprint);
         Assert.Equal(consumed.ReportSha256, consumed.Attempt.EvidencePayloadSha256);
+        Assert.Equal(CreateSourceBinding().IdentitySha256, consumed.Attempt.SourceArtifactIdentitySha256);
+        Assert.Equal(7001, consumed.AcceptedReport.SourceArtifactBinding?.ArtifactId);
         Assert.Equal(CandidateSha, consumed.HeadlessAiEvidence.CommitSha);
         Assert.Equal(RunId.ToString(), consumed.HeadlessAiEvidence.WorkflowRunId);
         Assert.Contains("test-results.actionable-failure", consumed.HeadlessAiEvidence.BoundedSummary);
@@ -96,7 +98,8 @@ public sealed class CiAiTestResultReportConsumerTests
             AcceptedReportSha256 = consumed.AcceptedReport.ReportSha256,
             AcceptedReportWorkflowRunId = consumed.AcceptedReport.WorkflowRunId,
             AcceptedReportRunAttempt = consumed.AcceptedReport.RunAttempt,
-            AcceptedReportCandidateCommitSha = consumed.AcceptedReport.CandidateCommitSha
+            AcceptedReportCandidateCommitSha = consumed.AcceptedReport.CandidateCommitSha,
+            AcceptedReportSourceArtifactIdentitySha256 = consumed.AcceptedReport.SourceArtifactIdentitySha256
         };
         acceptedResult.ValidateAgainst(repairRequest);
         Assert.Throws<InvalidOperationException>(() =>
@@ -110,7 +113,7 @@ public sealed class CiAiTestResultReportConsumerTests
     public void CompletePassIsDerivedOnlyFromCiAiVerdict()
     {
         var bytes = CreateReport("CompletePass", "Passed", "success", EventSha);
-        var consumed = CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now);
+        var consumed = Consume(bytes);
 
         Assert.True(consumed.Attempt.EvidenceComplete);
         Assert.True(consumed.Attempt.IsSuccessful);
@@ -133,7 +136,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<InvalidDataException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+            Consume(bytes));
     }
 
     [Fact]
@@ -148,7 +151,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<InvalidDataException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+            Consume(bytes));
     }
 
     [Fact]
@@ -160,7 +163,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
 
         Assert.Throws<FormatException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+            Consume(bytes));
     }
 
     [Fact]
@@ -169,7 +172,7 @@ public sealed class CiAiTestResultReportConsumerTests
         var bytes = CreateReport("ActionableFailure", "Failed", "failure", CandidateSha);
 
         Assert.Throws<UnauthorizedAccessException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), Now));
+            Consume(bytes));
     }
 
     [Fact]
@@ -179,23 +182,23 @@ public sealed class CiAiTestResultReportConsumerTests
         wrongJobKey["sourceJobKey"] = "unregistered-job";
         var wrongJobBytes = JsonSerializer.SerializeToUtf8Bytes(wrongJobKey);
         Assert.Throws<UnauthorizedAccessException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(wrongJobBytes), CreateTask(), Now));
+            Consume(wrongJobBytes));
 
         var missingJobKeyBytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
         Assert.Throws<UnauthorizedAccessException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(missingJobKeyBytes, includeJobKey: false), CreateTask(), Now));
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(missingJobKeyBytes, includeJobKey: false), CreateTask(), null, Now));
 
         var invalidArchiveDigest = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
         invalidArchiveDigest["providerArchiveDigest"] = "sha256:not-a-valid-digest";
         var invalidArchiveBytes = JsonSerializer.SerializeToUtf8Bytes(invalidArchiveDigest);
         Assert.Throws<InvalidDataException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(invalidArchiveBytes), CreateTask(), Now));
+            Consume(invalidArchiveBytes));
 
         var expiredSource = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
         expiredSource["artifactExpiresAt"] = "2026-10-31T10:44:00Z";
         var expiredSourceBytes = JsonSerializer.SerializeToUtf8Bytes(expiredSource);
         Assert.Throws<InvalidDataException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(expiredSourceBytes), CreateTask(), Now));
+            Consume(expiredSourceBytes));
     }
 
     [Fact]
@@ -224,8 +227,33 @@ public sealed class CiAiTestResultReportConsumerTests
         var json = Encoding.UTF8.GetString(bytes);
         var duplicate = Encoding.UTF8.GetBytes(json[..^1] + ",\"schema\":\"ciai.test-results.v1\"}");
         Assert.Throws<FormatException>(() =>
-            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(duplicate), CreateTask(), Now));
+            Consume(duplicate));
     }
+
+    private static CiAiConsumedTestResult Consume(byte[] bytes, bool includeJobKey = true) =>
+        CiAiTestResultReportConsumer.Consume(
+            CreateVerifiedArtifact(bytes, includeJobKey), CreateTask(),
+            includeJobKey ? CreateSourceBinding() : null, Now);
+
+    private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding(
+        long artifactId = 7001,
+        string artifactName = "minesweeper-test-results",
+        string jobKey = "minesweeper-required-check",
+        string archiveDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        long archiveSize = 512,
+        DateTimeOffset? artifactCreatedAt = null,
+        DateTimeOffset? artifactExpiresAt = null,
+        string payloadSha256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        long payloadSize = 512) =>
+        new(
+            Repository, RunId, RunAttempt, CandidateSha, WorkflowPath,
+            JobId, "test-minesweeper", jobKey, artifactId, artifactName,
+            archiveDigest, archiveSize,
+            DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
+            DateTimeOffset.Parse("2026-10-31T10:30:00Z"),
+            artifactCreatedAt ?? DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
+            artifactExpiresAt ?? DateTimeOffset.Parse("2026-11-07T10:20:00Z"),
+            payloadSha256, payloadSize);
 
     private static WorkTaskSnapshot CreateTask()
     {
@@ -317,7 +345,7 @@ public sealed class CiAiTestResultReportConsumerTests
             TestFramework = ".NET",
             Format = "trx",
             SourceArtifactId = (long?)7001,
-            SourceArtifactName = $"ciai-test-results-{RunId}-{RunAttempt}-test-minesweeper",
+            SourceArtifactName = "minesweeper-test-results",
             SourceJobKey = "minesweeper-required-check",
             ProviderArchiveDigest = "sha256:" + new string('a', 64),
             ArchiveSizeBytes = (long?)512,
