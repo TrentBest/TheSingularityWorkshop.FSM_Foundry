@@ -245,7 +245,8 @@ public sealed class CiAiArtifactHostCompositionTests
             "https://artifacts.example.test/",
             "https://ciai.example.test/api/v1/integrations/ciai/artifact-receipts",
             "ciai-ack-profile", Created, Created.AddHours(2),
-            TrustedEventSha: EventSha).Validate();
+            TrustedEventSha: EventSha)
+            { JobKey = "minesweeper-required-check" }.Validate();
         journal.CreateDispatchIntent(mapping);
         journal.BindRun("request-1", new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath,
@@ -335,7 +336,7 @@ public sealed class CiAiArtifactHostCompositionTests
             Format = "trx",
             SourceArtifactId = (long?)7001,
             SourceArtifactName = "ciai-test-results-" + RunId + "-" + RunAttempt + "-test-minesweeper",
-            SourceJobKey = "test-minesweeper",
+            SourceJobKey = "minesweeper-required-check",
             ProviderArchiveDigest = "sha256:" + new string('a', 64),
             ArchiveSizeBytes = (long?)512,
             ArtifactCreatedAt = DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
