@@ -254,7 +254,8 @@ public sealed class CiAiTestResultReportConsumerTests
             Repository, BranchRef, CandidateSha, WorkflowPath, "refs/heads/development", WorkflowSha,
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
-            createdAt, expiresAt, TrustedEventSha: EventSha).Validate();
+            createdAt, expiresAt, TrustedEventSha: EventSha)
+            { JobKey = "minesweeper-required-check" }.Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
