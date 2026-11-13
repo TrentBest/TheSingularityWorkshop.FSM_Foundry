@@ -65,9 +65,10 @@ public sealed record CiAiRequestTaskMapping(
         if (!Clean(TrustedWorkflowRef, 255) || TrustedWorkflowRef != "refs/heads/development")
             throw new ArgumentException("Trusted workflow ref must be the registered development ref.", nameof(TrustedWorkflowRef));
         if (!Clean(JobName, 128) || !Clean(ResolutionStepName, 128) || !Clean(VerificationStepName, 128) ||
-            (JobKey is not null && (!Clean(JobKey, 100) || !Clean(SourceArtifactName, 200))) ||
+            (JobKey is not null && !Clean(JobKey, 100)) ||
+            (SourceArtifactName is not null && !Clean(SourceArtifactName, 200)) ||
             (JobKey is null && SourceArtifactName is not null))
-            throw new ArgumentException("Registered job, required-check key, and expected source artifact name must be consistent.");
+            throw new ArgumentException("Registered job, required-check key, and optional expected source artifact name must be consistent.");
         ValidateHttpsOrigin(ArtifactOrigin, nameof(ArtifactOrigin), originOnly: true);
         ValidateHttpsOrigin(AcknowledgementDestination, nameof(AcknowledgementDestination), originOnly: false);
         if (CreatedAt == default || ExpiresAt <= CreatedAt || ExpiresAt - CreatedAt > TimeSpan.FromDays(7))
