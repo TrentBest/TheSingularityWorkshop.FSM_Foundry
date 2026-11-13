@@ -83,7 +83,7 @@ public sealed class CiAiArtifactHostCompositionTests
                       "content": [
                         {
                           "type": "output_text",
-                          "text": "{\\"diagnosis\\":\\"The exact accepted CI report identifies an actionable failure.\\",\\"patchIntent\\":\\"Propose a narrow correction to the failing test path.\\"}"
+                          "text": "{\"diagnosis\":\"The exact accepted CI report identifies an actionable failure.\",\"patchIntent\":\"Propose a narrow correction to the failing test path.\"}"
                         }
                       ]
                     }
