@@ -170,7 +170,7 @@ public sealed class CiAiArtifactHostCompositionTests
                 retrieved.Notice.ProviderRunId,
                 Now);
             var feedback = tasks.ApplyCiAiReport(
-                "task-1", leaseId, artifact, TimeSpan.FromHours(1), Now);
+                "task-1", leaseId, artifact, CreateSourceBinding(), TimeSpan.FromHours(1), Now);
 
             Assert.Equal(WorkTaskStatus.RepairRequired, feedback.Snapshot.Status);
             Assert.False(feedback.IsDuplicateDelivery);
@@ -180,7 +180,7 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.Equal(reportBytes, Encoding.UTF8.GetBytes(feedback.Consumed.AcceptedReport.CanonicalReportJson));
 
             var duplicateApply = tasks.ApplyCiAiReport(
-                "task-1", leaseId, artifact, TimeSpan.FromHours(1), Now);
+                "task-1", leaseId, artifact, CreateSourceBinding(), TimeSpan.FromHours(1), Now);
             Assert.True(duplicateApply.IsDuplicateDelivery);
             Assert.Null(duplicateApply.Consumed);
             Assert.Single(attemptJournal.GetAttempts("task-1"));
@@ -289,6 +289,17 @@ public sealed class CiAiArtifactHostCompositionTests
         return JsonSerializer.SerializeToUtf8Bytes(payload);
     }
 
+    private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding() =>
+        new(
+            Repository, RunId, RunAttempt, CandidateSha, WorkflowPath,
+            JobId, "test-minesweeper", "minesweeper-required-check",
+            7001, "minesweeper-test-results", "sha256:" + new string('a', 64), 512,
+            DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
+            DateTimeOffset.Parse("2026-10-31T10:30:00Z"),
+            DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
+            DateTimeOffset.Parse("2026-11-07T10:20:00Z"),
+            new string('f', 64), 512);
+
     private static byte[] CreateReport()
     {
         var failedResult = new
@@ -335,7 +346,7 @@ public sealed class CiAiArtifactHostCompositionTests
             TestFramework = ".NET",
             Format = "trx",
             SourceArtifactId = (long?)7001,
-            SourceArtifactName = "ciai-test-results-" + RunId + "-" + RunAttempt + "-test-minesweeper",
+            SourceArtifactName = "minesweeper-test-results",
             SourceJobKey = "minesweeper-required-check",
             ProviderArchiveDigest = "sha256:" + new string('a', 64),
             ArchiveSizeBytes = (long?)512,
