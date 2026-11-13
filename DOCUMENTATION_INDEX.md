@@ -16,7 +16,8 @@
 - [Workflow execution context](docs/WORKFLOW_EXECUTION_CONTEXT.md) — typed JSON inputs/outputs, enforced size limits, host ownership, and data-only safety boundary.
 - [Governed work task lifecycle](docs/WORK_TASK_LIFECYCLE.md) — task envelopes, fenced leases, local journals, capabilities, CODE RED notices, and exact-CI repair decisions.
 - [CiAi artifact callback contract](docs/CIAI_ARTIFACT_CALLBACK_CONTRACT.md) — callback wire contract and host security requirements.
-- [CiAi artifact host composition](docs/CIAI_ARTIFACT_HOST_COMPOSITION.md) — integrated host-neutral ingress, exact dispatch binding, bounded retrieval, report consumption, and same-task HeadlessAi handoff; production adapters remain host-owned.\n- [CiAi artifact transport security](docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — DNS-pinned HTTPS client construction, strict origin policy, redirect isolation, and production-adapter limits.
+- [CiAi artifact host composition](docs/CIAI_ARTIFACT_HOST_COMPOSITION.md) — integrated host-neutral ingress, exact dispatch binding, bounded retrieval, report consumption, and same-task HeadlessAi handoff; production adapters remain host-owned.
+- [CiAi artifact transport security](docs/CIAI_ARTIFACT_TRANSPORT_SECURITY.md) — DNS-pinned HTTPS client construction, strict origin policy, redirect isolation, and production-adapter limits.
 - [Foundry–HeadlessAi turn bridge](docs/HEADLESSAI_TURN_BRIDGE.md) — task-lease-gated invocation, durable at-most-once journal, host adapter mapping, and remaining live-integration gates.
 - [Concrete HeadlessAi host adapter](docs/HEADLESSAI_HOST_ADAPTER.md) — pinned source integration, immutable request mapping, normalized result mapping, credential boundaries, and manual provider smoke runner.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries and evidence labels.
