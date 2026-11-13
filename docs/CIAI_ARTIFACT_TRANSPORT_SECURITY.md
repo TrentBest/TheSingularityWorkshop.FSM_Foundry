@@ -5,7 +5,7 @@
 
 ## Purpose
 
-`PinnedHttpsArtifactHttpClientFactory` is the socket-level transport foundation for one registered artifact origin. It is intentionally placed in the Foundry host assembly, not the provider-neutral workflow contracts.
+`PinnedHttpsArtifactHttpClientFactory` is the socket-level transport foundation for one registered artifact origin. `PinnedHttpsCiAiArtifactTransport` now composes one pinned client per explicitly registered origin and implements `ICiAiArtifactTransport`. Both live in the Foundry host assembly, not the provider-neutral workflow contracts.
 
 ## Guarantees
 
@@ -19,15 +19,15 @@ The address classifier is deliberately conservative. It rejects private, loopbac
 
 ## Composition rules
 
-The factory creates a client for exactly one origin. The host must validate the requested URI against its persisted provider registration before choosing that client. Redirects are not followed. If a provider legitimately requires a redirect to an object-storage origin, the host must validate that destination against a separate, explicit origin allowlist and issue a new request with a client pinned to that origin. It must never forward the original origin's Authorization header, cookies, or other credentials to a different host.
+The factory creates a client for exactly one origin. `PinnedHttpsCiAiArtifactTransport.Create` accepts a non-empty, duplicate-free set of registered origins and creates a separate pinned client for each. Requests are accepted only when their HTTPS DNS origin is in that allowlist; the supplied absolute URI is sent unchanged. Redirects are not followed. If a provider legitimately requires a redirect to an object-storage origin, the host must validate that destination against a separate, explicit origin allowlist and issue a new request with a client pinned to that origin. The adapter does not attach credentials and never forwards source-origin Authorization headers or cookies to a different host.
 
 Do not use this client for arbitrary URLs or accept the origin from an untrusted notice without comparing it to the persisted request mapping. Do not weaken the origin policy to make a failing retrieval succeed.
 
 ## Limits
 
-This factory is not, by itself, an artifact transport adapter or a complete production host. It does not issue credentials, authenticate CiAi callbacks, implement JWT validation, implement the `ICiAiArtifactTransport` interface, host HTTPS ingress, provide remote acknowledgement, or prove a live DNS/socket/TLS retrieval. The caller remains responsible for bounded response streaming, status/media checks, exact URI checks, expiry, byte-count and digest verification, and durable receipt handling.
+The transport adapter is a concrete implementation of `ICiAiArtifactTransport`, but it is not a complete production host. It does not issue credentials, authenticate CiAi callbacks, implement JWT validation, host HTTPS ingress, provide remote acknowledgement, or prove a live DNS/socket/TLS retrieval against a provider endpoint. The `CiAiArtifactRetrievalCoordinator` remains responsible for bounded response streaming, status/media checks, exact URI checks, expiry, byte-count and digest verification, and durable receipt handling.
 
-The contract-level integration test uses fakes; this transport foundation must be composed with a concrete adapter and exercised against a controlled integration endpoint before production readiness is claimed.
+The exact-head Foundry CI run now compiles the concrete adapter and exercises its origin allowlist, invalid-URI, duplicate-registration, and disposal behavior. Those tests do not open a real network connection. A controlled integration endpoint and provider-specific redirect/download flow are still required before production readiness is claimed.
 
 ---
 
