@@ -100,6 +100,7 @@ public sealed class CiAiArtifactHostCompositionTests
                 AcceptedReportWorkflowRunId = request.AcceptedCiAiReport?.WorkflowRunId,
                 AcceptedReportRunAttempt = request.AcceptedCiAiReport?.RunAttempt,
                 AcceptedReportCandidateCommitSha = request.AcceptedCiAiReport?.CandidateCommitSha,
+                AcceptedReportSourceArtifactIdentitySha256 = request.AcceptedCiAiReport?.SourceArtifactIdentitySha256,
                 Diagnosis = "The exact candidate contains an actionable test failure.",
                 PatchIntent = "Propose a narrowly scoped correction."
             });
