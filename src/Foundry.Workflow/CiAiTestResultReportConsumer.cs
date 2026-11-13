@@ -76,6 +76,12 @@ public sealed class FoundryAcceptedCiAiReportContext
             CandidateCommitSha is not { Length: 40 } || !CandidateCommitSha.All(Uri.IsHexDigit))
             throw new InvalidDataException("Accepted CiAi report context is malformed or incomplete.");
 
+        if (Verdict is not ("CompletePass" or "ActionableFailure" or "NonActionableFailure" or "IncompleteOrUntrusted"))
+            throw new InvalidDataException("Accepted CiAi report verdict is unknown.");
+        if ((Verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure") &&
+            SourceArtifactBinding is null)
+            throw new InvalidDataException("Complete accepted CiAi evidence requires host-observed nested source-artifact provenance.");
+
         if (ReportIdentity != "sha256:" + ReportSha256)
             throw new InvalidDataException("Accepted CiAi report identity does not match its SHA-256 digest.");
         if (!string.Equals(CandidateCommitSha, currentCandidateSha, StringComparison.OrdinalIgnoreCase) &&
