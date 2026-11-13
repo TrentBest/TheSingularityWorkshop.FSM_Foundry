@@ -108,6 +108,7 @@ public sealed class PersistentWorkTaskCoordinator
         string taskId,
         Guid leaseId,
         FoundryVerifiedCiAiReportArtifact artifact,
+        CiAiHostObservedSourceArtifactBinding? sourceArtifactBinding,
         TimeSpan maximumDuration,
         DateTimeOffset now)
     {
