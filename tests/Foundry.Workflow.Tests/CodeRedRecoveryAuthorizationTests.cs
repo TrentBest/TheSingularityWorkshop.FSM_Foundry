@@ -135,12 +135,13 @@ public sealed class CodeRedRecoveryAuthorizationTests
                 updateStarted.TrySetResult();
                 return incidents.Update(updated);
             });
-            Assert.True(updateStarted.Wait(TimeSpan.FromSeconds(5)));
-            Assert.False(updateTask.Wait(TimeSpan.FromMilliseconds(100)));
+            await updateStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            Assert.False(updateTask.IsCompleted);
 
             verifier.AllowVerification.Set();
-            Assert.Equal(WorkTaskStatus.Investigating, recoveryTask.GetAwaiter().GetResult().Status);
-            Assert.Equal(2, updateTask.GetAwaiter().GetResult().Sequence);
+            Assert.Equal(WorkTaskStatus.Investigating, (await recoveryTask).Status);
+            Assert.Equal(2, (await updateTask).Sequence);
         }
         finally
         {
