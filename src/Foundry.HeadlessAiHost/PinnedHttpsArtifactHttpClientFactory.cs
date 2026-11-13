@@ -90,6 +90,12 @@ public static class PinnedHttpsArtifactHttpClientFactory
 
         if ((bytes[0] & 0xE0) != 0x20)
             return false;
+
+        // IANA's current global-unicast allocation table reserves 2D00::/8 through
+        // 3FFF::/16 for future use or other special purposes. Do not treat the
+        // entire 2000::/3 aggregate as proof that every address is globally routable.
+        if (bytes[0] >= 0x2D)
+            return false;
         if (bytes[0] == 0x20 && bytes[1] == 0x01 &&
             ((bytes[2] & 0xFE) == 0x00 || bytes[2] == 0x0D && bytes[3] == 0xB8))
             return false;
