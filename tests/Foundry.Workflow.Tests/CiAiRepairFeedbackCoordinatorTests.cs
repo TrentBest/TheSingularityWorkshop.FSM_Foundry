@@ -134,7 +134,8 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Repository, BranchRef, CandidateSha, WorkflowPath, "refs/heads/development", WorkflowSha,
             "test-minesweeper", "resolve", "verify", "ciai-provider",
             "https://artifacts.example.com/", "https://foundry.example.com/callback", "auth-profile",
-            createdAt, expiresAt, TrustedEventSha: EventSha).Validate();
+            createdAt, expiresAt, TrustedEventSha: EventSha)
+            { JobKey = "minesweeper-required-check" }.Validate();
         var run = new CiAiDispatchRunBinding(
             RunId, RunAttempt, Repository, WorkflowPath, "refs/heads/development", WorkflowSha,
             BranchRef, CandidateSha, "workflow_dispatch", RunBoundAt, EventSha: EventSha).ValidateAgainst(mapping);
@@ -193,7 +194,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Format = "trx",
             SourceArtifactId = (long?)7001,
             SourceArtifactName = $"ciai-test-results-{RunId}-{RunAttempt}-test-minesweeper",
-            SourceJobKey = "test-minesweeper",
+            SourceJobKey = "minesweeper-required-check",
             ProviderArchiveDigest = "sha256:" + new string('a', 64),
             ArchiveSizeBytes = (long?)512,
             ArtifactCreatedAt = DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
