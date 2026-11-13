@@ -26,6 +26,8 @@ public sealed class FoundryAcceptedCiAiReportContext
     public const int MaximumReportBytes = 1024 * 1024;
 
     public string Repository { get; }
+    public string WorkflowPath { get; }
+    public DateTimeOffset ReportObservedAt { get; }
     public string SchemaVersion { get; }
     public string Verdict { get; }
     public string ReportIdentity { get; }
@@ -40,6 +42,8 @@ public sealed class FoundryAcceptedCiAiReportContext
 
     internal FoundryAcceptedCiAiReportContext(
         string repository,
+        string workflowPath,
+        DateTimeOffset reportObservedAt,
         string schemaVersion,
         string verdict,
         string reportIdentity,
@@ -51,6 +55,8 @@ public sealed class FoundryAcceptedCiAiReportContext
         CiAiHostObservedSourceArtifactBinding? sourceArtifactBinding)
     {
         Repository = repository;
+        WorkflowPath = workflowPath;
+        ReportObservedAt = reportObservedAt;
         SchemaVersion = schemaVersion;
         Verdict = verdict;
         ReportIdentity = reportIdentity;
@@ -76,6 +82,10 @@ public sealed class FoundryAcceptedCiAiReportContext
             CandidateCommitSha is not { Length: 40 } || !CandidateCommitSha.All(Uri.IsHexDigit))
             throw new InvalidDataException("Accepted CiAi report context is malformed or incomplete.");
 
+        if (string.IsNullOrWhiteSpace(WorkflowPath) || WorkflowPath.Length > 512 ||
+            !WorkflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
+            WorkflowPath.Any(char.IsControl) || ReportObservedAt == default)
+            throw new InvalidDataException("Accepted CiAi report workflow path or observation timestamp is invalid.");
         if (Verdict is not ("CompletePass" or "ActionableFailure" or "NonActionableFailure" or "IncompleteOrUntrusted"))
             throw new InvalidDataException("Accepted CiAi report verdict is unknown.");
         if ((Verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure") &&
@@ -95,6 +105,10 @@ public sealed class FoundryAcceptedCiAiReportContext
              !string.Equals(sourceBinding.RunId.ToString(CultureInfo.InvariantCulture), WorkflowRunId, StringComparison.Ordinal) ||
              sourceBinding.RunAttempt != RunAttempt ||
              !string.Equals(sourceBinding.CandidateSha, CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(sourceBinding.WorkflowPath, WorkflowPath, StringComparison.Ordinal) ||
+             sourceBinding.JobCompletedAt > ReportObservedAt ||
+             sourceBinding.ArtifactCreatedAt > ReportObservedAt ||
+             sourceBinding.ArtifactExpiresAt <= ReportObservedAt ||
              sourceIdentity is not { Length: 64 } || !sourceIdentity.All(Uri.IsHexDigit)))
             throw new InvalidDataException("Accepted CiAi report nested source-artifact provenance does not match the outer report run lineage.");
         var bytes = new UTF8Encoding(false, true).GetBytes(CanonicalReportJson);
@@ -320,6 +334,8 @@ public static class CiAiTestResultReportConsumer
 
         var acceptedReport = new FoundryAcceptedCiAiReportContext(
             mapping.Repository,
+            mapping.WorkflowPath,
+            observedAt,
             Schema,
             verdict,
             "sha256:" + reportDigest,
@@ -381,7 +397,8 @@ public static class CiAiTestResultReportConsumer
             payloadSize != sourceBinding.PayloadSizeBytes)
             throw new UnauthorizedAccessException("CiAi report archive/payload digest, size, or timestamps do not match the independent host-observed source binding.");
 
-        if (artifactCreatedAt > observedAt || artifactExpiresAt <= artifactCreatedAt || artifactExpiresAt < observedAt)
+        if (sourceBinding.JobCompletedAt > observedAt ||
+            artifactCreatedAt > observedAt || artifactExpiresAt <= artifactCreatedAt || artifactExpiresAt < observedAt)
             throw new InvalidDataException("CiAi source artifact timestamps are outside the exact observation and retention window.");
     }
 
