@@ -10,26 +10,68 @@ namespace TheSingularityWorkshop.Foundry;
 /// and bounded archive extraction/digest verification; never copy values from report JSON.
 /// Foundry compares every field in this binding to the report before accepting it.
 /// </summary>
-public sealed record CiAiHostObservedSourceArtifactBinding(
-    string Repository,
-    long RunId,
-    int RunAttempt,
-    string CandidateSha,
-    string WorkflowPath,
-    long JobId,
-    string JobName,
-    string JobKey,
-    long ArtifactId,
-    string ArtifactName,
-    string ProviderArchiveDigest,
-    long ArchiveSizeBytes,
-    DateTimeOffset JobStartedAt,
-    DateTimeOffset JobCompletedAt,
-    DateTimeOffset ArtifactCreatedAt,
-    DateTimeOffset ArtifactExpiresAt,
-    string PayloadSha256,
-    long PayloadSizeBytes)
+public sealed record CiAiHostObservedSourceArtifactBinding
 {
+    public string Repository { get; }
+    public long RunId { get; }
+    public int RunAttempt { get; }
+    public string CandidateSha { get; }
+    public string WorkflowPath { get; }
+    public long JobId { get; }
+    public string JobName { get; }
+    public string JobKey { get; }
+    public long ArtifactId { get; }
+    public string ArtifactName { get; }
+    public string ProviderArchiveDigest { get; }
+    public long ArchiveSizeBytes { get; }
+    public DateTimeOffset JobStartedAt { get; }
+    public DateTimeOffset JobCompletedAt { get; }
+    public DateTimeOffset ArtifactCreatedAt { get; }
+    public DateTimeOffset ArtifactExpiresAt { get; }
+    public string PayloadSha256 { get; }
+    public long PayloadSizeBytes { get; }
+
+    // Only Foundry's trusted verification path may construct this value. External callers
+    // cannot turn report-supplied metadata into a host-observed binding.
+    internal CiAiHostObservedSourceArtifactBinding(
+        string repository,
+        long runId,
+        int runAttempt,
+        string candidateSha,
+        string workflowPath,
+        long jobId,
+        string jobName,
+        string jobKey,
+        long artifactId,
+        string artifactName,
+        string providerArchiveDigest,
+        long archiveSizeBytes,
+        DateTimeOffset jobStartedAt,
+        DateTimeOffset jobCompletedAt,
+        DateTimeOffset artifactCreatedAt,
+        DateTimeOffset artifactExpiresAt,
+        string payloadSha256,
+        long payloadSizeBytes)
+    {
+        Repository = repository;
+        RunId = runId;
+        RunAttempt = runAttempt;
+        CandidateSha = candidateSha;
+        WorkflowPath = workflowPath;
+        JobId = jobId;
+        JobName = jobName;
+        JobKey = jobKey;
+        ArtifactId = artifactId;
+        ArtifactName = artifactName;
+        ProviderArchiveDigest = providerArchiveDigest;
+        ArchiveSizeBytes = archiveSizeBytes;
+        JobStartedAt = jobStartedAt;
+        JobCompletedAt = jobCompletedAt;
+        ArtifactCreatedAt = artifactCreatedAt;
+        ArtifactExpiresAt = artifactExpiresAt;
+        PayloadSha256 = payloadSha256;
+        PayloadSizeBytes = payloadSizeBytes;
+    }
     public string IdentitySha256
     {
         get
