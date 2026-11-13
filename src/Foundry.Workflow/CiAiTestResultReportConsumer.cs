@@ -316,7 +316,8 @@ public static class CiAiTestResultReportConsumer
         var payloadSize = ReadInt64(properties, "payloadSizeBytes");
 
         if (sourceArtifactId <= 0 || string.IsNullOrWhiteSpace(sourceArtifactName) ||
-            !string.Equals(sourceJobKey, mapping.JobName, StringComparison.Ordinal))
+            (string.IsNullOrWhiteSpace(mapping.JobKey) ||
+             !string.Equals(sourceJobKey, mapping.JobKey, StringComparison.Ordinal)))
             throw new UnauthorizedAccessException("CiAi source artifact identity does not match the registered workflow job.");
 
         if (archiveDigest.Length != 71 ||
