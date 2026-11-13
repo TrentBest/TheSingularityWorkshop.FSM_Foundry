@@ -31,6 +31,7 @@ public sealed class FoundryAcceptedCiAiReportContext
     public string SchemaVersion { get; }
     public string Verdict { get; }
     public string ReportIdentity { get; }
+    public string NoticeIdentitySha256 { get; }
     public string CanonicalReportJson { get; }
     public string ReportSha256 { get; }
     public string WorkflowRunId { get; }
@@ -47,6 +48,7 @@ public sealed class FoundryAcceptedCiAiReportContext
         string schemaVersion,
         string verdict,
         string reportIdentity,
+        string noticeIdentitySha256,
         string canonicalReportJson,
         string reportSha256,
         string workflowRunId,
@@ -60,6 +62,7 @@ public sealed class FoundryAcceptedCiAiReportContext
         SchemaVersion = schemaVersion;
         Verdict = verdict;
         ReportIdentity = reportIdentity;
+        NoticeIdentitySha256 = noticeIdentitySha256;
         CanonicalReportJson = canonicalReportJson;
         ReportSha256 = reportSha256;
         WorkflowRunId = workflowRunId;
@@ -81,6 +84,10 @@ public sealed class FoundryAcceptedCiAiReportContext
                 CultureInfo.InvariantCulture, out var runId) || runId <= 0 ||
             CandidateCommitSha is not { Length: 40 } || !CandidateCommitSha.All(Uri.IsHexDigit))
             throw new InvalidDataException("Accepted CiAi report context is malformed or incomplete.");
+
+        if (NoticeIdentitySha256 is not { Length: 64 } || !NoticeIdentitySha256.All(Uri.IsHexDigit) ||
+            !string.Equals(NoticeIdentitySha256, NoticeIdentitySha256.ToLowerInvariant(), StringComparison.Ordinal))
+            throw new InvalidDataException("Accepted outer notice identity must be a lowercase SHA-256 fingerprint.");
 
         if (string.IsNullOrWhiteSpace(WorkflowPath) || WorkflowPath.Length > 512 ||
             !WorkflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
@@ -339,6 +346,7 @@ public static class CiAiTestResultReportConsumer
             Schema,
             verdict,
             "sha256:" + reportDigest,
+            artifact.NoticeIdentitySha256,
             new UTF8Encoding(false, true).GetString(bytes.Span),
             reportDigest,
             run.RunId.ToString(CultureInfo.InvariantCulture),
