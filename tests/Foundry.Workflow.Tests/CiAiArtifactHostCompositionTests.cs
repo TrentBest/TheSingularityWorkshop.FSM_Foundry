@@ -230,6 +230,8 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.Equal(CandidateSha, client.Request.AcceptedCiAiReport.CandidateCommitSha);
             Assert.Equal(RunId.ToString(), client.Request.AcceptedCiAiReport.WorkflowRunId);
             Assert.Equal(RunAttempt, client.Request.AcceptedCiAiReport.RunAttempt);
+            Assert.Equal(CreateSourceBinding().IdentitySha256,
+                client.Request.AcceptedCiAiReport.SourceArtifactIdentitySha256);
         }
         finally
         {
