@@ -27,6 +27,7 @@ public sealed class FoundryAcceptedCiAiReportContext
 
     public string Repository { get; }
     public string SchemaVersion { get; }
+    public string Verdict { get; }
     public string ReportIdentity { get; }
     public string CanonicalReportJson { get; }
     public string ReportSha256 { get; }
@@ -40,6 +41,7 @@ public sealed class FoundryAcceptedCiAiReportContext
     internal FoundryAcceptedCiAiReportContext(
         string repository,
         string schemaVersion,
+        string verdict,
         string reportIdentity,
         string canonicalReportJson,
         string reportSha256,
@@ -50,6 +52,7 @@ public sealed class FoundryAcceptedCiAiReportContext
     {
         Repository = repository;
         SchemaVersion = schemaVersion;
+        Verdict = verdict;
         ReportIdentity = reportIdentity;
         CanonicalReportJson = canonicalReportJson;
         ReportSha256 = reportSha256;
