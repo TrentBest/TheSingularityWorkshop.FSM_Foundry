@@ -243,14 +243,14 @@ public static class CiAiTestResultReportConsumer
         if (observedAt < run.BoundAt || observedAt > now || observedAt > artifact.ExpiresAt)
             throw new InvalidDataException("CiAi report observation time is outside the bound run and artifact validity window.");
 
-        // The authenticated, registered CiAi capability is the source-artifact attestor.
-        // Bind its nested artifact claim back to the exact run/job registered by Foundry;
-        // do not confuse this with the outer JSON report artifact verified by the notice.
+        // The trusted host adapter is the nested source-artifact attestor. Compare every
+        // report claim to its independent provider/job/archive observation; do not confuse
+        // this nested TRX archive identity with the outer JSON report artifact verified by the notice.
         if (verdict is "CompletePass" or "ActionableFailure" or "NonActionableFailure")
         {
             if (sourceArtifactBinding is null)
                 throw new UnauthorizedAccessException("A host-observed source-artifact binding is required before accepting complete CI evidence.");
-            ValidateSourceArtifactMetadata(properties, mapping, run, sourceArtifactBinding,
+            ValidateSourceArtifactMetadata(properties, mapping, sourceArtifactBinding,
                 jobId, jobName, observedAt);
         }
 
@@ -327,7 +327,6 @@ public static class CiAiTestResultReportConsumer
     private static void ValidateSourceArtifactMetadata(
         Dictionary<string, JsonElement> properties,
         CiAiRequestTaskMapping mapping,
-        CiAiDispatchRunBinding run,
         CiAiHostObservedSourceArtifactBinding sourceBinding,
         long reportJobId,
         string reportJobName,
