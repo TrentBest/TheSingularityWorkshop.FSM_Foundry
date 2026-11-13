@@ -53,7 +53,10 @@ public sealed record WorkTaskEvent(long Sequence, WorkTaskStatus Previous, WorkT
     long? CiRunId = null, int? CiRunAttempt = null, string? EvidencePayloadSha256 = null,
     string? ApprovalReceiptId = null, string? ApprovalIssuer = null, string? ApprovalPrincipal = null,
     string? ApprovalIncidentId = null, long? ApprovalIncidentSequence = null,
-    long? ApprovalTaskEventSequence = null, CodeRedRecoveryApprovalReceipt? ApprovalReceipt = null);
+    long? ApprovalTaskEventSequence = null, CodeRedRecoveryApprovalReceipt? ApprovalReceipt = null)
+{
+    public string? SourceArtifactIdentitySha256 { get; init; }
+}
 public sealed record WorkTaskSnapshot(WorkTaskRequest Request, WorkTaskStatus Status,
     WorkTaskLease? Lease, int Attempt, IReadOnlyList<WorkTaskEvent> Events);
 
@@ -258,7 +261,8 @@ public sealed class WorkTaskCoordinator
                 state.Lease = null;
             state.AddEvent(previous, next, lease.AgentId, lease.LeaseId, now,
                 $"{decision.ReasonCode}: {decision.Reason}", currentAttempt.CiRunId,
-                currentAttempt.CiRunAttempt, currentAttempt.EvidencePayloadSha256);
+                currentAttempt.CiRunAttempt, currentAttempt.EvidencePayloadSha256,
+                sourceArtifactIdentitySha256: currentAttempt.SourceArtifactIdentitySha256);
             return state.Snapshot();
         }
     }
@@ -347,11 +351,17 @@ public sealed class WorkTaskCoordinator
             string? evidencePayloadSha256 = null, string? approvalReceiptId = null,
             string? approvalIssuer = null, string? approvalPrincipal = null,
             string? approvalIncidentId = null, long? approvalIncidentSequence = null,
-            long? approvalTaskEventSequence = null, CodeRedRecoveryApprovalReceipt? approvalReceipt = null) =>
+            long? approvalTaskEventSequence = null, CodeRedRecoveryApprovalReceipt? approvalReceipt = null,
+            string? sourceArtifactIdentitySha256 = null)
+        {
             _events.Add(new WorkTaskEvent(_events.Count + 1, previous, current, agent, lease, at,
                 reason, ciRunId, ciRunAttempt, evidencePayloadSha256, approvalReceiptId,
                 approvalIssuer, approvalPrincipal, approvalIncidentId, approvalIncidentSequence,
-                approvalTaskEventSequence, approvalReceipt));
+                approvalTaskEventSequence, approvalReceipt)
+            {
+                SourceArtifactIdentitySha256 = sourceArtifactIdentitySha256
+            });
+        }
         public WorkTaskSnapshot Snapshot() =>
             new(Request, Status, Lease, Attempt, Array.AsReadOnly(_events.ToArray()));
     }
