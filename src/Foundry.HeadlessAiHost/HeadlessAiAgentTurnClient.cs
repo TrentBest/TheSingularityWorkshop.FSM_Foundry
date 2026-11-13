@@ -100,6 +100,7 @@ public sealed class HeadlessAiAgentTurnClient : IHeadlessAiAgentTurnClient
                 WorkflowPath = foundryReport.WorkflowPath,
                 ReportObservedAt = foundryReport.ReportObservedAt,
                 ReportIdentity = foundryReport.ReportIdentity,
+                NoticeIdentitySha256 = foundryReport.NoticeIdentitySha256,
                 CanonicalReportJson = foundryReport.CanonicalReportJson,
                 ReportSha256 = foundryReport.ReportSha256,
                 WorkflowRunId = foundryReport.WorkflowRunId,
