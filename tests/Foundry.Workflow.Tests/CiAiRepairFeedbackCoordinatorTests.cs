@@ -46,7 +46,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 ValidationStart, "Validate exact candidate.");
 
             var artifact = CreateArtifact();
-            var feedback = tasks.ApplyCiAiReport("task-1", leaseId, artifact,
+            var feedback = tasks.ApplyCiAiReport("task-1", leaseId, artifact, CreateSourceBinding(),
                 TimeSpan.FromHours(1), Now);
 
             Assert.Equal(WorkTaskStatus.RepairRequired, feedback.Snapshot.Status);
@@ -56,7 +56,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.Equal(RunId, feedback.Snapshot.Events[^1].CiRunId);
             Assert.Equal(RunAttempt, feedback.Snapshot.Events[^1].CiRunAttempt);
 
-            var duplicate = tasks.ApplyCiAiReport("task-1", leaseId, artifact,
+            var duplicate = tasks.ApplyCiAiReport("task-1", leaseId, artifact, CreateSourceBinding(),
                 TimeSpan.FromHours(1), Now);
             Assert.True(duplicate.IsDuplicateDelivery);
             Assert.Null(duplicate.Consumed);
@@ -147,6 +147,17 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             expiresAt, RunId.ToString(), Now);
     }
 
+    private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding() =>
+        new(
+            Repository, RunId, RunAttempt, CandidateSha, WorkflowPath,
+            JobId, "test-minesweeper", "minesweeper-required-check",
+            7001, "minesweeper-test-results", "sha256:" + new string('a', 64), 512,
+            DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
+            DateTimeOffset.Parse("2026-10-31T10:30:00Z"),
+            DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
+            DateTimeOffset.Parse("2026-11-07T10:20:00Z"),
+            new string('f', 64), 512);
+
     private static byte[] CreateReport()
     {
         var failedResult = new
@@ -193,7 +204,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             TestFramework = ".NET",
             Format = "trx",
             SourceArtifactId = (long?)7001,
-            SourceArtifactName = $"ciai-test-results-{RunId}-{RunAttempt}-test-minesweeper",
+            SourceArtifactName = "minesweeper-test-results",
             SourceJobKey = "minesweeper-required-check",
             ProviderArchiveDigest = "sha256:" + new string('a', 64),
             ArchiveSizeBytes = (long?)512,
