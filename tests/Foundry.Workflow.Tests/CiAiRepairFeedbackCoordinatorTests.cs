@@ -151,9 +151,18 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
         var snapshot = new CiAiRequestTaskMappingSnapshot(mapping, run, false);
         var bytes = CreateReport();
         var digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        return FoundryVerifiedCiAiReportArtifact.Verify(
-            snapshot, bytes, "application/json", digest, bytes.Length,
-            expiresAt, RunId.ToString(), Now);
+        const string noticePayload = "{}";
+        var noticePayloadDigest = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(noticePayload))).ToLowerInvariant();
+        var notice = new CiAiValidatedArtifactNotice(
+            snapshot, "notice-1", RunBoundAt, "owner/ciai", "workflow-evidence", "1",
+            "implementation-1", "report-artifact-1", "v1", "application/json",
+            bytes.Length, new Uri("https://artifacts.example.com/report.json"), digest,
+            expiresAt, RunId.ToString(), "foundry-host", noticePayloadDigest);
+        var receipt = new CiAiArtifactNoticeReceipt(
+            CiAiArtifactNoticeReceipt.CurrentSchemaVersion, "receipt-1", mapping.ProviderIdentity,
+            notice.NoticeId, mapping.IdempotencyKey, noticePayloadDigest, noticePayload, Now);
+        var retrieved = CiAiArtifactContentVerifier.Verify(notice, bytes, Now);
+        return FoundryVerifiedCiAiReportArtifact.Verify(retrieved, receipt, Now);
     }
 
     private static CiAiHostObservedSourceArtifactBinding CreateSourceBinding(DateTimeOffset? jobStartedAt = null) =>
