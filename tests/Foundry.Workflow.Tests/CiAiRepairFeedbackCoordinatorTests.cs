@@ -56,6 +56,8 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             Assert.False(feedback.IsDuplicateDelivery);
             Assert.Single(attempts.GetAttempts("task-1"));
             Assert.Equal(RunId, feedback.Snapshot.Events[^1].CiRunId);
+            Assert.Equal(CreateSourceBinding().IdentitySha256,
+                feedback.Snapshot.Events[^1].SourceArtifactIdentitySha256);
             Assert.Equal(RunAttempt, feedback.Snapshot.Events[^1].CiRunAttempt);
 
             var duplicate = tasks.ApplyCiAiReport("task-1", leaseId, artifact, CreateSourceBinding(),
