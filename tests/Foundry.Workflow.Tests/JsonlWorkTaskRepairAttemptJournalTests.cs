@@ -10,7 +10,7 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
     private static WorkTaskRepairAttempt Attempt(int number = 1, char candidate = 'a',
         char diagnostics = 'd', bool successful = false, bool complete = true, bool actionable = true,
         long? runId = null, int runAttempt = 1) =>
-        new(1, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
+        new(WorkTaskRepairAttempt.CurrentSchemaVersion, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
             "work/task-8", ".github/workflows/build.yml", TaskStart, number,
             new string(candidate, 40), runId ?? 1000 + number, runAttempt,
             new string((char)('f' - number), 64), complete, successful,
@@ -38,6 +38,31 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
             Assert.Equal(first.CandidateSha, history[0].CandidateSha);
             Assert.Equal(second.CandidateSha, history[1].CandidateSha);
             Assert.Equal(2, File.ReadAllLines(path).Length);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void JournalReplaysLegacyV1ButRequiresV2ForNewCompleteAttempts()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-repair-legacy-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var legacy = Attempt() with
+            {
+                SchemaVersion = 1,
+                SourceArtifactIdentitySha256 = null
+            };
+            File.WriteAllText(path,
+                System.Text.Json.JsonSerializer.Serialize(legacy, new System.Text.Json.JsonSerializerOptions(
+                    System.Text.Json.JsonSerializerDefaults.Web)) + Environment.NewLine);
+
+            var journal = new JsonlWorkTaskRepairAttemptJournal(path);
+            Assert.Equal(legacy, journal.GetAttempts("task-8").Single());
+            Assert.Throws<ArgumentException>(() => journal.Append(legacy));
         }
         finally
         {
