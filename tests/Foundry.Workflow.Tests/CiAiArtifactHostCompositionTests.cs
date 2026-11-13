@@ -97,6 +97,7 @@ public sealed class CiAiArtifactHostCompositionTests
                 AcceptedReportSchemaVersion = request.AcceptedCiAiReport?.SchemaVersion,
                 AcceptedReportVerdict = request.AcceptedCiAiReport?.Verdict,
                 AcceptedReportIdentity = request.AcceptedCiAiReport?.ReportIdentity,
+                AcceptedReportNoticeIdentitySha256 = request.AcceptedCiAiReport?.NoticeIdentitySha256,
                 AcceptedReportSha256 = request.AcceptedCiAiReport?.ReportSha256,
                 AcceptedReportWorkflowRunId = request.AcceptedCiAiReport?.WorkflowRunId,
                 AcceptedReportRunAttempt = request.AcceptedCiAiReport?.RunAttempt,
@@ -162,15 +163,7 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.Equal(ArtifactUri, transport.RequestedUri);
             Assert.Equal(reportBytes, retrieved.Bytes.ToArray());
 
-            var artifact = FoundryVerifiedCiAiReportArtifact.Verify(
-                retrieved.Notice.Request,
-                retrieved.Bytes,
-                retrieved.Notice.MediaType,
-                retrieved.Notice.Digest,
-                retrieved.Notice.SizeBytes,
-                retrieved.Notice.ExpiresAt,
-                retrieved.Notice.ProviderRunId,
-                Now);
+            var artifact = FoundryVerifiedCiAiReportArtifact.Verify(retrieved, accepted.Receipt, Now);
             var feedback = tasks.ApplyCiAiReport(
                 "task-1", leaseId, artifact, CreateSourceBinding(), TimeSpan.FromHours(1), Now);
 
@@ -229,6 +222,7 @@ public sealed class CiAiArtifactHostCompositionTests
             Assert.Equal(WorkTaskStatus.RepairRequired, tasks.GetSnapshot("task-1").Status);
             Assert.NotNull(client.Request?.AcceptedCiAiReport);
             Assert.Equal("sha256:" + reportDigest, client.Request!.AcceptedCiAiReport!.ReportIdentity);
+            Assert.Equal(artifact.NoticeIdentitySha256, client.Request.AcceptedCiAiReport.NoticeIdentitySha256);
             Assert.Equal(Encoding.UTF8.GetString(reportBytes), client.Request.AcceptedCiAiReport.CanonicalReportJson);
             Assert.Equal(CandidateSha, client.Request.AcceptedCiAiReport.CandidateCommitSha);
             Assert.Equal(RunId.ToString(), client.Request.AcceptedCiAiReport.WorkflowRunId);
