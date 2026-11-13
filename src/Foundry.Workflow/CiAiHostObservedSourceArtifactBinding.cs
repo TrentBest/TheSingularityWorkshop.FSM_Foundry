@@ -87,7 +87,7 @@ public sealed record CiAiHostObservedSourceArtifactBinding(
             !ProviderArchiveDigest.AsSpan(7).ToString().All(Uri.IsHexDigit) ||
             ArchiveSizeBytes is <= 0 or > 20 * 1024 * 1024 ||
             !IsDigest(PayloadSha256) || PayloadSizeBytes is <= 0 or > 16 * 1024 * 1024 ||
-            JobStartedAt == default || JobCompletedAt < JobStartedAt ||
+            JobStartedAt == default || JobCompletedAt < JobStartedAt || JobCompletedAt > now ||
             ArtifactCreatedAt < JobStartedAt || ArtifactCreatedAt > JobCompletedAt ||
             ArtifactExpiresAt <= ArtifactCreatedAt || ArtifactCreatedAt > now || ArtifactExpiresAt <= now)
             throw new InvalidDataException("Host-observed source artifact binding is malformed, expired, or outside the exact job-attempt window.");
