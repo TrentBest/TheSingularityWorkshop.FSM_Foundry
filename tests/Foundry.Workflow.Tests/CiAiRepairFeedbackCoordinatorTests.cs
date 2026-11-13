@@ -284,6 +284,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
                 AcceptedReportSchemaVersion = request.AcceptedCiAiReport?.SchemaVersion,
                 AcceptedReportVerdict = request.AcceptedCiAiReport?.Verdict,
                 AcceptedReportIdentity = request.AcceptedCiAiReport?.ReportIdentity,
+                AcceptedReportNoticeIdentitySha256 = request.AcceptedCiAiReport?.NoticeIdentitySha256,
                 AcceptedReportSha256 = request.AcceptedCiAiReport?.ReportSha256,
                 AcceptedReportWorkflowRunId = request.AcceptedCiAiReport?.WorkflowRunId,
                 AcceptedReportRunAttempt = request.AcceptedCiAiReport?.RunAttempt,
