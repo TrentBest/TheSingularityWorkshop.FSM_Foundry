@@ -87,6 +87,8 @@ public sealed record FoundryHeadlessAiTurnRequest
         if (AcceptedCiAiReport is not null)
         {
             AcceptedCiAiReport.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
+            if (Role == "repair" && AcceptedCiAiReport.SourceArtifactBinding is null)
+                throw new ArgumentException("HeadlessAi repair turns require both outer report identity and host-observed nested source-artifact provenance.", nameof(AcceptedCiAiReport));
             if (!Evidence.Any(item =>
                     item.WorkflowRunId == AcceptedCiAiReport.WorkflowRunId &&
                     item.Attempt == AcceptedCiAiReport.RunAttempt &&
@@ -127,7 +129,8 @@ public sealed record FoundryHeadlessAiTurnRequest
             acceptedReportSha256 = acceptedCiAiReport?.ReportSha256,
             acceptedReportRunId = acceptedCiAiReport?.WorkflowRunId,
             acceptedReportRunAttempt = acceptedCiAiReport?.RunAttempt,
-            acceptedReportCandidateSha = acceptedCiAiReport?.CandidateCommitSha
+            acceptedReportCandidateSha = acceptedCiAiReport?.CandidateCommitSha,
+            acceptedSourceArtifactIdentitySha256 = acceptedCiAiReport?.SourceArtifactIdentitySha256
         });
         return "foundry-" + Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant();
     }
@@ -194,6 +197,7 @@ public sealed record FoundryHeadlessAiTurnResult
     public string? AcceptedReportWorkflowRunId { get; init; }
     public int? AcceptedReportRunAttempt { get; init; }
     public string? AcceptedReportCandidateCommitSha { get; init; }
+    public string? AcceptedReportSourceArtifactIdentitySha256 { get; init; }
     public string? ErrorCode { get; init; }
     public string? Diagnosis { get; init; }
     public string? PatchIntent { get; init; }
@@ -227,7 +231,8 @@ public sealed record FoundryHeadlessAiTurnResult
         {
             if (AcceptedReportSchemaVersion is not null || AcceptedReportIdentity is not null ||
                 AcceptedReportSha256 is not null || AcceptedReportWorkflowRunId is not null ||
-                AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null)
+                AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null ||
+                AcceptedReportSourceArtifactIdentitySha256 is not null)
                 throw new InvalidOperationException("HeadlessAi returned accepted-report lineage for a turn that supplied no accepted report.");
         }
         else if (AcceptedReportSchemaVersion != accepted.SchemaVersion ||
@@ -235,7 +240,8 @@ public sealed record FoundryHeadlessAiTurnResult
             AcceptedReportSha256 != accepted.ReportSha256 ||
             AcceptedReportWorkflowRunId != accepted.WorkflowRunId ||
             AcceptedReportRunAttempt != accepted.RunAttempt ||
-            !string.Equals(AcceptedReportCandidateCommitSha, accepted.CandidateCommitSha, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(AcceptedReportCandidateCommitSha, accepted.CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(AcceptedReportSourceArtifactIdentitySha256, accepted.SourceArtifactIdentitySha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("HeadlessAi result accepted-report lineage does not match the exact report supplied to the turn.");
         if (string.IsNullOrWhiteSpace(TurnId) || TurnId.Length > 128 ||
             string.IsNullOrWhiteSpace(ProviderId) || ProviderId.Length > 128 ||
