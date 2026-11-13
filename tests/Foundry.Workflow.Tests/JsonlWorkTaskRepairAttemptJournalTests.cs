@@ -177,8 +177,9 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
                 appendStarted.TrySetResult();
                 return journal.Append(second);
             });
-            Assert.True(appendStarted.Wait(TimeSpan.FromSeconds(5)));
-            Assert.False(append.Wait(TimeSpan.FromMilliseconds(100)));
+            await appendStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            Assert.False(append.IsCompleted);
 
             releaseCallback.Set();
             Assert.Equal(first, await decision);
