@@ -51,6 +51,8 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
 
             Assert.Equal(WorkTaskStatus.RepairRequired, feedback.Snapshot.Status);
             Assert.NotNull(feedback.Consumed);
+            Assert.Equal(CreateSourceBinding().IdentitySha256, feedback.Consumed!.Attempt.SourceArtifactIdentitySha256);
+            Assert.Equal(CreateSourceBinding().IdentitySha256, feedback.Consumed.AcceptedReport.SourceArtifactIdentitySha256);
             Assert.False(feedback.IsDuplicateDelivery);
             Assert.Single(attempts.GetAttempts("task-1"));
             Assert.Equal(RunId, feedback.Snapshot.Events[^1].CiRunId);
