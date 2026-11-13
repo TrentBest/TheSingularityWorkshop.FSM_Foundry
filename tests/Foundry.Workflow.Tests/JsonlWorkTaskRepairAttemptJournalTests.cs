@@ -160,7 +160,7 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
 
             using var callbackEntered = new ManualResetEventSlim();
             using var releaseCallback = new ManualResetEventSlim();
-            using var appendStarted = new ManualResetEventSlim();
+            var appendStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var decision = Task.Run(() => journal.ExecuteWithAttempts("task-8", history =>
             {
@@ -174,7 +174,7 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
             Assert.True(callbackEntered.Wait(TimeSpan.FromSeconds(5)));
             var append = Task.Run(() =>
             {
-                appendStarted.Set();
+                appendStarted.TrySetResult();
                 return journal.Append(second);
             });
             Assert.True(appendStarted.Wait(TimeSpan.FromSeconds(5)));
