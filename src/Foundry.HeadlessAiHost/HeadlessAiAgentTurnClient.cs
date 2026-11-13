@@ -157,6 +157,7 @@ public sealed class HeadlessAiAgentTurnClient : IHeadlessAiAgentTurnClient
             AcceptedReportSchemaVersion = result.AcceptedReportSchemaVersion,
             AcceptedReportVerdict = result.AcceptedReportVerdict,
             AcceptedReportIdentity = result.AcceptedReportIdentity,
+            AcceptedReportNoticeIdentitySha256 = result.AcceptedReportNoticeIdentitySha256,
             AcceptedReportSha256 = result.AcceptedReportSha256,
             AcceptedReportWorkflowRunId = result.AcceptedReportWorkflowRunId,
             AcceptedReportRunAttempt = result.AcceptedReportRunAttempt,
