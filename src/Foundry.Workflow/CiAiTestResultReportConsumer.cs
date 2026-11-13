@@ -321,6 +321,7 @@ public static class CiAiTestResultReportConsumer
         var acceptedReport = new FoundryAcceptedCiAiReportContext(
             mapping.Repository,
             Schema,
+            verdict,
             "sha256:" + reportDigest,
             new UTF8Encoding(false, true).GetString(bytes.Span),
             reportDigest,
