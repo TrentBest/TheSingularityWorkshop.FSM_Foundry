@@ -9,7 +9,7 @@ public sealed class WorkTaskRepairDecisionPolicyTests
 
     private static WorkTaskRepairAttempt Attempt(int number = 1, char candidate = 'a',
         char diagnostics = 'd', bool successful = false, bool complete = true, bool actionable = true) =>
-        new(1, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
+        new(WorkTaskRepairAttempt.CurrentSchemaVersion, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
             "work/task-8", ".github/workflows/build.yml", TaskStart, number,
             new string(candidate, 40), 1000 + number, 1, new string((char)('f' - number), 64),
             complete, successful, successful ? false : actionable,
