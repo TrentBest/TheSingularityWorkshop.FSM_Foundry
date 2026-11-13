@@ -15,7 +15,7 @@
 - Connects the socket to a vetted IP while retaining the registered DNS hostname for TLS certificate validation and SNI.
 - Bounds connection establishment and total client timeout.
 
-The address classifier is deliberately conservative. It rejects private, loopback, link-local, carrier-grade NAT, documentation, multicast, reserved, and transition ranges. A deployment must keep the classifier aligned with current IANA special-purpose allocations and its own egress policy.
+The address classifier is deliberately conservative. It rejects private, loopback, link-local, carrier-grade NAT, documentation, multicast, reserved, and transition ranges. For IPv6 it does not treat the whole 2000::/3 aggregate as sufficient: the currently unallocated/reserved 2D00::/8 through 3FFF::/16 portion is rejected as well. This policy is based on the IANA IPv6 Global Unicast Address Space registry (last updated 2025-10-10); a deployment must keep the classifier aligned with current IANA allocations and its own egress policy.
 
 ## Composition rules
 
