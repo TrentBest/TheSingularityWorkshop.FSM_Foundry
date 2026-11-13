@@ -44,7 +44,7 @@ public static class CiAiArtifactContentVerifier
         if (notice.ExpiresAt <= now)
             throw new InvalidOperationException("CiAi artifact expired before content verification.");
         if (notice.SizeBytes is < 1 or > 1024 * 1024)
-            throw new InvalidOperationException("Validated CiAi artifact size is outside the v1 limit.");
+            throw new InvalidDataException("Validated CiAi artifact size is outside the v1 limit.");
         if (content.Length != notice.SizeBytes)
             throw new InvalidDataException("Retrieved CiAi artifact length does not match the validated manifest.");
 
