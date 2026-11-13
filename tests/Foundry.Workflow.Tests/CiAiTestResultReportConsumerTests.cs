@@ -254,6 +254,12 @@ public sealed class CiAiTestResultReportConsumerTests
         Assert.Throws<InvalidDataException>(() =>
             CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
                 CreateSourceBinding(jobStartedAt: DateTimeOffset.Parse("2026-10-31T10:21:00Z")), Now));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(artifactName: "unregistered-artifact"), Now));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(jobKey: "unregistered-job-key"), Now));
     }
 
     [Fact]
