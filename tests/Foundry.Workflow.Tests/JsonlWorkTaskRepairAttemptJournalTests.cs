@@ -134,6 +134,11 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
             }));
             Assert.Throws<ArgumentException>(() => journal.Append(Attempt() with
             {
+                SourceArtifactIdentitySha256 = null
+            }));
+
+            Assert.Throws<ArgumentException>(() => journal.Append(Attempt() with
+            {
                 WorkflowPath = "../../unsafe.yml"
             }));
         }
