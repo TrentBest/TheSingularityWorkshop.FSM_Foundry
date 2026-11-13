@@ -203,6 +203,60 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void CompleteEvidenceRequiresIndependentHostSourceArtifactBinding()
+    {
+        var bytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(CreateVerifiedArtifact(bytes), CreateTask(), null, Now));
+    }
+
+    [Fact]
+    public void RejectsEveryNestedSourceArtifactFieldThatDiffersFromHostObservation()
+    {
+        var mutations = new (string Property, JsonNode Value)[]
+        {
+            ("jobId", JsonValue.Create(JobId + 1)!),
+            ("jobName", JsonValue.Create("different-job")!),
+            ("sourceArtifactId", JsonValue.Create(7002)!),
+            ("sourceArtifactName", JsonValue.Create("different-artifact")!),
+            ("sourceJobKey", JsonValue.Create("different-job-key")!),
+            ("providerArchiveDigest", JsonValue.Create("sha256:" + new string('b', 64))!),
+            ("archiveSizeBytes", JsonValue.Create(513)!),
+            ("artifactCreatedAt", JsonValue.Create("2026-10-31T10:21:00Z")!),
+            ("artifactExpiresAt", JsonValue.Create("2026-11-08T10:20:00Z")!),
+            ("payloadSha256", JsonValue.Create(new string('a', 64))!),
+            ("payloadSizeBytes", JsonValue.Create(513)!)
+        };
+
+        foreach (var mutation in mutations)
+        {
+            var node = JsonNode.Parse(CreateReport("ActionableFailure", "Failed", "failure", EventSha))!;
+            node[mutation.Property] = mutation.Value.DeepClone();
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
+            Assert.Throws<UnauthorizedAccessException>(() => Consume(bytes));
+        }
+    }
+
+    [Fact]
+    public void RejectsHostBindingOutsideExactRunOrJobAttempt()
+    {
+        var bytes = CreateReport("ActionableFailure", "Failed", "failure", EventSha);
+        var artifact = CreateVerifiedArtifact(bytes);
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(runId: RunId + 1), Now));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(runAttempt: RunAttempt + 1), Now));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(candidateSha: EventSha), Now));
+        Assert.Throws<InvalidDataException>(() =>
+            CiAiTestResultReportConsumer.Consume(artifact, CreateTask(),
+                CreateSourceBinding(jobStartedAt: DateTimeOffset.Parse("2026-10-31T10:21:00Z")), Now));
+    }
+
+    [Fact]
     public void RejectsDispatchBindingWhoseEventShaDiffersFromPersistedIntent()
     {
         var createdAt = DateTimeOffset.Parse("2026-10-31T10:00:00Z");
@@ -245,12 +299,16 @@ public sealed class CiAiTestResultReportConsumerTests
         DateTimeOffset? artifactCreatedAt = null,
         DateTimeOffset? artifactExpiresAt = null,
         string payloadSha256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        long payloadSize = 512) =>
+        long payloadSize = 512,
+        long? runId = null,
+        int? runAttempt = null,
+        string? candidateSha = null,
+        DateTimeOffset? jobStartedAt = null) =>
         new(
-            Repository, RunId, RunAttempt, CandidateSha, WorkflowPath,
+            Repository, runId ?? RunId, runAttempt ?? RunAttempt, candidateSha ?? CandidateSha, WorkflowPath,
             JobId, "test-minesweeper", jobKey, artifactId, artifactName,
             archiveDigest, archiveSize,
-            DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
+            jobStartedAt ?? DateTimeOffset.Parse("2026-10-31T10:18:00Z"),
             DateTimeOffset.Parse("2026-10-31T10:30:00Z"),
             artifactCreatedAt ?? DateTimeOffset.Parse("2026-10-31T10:20:00Z"),
             artifactExpiresAt ?? DateTimeOffset.Parse("2026-11-07T10:20:00Z"),
