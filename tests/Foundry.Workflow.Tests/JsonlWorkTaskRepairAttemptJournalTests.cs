@@ -148,7 +148,7 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
         }
     }
     [Fact]
-    public void DecisionCallbackSerializesAgainstConcurrentAttemptAppend()
+    public async Task DecisionCallbackSerializesAgainstConcurrentAttemptAppend()
     {
         var path = Path.Combine(Path.GetTempPath(), $"foundry-repair-lock-{Guid.NewGuid():N}.jsonl");
         try
@@ -181,8 +181,8 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
             Assert.False(append.Wait(TimeSpan.FromMilliseconds(100)));
 
             releaseCallback.Set();
-            Assert.Equal(first, decision.GetAwaiter().GetResult());
-            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Appended, append.GetAwaiter().GetResult());
+            Assert.Equal(first, await decision);
+            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Appended, await append);
             Assert.Equal(2, journal.GetAttempts("task-8").Count);
         }
         finally
