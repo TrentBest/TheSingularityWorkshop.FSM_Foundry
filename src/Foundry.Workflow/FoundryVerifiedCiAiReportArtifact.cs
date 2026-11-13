@@ -62,10 +62,11 @@ public sealed class FoundryVerifiedCiAiReportArtifact
         var run = notice.Request.RunBinding
             ?? throw new InvalidOperationException("CiAi report content requires an exact persisted run binding.");
         run.ValidateAgainst(mapping);
-        if (notice.ExpiresAt <= now || now == default ||
-            notice.SizeBytes is < 1 or > 1024 * 1024 ||
+        if (notice.ExpiresAt <= now || now == default)
+            throw new InvalidOperationException("CiAi report request or artifact is expired or outside its validity window.");
+        if (notice.SizeBytes is < 1 or > 1024 * 1024 ||
             retrieved.Bytes.IsEmpty || retrieved.Bytes.Length != notice.SizeBytes)
-            throw new InvalidOperationException("CiAi report request or artifact is expired, empty, oversized, or outside its validity window.");
+            throw new InvalidDataException("CiAi report artifact is empty, oversized, or has an unexpected byte length.");
         if (!string.Equals(notice.MediaType, "application/json", StringComparison.OrdinalIgnoreCase))
             throw new FormatException("CiAi report artifact media type must be application/json.");
         if (receipt.SchemaVersion != CiAiArtifactNoticeReceipt.CurrentSchemaVersion ||
