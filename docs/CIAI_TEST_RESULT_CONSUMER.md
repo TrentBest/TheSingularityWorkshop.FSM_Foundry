@@ -27,6 +27,8 @@ At the same time, a valid CiAi report must not be allowed to attach itself to an
 - exact GitHub run ID and attempt; and
 - registered producing job display name and, separately, the configured required-check job key.
 
+The host must populate `CiAiRequestTaskMapping.JobKey` from the configured required-check key when it persists the dispatch intent. `JobName` remains the provider's display name and must not be substituted for the key. Complete/failure report consumption fails closed when the explicit key is absent or differs from `sourceJobKey`.
+
 For complete and failure verdicts, Foundry also validates the nested source-artifact claim carried by the authenticated, registered CiAi capability: positive provider artifact ID, bounded provider artifact name, source job key matching the separately persisted configured job key (not merely the provider job display name), SHA-256 archive identity, archive-size limit, payload SHA-256/size, and source-artifact creation/expiry window relative to the exact run and report observation. These are claims attested by the registered CiAi implementation revision; Foundry does not download the nested source ZIP itself. The host/CiAi side remains responsible for independently observing provider artifact metadata, verifying the ZIP digest, safely extracting the exact TRX/provenance entries, and constructing the trusted source descriptor.
 
 The Foundry content factory verifies the report artifact's bytes against the digest and size supplied by the already-validated notice. The report consumer hashes the bytes again when recording the attempt. These checks do not replace sender authentication, notice validation, or artifact transport security.
