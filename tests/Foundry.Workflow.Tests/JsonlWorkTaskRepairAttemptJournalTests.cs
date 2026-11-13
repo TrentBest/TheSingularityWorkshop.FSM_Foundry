@@ -15,7 +15,8 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
             new string(candidate, 40), runId ?? 1000 + number, runAttempt,
             new string((char)('f' - number), 64), complete, successful,
             successful ? false : actionable, actionable && !successful ? new string(diagnostics, 64) : null,
-            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1));
+            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1))
+        { SourceArtifactIdentitySha256 = new string('c', 64) };
 
     [Fact]
     public void JournalPersistsEveryExactAttemptAndReplaysAfterRestart()
