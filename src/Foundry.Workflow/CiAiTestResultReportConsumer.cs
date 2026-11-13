@@ -79,13 +79,14 @@ public sealed class FoundryAcceptedCiAiReportContext
             (priorCandidateSha is null ||
              !string.Equals(CandidateCommitSha, priorCandidateSha, StringComparison.OrdinalIgnoreCase)))
             throw new UnauthorizedAccessException("Accepted CiAi report candidate does not match the current or prior candidate.");
-        if (SourceArtifactBinding is not null &&
-            (!string.Equals(SourceArtifactBinding.Repository, Repository, StringComparison.OrdinalIgnoreCase) ||
-             !string.Equals(SourceArtifactBinding.RunId.ToString(CultureInfo.InvariantCulture), WorkflowRunId, StringComparison.Ordinal) ||
-             SourceArtifactBinding.RunAttempt != RunAttempt ||
-             !string.Equals(SourceArtifactBinding.CandidateSha, CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
-             SourceArtifactIdentitySha256 is not { Length: 64 } ||
-             !SourceArtifactIdentitySha256.All(Uri.IsHexDigit)))
+        var sourceBinding = SourceArtifactBinding;
+        var sourceIdentity = sourceBinding?.IdentitySha256;
+        if (sourceBinding is not null &&
+            (!string.Equals(sourceBinding.Repository, Repository, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(sourceBinding.RunId.ToString(CultureInfo.InvariantCulture), WorkflowRunId, StringComparison.Ordinal) ||
+             sourceBinding.RunAttempt != RunAttempt ||
+             !string.Equals(sourceBinding.CandidateSha, CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+             sourceIdentity is not { Length: 64 } || !sourceIdentity.All(Uri.IsHexDigit)))
             throw new InvalidDataException("Accepted CiAi report nested source-artifact provenance does not match the outer report run lineage.");
         var bytes = new UTF8Encoding(false, true).GetBytes(CanonicalReportJson);
         if (bytes.Length > MaximumReportBytes)
