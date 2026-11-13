@@ -146,7 +146,7 @@ public sealed class PersistentWorkTaskCoordinator
                     return new CiAiRepairFeedbackResult(task, null, IsDuplicateDelivery: true);
             }
 
-            var consumed = CiAiTestResultReportConsumer.Consume(artifact, task, now);
+            var consumed = CiAiTestResultReportConsumer.Consume(artifact, task, sourceArtifactBinding, now);
             var appendOutcome = journal.Append(consumed.Attempt);
             if (appendOutcome is WorkTaskRepairAttemptAppendOutcome.Conflict or
                 WorkTaskRepairAttemptAppendOutcome.OutOfOrder)
