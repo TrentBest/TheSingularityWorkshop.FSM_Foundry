@@ -45,12 +45,24 @@ The integrated path is:
 
 ## 05 — Provider-observer integration gate
 
-CiAi PR #65 (`integration/ciai-v1-evidence-contracts`, reviewed at
-`ecd4f679b36eab81972146a5a784699ceeddefd4`) contains useful provider-side building blocks:
-exact-SHA workflow-run discovery, attempt-specific job collection, artifact list/detail
-observation, bounded ZIP extraction, and strict provenance JSON parsing. They are not yet
-a drop-in Foundry host adapter and must not be treated as production attestation merely
-because their constructors are internal.
+CiAi PR #65 (`integration/ciai-v1-evidence-contracts`, current candidate
+`91775679ad1e0d29b0be4dbfef2dec24a40e08c3`) now has a successful exact-source producer
+and observer run. On source run `43547370162`, attempt `1`, the `contract` job (`132301723883`)
+completed successfully and published `ciai-test-results-1` (artifact `14094561284`,
+provider digest `sha256:542d776c5a1c3585c3560c135da2b14b976cac71f59b265eb039007d3229a030`).
+The separate observer run `43547370174` independently retrieved and validated that source
+artifact and its provenance, then published report bundle `14093774927`. The canonical
+report verdict is `CompletePass`, report identity
+`sha256:d62dd4834533d57787002328d82958776a06dd3bd8de6760a21a8709d7a58064`.
+
+These runs prove the CiAi producer/observer path for this candidate; they do not prove
+Foundry's receiver-side retrieval or binding. Keep source run `43547370162` distinct from
+observer run `43547370174`: the observer artifact hosts the report, while the report's
+nested source evidence is bound to the source run. The Foundry host must retrieve the
+observer bundle, validate the canonical report and nested source binding, and preserve the
+source run ID in the persisted dispatch/notice mapping. The CiAi provider-side collectors
+remain useful reference implementations, not a drop-in Foundry host adapter or production
+attestation merely because their constructors are internal.
 
 The adapter must preserve these identities independently:
 
