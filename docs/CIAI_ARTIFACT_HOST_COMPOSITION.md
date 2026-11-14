@@ -55,6 +55,20 @@ artifact and its provenance, then published report bundle `14093774927`. The can
 report verdict is `CompletePass`, report identity
 `sha256:d62dd4834533d57787002328d82958776a06dd3bd8de6760a21a8709d7a58064`.
 
+I also downloaded the exact observer bundle (`14093774927`, 5,042 bytes; provider
+ digest `sha256:ebb72199235bd18310f866dca0be2a20e615e58b17961f737215436ca47c4613`)
+and inspected its canonical JSON report. I separately downloaded source artifact
+`14094561284` and independently recomputed its ZIP digest and byte count: 984 bytes and
+`sha256:542d776c5a1c3585c3560c135da2b14b976cac71f59b265eb039007d3229a030`. The ZIP
+contains exactly `provenance.json` (668 bytes, SHA-256
+`88d99ece901275e2cbd1b9ab2fe0b2ab12eb03aecf245208725b78328bdc04dd`) and `results.trx`
+(862 bytes, SHA-256
+`c0cc974621c28088743f2de603d5c9809bf771062f405b931f7deb109ea0d958`). The report's
+source artifact ID/name, archive digest/size, payload digest/size, run/attempt, job ID/name,
+and provenance fields all match those independently observed bytes and provider facts.
+The TRX currently contains one suite-level result (`1/1` passed); it does not represent
+399 individual TRX test cases.
+
 These runs prove the CiAi producer/observer path for this candidate; they do not prove
 Foundry's receiver-side retrieval or binding. Keep source run `43547370162` distinct from
 observer run `43547370174`: the observer artifact hosts the report, while the report's
