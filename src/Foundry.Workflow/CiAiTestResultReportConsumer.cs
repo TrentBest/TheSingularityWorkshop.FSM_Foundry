@@ -242,7 +242,8 @@ public static class CiAiTestResultReportConsumer
         RequireEqual(ReadText(properties, "candidateRef", 255), mapping.CandidateRef, "candidate ref");
         RequireEqualSha(ReadText(properties, "candidateSha", 40), mapping.CandidateSha, "candidate SHA");
         RequireEqual(ReadText(properties, "workflowPath", 512), mapping.WorkflowPath, "workflow path");
-        RequireEqual(ReadText(properties, "workflowDefinitionRef", 255), mapping.TrustedWorkflowRef, "trusted workflow ref");
+        var expectedWorkflowDefinitionRef = $"{mapping.Repository}/{mapping.WorkflowPath}@{mapping.TrustedWorkflowRef}";
+        RequireEqual(ReadText(properties, "workflowDefinitionRef", 1024), expectedWorkflowDefinitionRef, "trusted workflow definition ref");
         RequireEqualSha(ReadText(properties, "workflowDefinitionSha", 40), mapping.TrustedWorkflowSha, "trusted workflow SHA");
         RequireEqual(ReadText(properties, "eventName", 64), run.Event, "event name");
         RequireEqual(ReadText(properties, "eventRef", 255), mapping.TrustedWorkflowRef, "event ref");
