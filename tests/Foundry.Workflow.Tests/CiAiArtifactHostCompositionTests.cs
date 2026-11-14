@@ -403,7 +403,7 @@ public sealed class CiAiArtifactHostCompositionTests
             CandidateRef = BranchRef,
             CandidateSha,
             WorkflowPath,
-            WorkflowDefinitionRef = $"{ProviderRepository}/{WorkflowPath}@refs/heads/development",
+            WorkflowDefinitionRef = $"{Repository}/{WorkflowPath}@refs/heads/development",
             PullRequestNumber = (int?)null,
             PullRequestHeadRef = (string?)null,
             PullRequestHeadSha = (string?)null,
