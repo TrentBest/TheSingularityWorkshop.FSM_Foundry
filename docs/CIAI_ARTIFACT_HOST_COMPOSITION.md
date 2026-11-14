@@ -69,6 +69,26 @@ and provenance fields all match those independently observed bytes and provider 
 The TRX currently contains one suite-level result (`1/1` passed); it does not represent
 399 individual TRX test cases.
 
+### Dispatch compatibility gate
+
+The verified sample above is a producer-side proof, not yet an acceptable Foundry task
+receipt. It was triggered by `push` on the CiAi feature branch. Foundry's persisted
+dispatch binding deliberately requires `workflow_dispatch` from the trusted
+`refs/heads/development` workflow revision, with the candidate checkout ref/SHA recorded
+separately. The CiAi workflow supports this shape through its `target_branch` input, which
+resolves the selected candidate branch to an immutable checkout SHA. A push report whose
+workflow definition is loaded from the candidate branch must remain ineligible for that
+Foundry mapping.
+
+The producer's `workflowDefinitionRef` is the fully qualified identity
+`<repository>/<workflow-path>@<workflow-ref>`, not the bare workflow ref. Foundry's
+consumer has been corrected to compare that exact value against its persisted repository,
+workflow path, and trusted workflow ref; regression coverage now rejects a different
+workflow path/ref. `eventRef` remains a separate event identity and is compared to the
+persisted trusted workflow ref for this workflow-dispatch contract. This correction does
+not relax the required `workflow_dispatch` event or make the current push sample
+acceptable. No workflow dispatch was performed as part of this review.
+
 These runs prove the CiAi producer/observer path for this candidate; they do not prove
 Foundry's receiver-side retrieval or binding. Keep source run `43547370162` distinct from
 observer run `43547370174`: the observer artifact hosts the report, while the report's
