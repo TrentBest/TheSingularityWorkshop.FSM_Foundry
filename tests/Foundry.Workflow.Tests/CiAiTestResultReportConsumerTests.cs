@@ -133,6 +133,16 @@ public sealed class CiAiTestResultReportConsumerTests
     }
 
     [Fact]
+    public void RejectsWorkflowDefinitionRefOutsideTheTrustedRepositoryPathAndRef()
+    {
+        var node = JsonNode.Parse(CreateReport("CompletePass", "Passed", "success", EventSha))!;
+        node["workflowDefinitionRef"] = $"{Repository}/.github/workflows/untrusted.yml@refs/heads/development";
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(node);
+
+        Assert.Throws<UnauthorizedAccessException>(() => Consume(bytes));
+    }
+
+    [Fact]
     public void RejectsReportsAboveTheCanonicalOneMiBLimit()
     {
         var oversized = new byte[1024 * 1024 + 1];
@@ -405,7 +415,7 @@ public sealed class CiAiTestResultReportConsumerTests
             CandidateRef = BranchRef,
             CandidateSha,
             WorkflowPath,
-            WorkflowDefinitionRef = "refs/heads/development",
+            WorkflowDefinitionRef = $"{Repository}/{WorkflowPath}@refs/heads/development",
             PullRequestNumber = (int?)null,
             PullRequestHeadRef = (string?)null,
             PullRequestHeadSha = (string?)null,
