@@ -43,7 +43,64 @@ The integrated path is:
 - The report-composition integration test still uses deterministic fakes. The adapter's unit tests validate allowlist and URI policy but do not prove a live endpoint, production credentials, a real provider artifact service, independent provider run/job/artifact observation, nested archive verification, or the Experiences/Minesweeper red-to-green pilot.
 - CODE RED is urgency, not permission escalation. No automatic apply, merge, canonical-branch write, publication, release, deployment, or branch deletion is enabled.
 
-## 05 — See it in a minute
+## 05 — Provider-observer integration gate
+
+CiAi PR #65 (`integration/ciai-v1-evidence-contracts`, reviewed at
+`ecd4f679b36eab81972146a5a784699ceeddefd4`) contains useful provider-side building blocks:
+exact-SHA workflow-run discovery, attempt-specific job collection, artifact list/detail
+observation, bounded ZIP extraction, and strict provenance JSON parsing. They are not yet
+a drop-in Foundry host adapter and must not be treated as production attestation merely
+because their constructors are internal.
+
+The adapter must preserve these identities independently:
+
+- **Provider run identity:** repository, run ID, run attempt, event, provider `head_sha`,
+  workflow path, and workflow-definition ref.
+- **Trusted workflow identity:** provenance workflow ref and workflow SHA. The run's
+  provider `head_sha` is not a substitute for the workflow SHA.
+- **Candidate checkout identity:** provenance checkout ref and checkout SHA, compared
+  to the persisted dispatch mapping. Never copy the provider run `head_sha` into the
+  candidate-SHA slot without an explicit workflow/event contract proving equality.
+- **Job identity:** job ID, run ID, run attempt, exact job name, evidence URL, and the
+  required checkout-resolution/verification step names and successful conclusions.
+- **Artifact identity:** artifact ID selected from the exact run's complete listing,
+  exact artifact name, archive digest/size, created/expiry timestamps, and download URL.
+  The ID and metadata must never originate in the report or provenance JSON.
+
+The PR #65 collector audit identified hardening required before reuse:
+
+1. The run, job, and artifact collectors parse provider JSON directly from response
+   streams without an explicit maximum response-byte limit. Foundry must wrap every
+   API response in a bounded reader before JSON parsing, with bounded pagination and
+   an explicit timeout.
+2. Artifact detail validates the returned artifact ID, name, digest, size, expiry, and
+   nested workflow-run ID/head SHA. The Foundry composition must additionally bind
+   that detail to the independently observed repository and exact run attempt; it
+   cannot infer attempt identity from the artifact detail object.
+3. Run and job observations are separate API facts. The attempt-specific jobs endpoint
+   must be queried for the exact observed attempt, and every returned job must retain
+   and validate its own run ID/attempt. Required job steps must be checked by exact
+   name, status, and conclusion; merely finding a configured step name is insufficient.
+4. Provenance parsing validates its own schema, duplicate-property rejection, digest,
+   repository, run/attempt, workflow fields, event fields, PR fields, and checkout
+   fields. Foundry must still compare those parsed fields against the persisted dispatch
+   mapping and independently observed run/job facts before it constructs
+   `CiAiHostObservedSourceArtifactBinding`.
+5. The archive URL returned by GitHub is an API-origin URL, while the ZIP download may
+   redirect to object storage. Download handling must be an explicit bounded redirect
+   state machine: validate every destination against separately registered pinned HTTPS
+   origins, never forward GitHub API credentials to a storage origin, reject loops and
+   excessive hops, and verify the downloaded ZIP against the independently observed
+   digest and size before extraction.
+
+Accordingly, PR #65 is the contract reference, not a trusted evidence source by itself.
+The next implementation unit is a Foundry-owned bounded GitHub API observer and
+cross-evidence validator. Only its successful output may feed the archive verifier;
+only after archive and provenance checks may the host construct the internal source
+binding. Until that composition and its tampering tests exist, nested source-artifact
+attestation remains an open CODE RED gate.
+
+## 06 — See it in a minute
 
 CiAiArtifactHostCompositionTests exercises the entire fake-host path: exact notice authentication and validation, durable receipt and duplicate retry, exact-URI retrieval and byte verification, accepted v1 report consumption, idempotent task lifecycle application, and a same-task HeadlessAi repair request carrying the byte-exact accepted report context.
 
