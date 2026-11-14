@@ -9,12 +9,13 @@ public sealed class WorkTaskRepairDecisionPolicyTests
 
     private static WorkTaskRepairAttempt Attempt(int number = 1, char candidate = 'a',
         char diagnostics = 'd', bool successful = false, bool complete = true, bool actionable = true) =>
-        new(1, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
+        new(WorkTaskRepairAttempt.CurrentSchemaVersion, "task-8", "correlation-8", "TrentBest/TheSingularityWorkshop.Foundry",
             "work/task-8", ".github/workflows/build.yml", TaskStart, number,
             new string(candidate, 40), 1000 + number, 1, new string((char)('f' - number), 64),
             complete, successful, successful ? false : actionable,
             actionable && !successful ? new string(diagnostics, 64) : null,
-            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1));
+            TaskStart.AddMinutes(number * 3 - 2), TaskStart.AddMinutes(number * 3 - 1))
+        { SourceArtifactIdentitySha256 = new string('c', 64) };
 
     private static WorkTaskRepairEvidenceExpectation Expectation(WorkTaskRepairAttempt attempt) =>
         new(attempt.TaskId, attempt.CorrelationId, attempt.Repository, attempt.Branch,

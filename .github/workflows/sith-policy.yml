@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sith-policy-${{ github.repository }}
@@ -154,18 +154,7 @@ jobs:
           </svg>
           SVG
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          event_deleted="$(jq -r '.deleted // false' "$GITHUB_EVENT_PATH")"
-          if [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" || "$GITHUB_REF" == "refs/heads/development" || "$GITHUB_EVENT_NAME" == "delete" || "$event_deleted" == "true" ]]; then
-            git add assets/sith-policy.svg assets/sith-policy.json
-            if ! git diff --cached --quiet; then
-              git commit -m "chore: refresh Sith policy evidence"
-              git push origin "HEAD:$DEFAULT_BRANCH"
-            fi
-          else
-            echo "Badge publication is reserved for default-branch evaluations."
-          fi
+          echo "Sith policy evidence is retained as a workflow artifact; this workflow never writes repository refs."
 
           {
             echo "## Sith Policy: $status"
@@ -185,3 +174,14 @@ jobs:
             echo "::error::Sith Policy requires exactly master and development; status is $status."
             exit 1
           fi
+
+      - name: Retain living Sith policy evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sith-policy-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            assets/sith-policy.svg
+            assets/sith-policy.json
+          if-no-files-found: warn
+          retention-days: 30

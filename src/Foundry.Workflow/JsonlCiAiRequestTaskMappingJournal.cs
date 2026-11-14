@@ -28,8 +28,14 @@ public sealed record CiAiRequestTaskMapping(
     string AcknowledgementDestination,
     string AcknowledgementAuthProfileId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset ExpiresAt)
+    DateTimeOffset ExpiresAt,
+    string? TrustedEventSha = null)
 {
+    /// <summary>Configured required-check key; distinct from the provider's display job name.</summary>
+    public string? JobKey { get; init; }
+    /// <summary>Exact provider artifact name registered for the required job key.</summary>
+    public string? SourceArtifactName { get; init; }
+
     public const int CurrentSchemaVersion = 1;
 
     public CiAiRequestTaskMapping Validate()
@@ -49,6 +55,8 @@ public sealed record CiAiRequestTaskMapping(
             throw new ArgumentException("Candidate ref must identify an isolated branch.", nameof(CandidateRef));
         ValidateSha(CandidateSha, nameof(CandidateSha));
         ValidateSha(TrustedWorkflowSha, nameof(TrustedWorkflowSha));
+        if (TrustedEventSha is not null)
+            ValidateSha(TrustedEventSha, nameof(TrustedEventSha));
         if (!Clean(WorkflowPath, 512) ||
             !WorkflowPath.StartsWith(".github/workflows/", StringComparison.Ordinal) ||
             !(WorkflowPath.EndsWith(".yml", StringComparison.Ordinal) || WorkflowPath.EndsWith(".yaml", StringComparison.Ordinal)) ||
@@ -56,8 +64,11 @@ public sealed record CiAiRequestTaskMapping(
             throw new ArgumentException("Workflow path is invalid.", nameof(WorkflowPath));
         if (!Clean(TrustedWorkflowRef, 255) || TrustedWorkflowRef != "refs/heads/development")
             throw new ArgumentException("Trusted workflow ref must be the registered development ref.", nameof(TrustedWorkflowRef));
-        if (!Clean(JobName, 128) || !Clean(ResolutionStepName, 128) || !Clean(VerificationStepName, 128))
-            throw new ArgumentException("Registered job and step names are required.");
+        if (!Clean(JobName, 128) || !Clean(ResolutionStepName, 128) || !Clean(VerificationStepName, 128) ||
+            (JobKey is not null && !Clean(JobKey, 100)) ||
+            (SourceArtifactName is not null && !Clean(SourceArtifactName, 200)) ||
+            (JobKey is null && SourceArtifactName is not null))
+            throw new ArgumentException("Registered job, required-check key, and optional expected source artifact name must be consistent.");
         ValidateHttpsOrigin(ArtifactOrigin, nameof(ArtifactOrigin), originOnly: true);
         ValidateHttpsOrigin(AcknowledgementDestination, nameof(AcknowledgementDestination), originOnly: false);
         if (CreatedAt == default || ExpiresAt <= CreatedAt || ExpiresAt - CreatedAt > TimeSpan.FromDays(7))
@@ -92,15 +103,19 @@ public sealed record CiAiDispatchRunBinding(
     string CandidateRef,
     string CandidateSha,
     string Event,
-    DateTimeOffset BoundAt)
+    DateTimeOffset BoundAt,
+    string? EventSha = null)
 {
     public CiAiDispatchRunBinding ValidateAgainst(CiAiRequestTaskMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        var expectedEventSha = mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
+        var observedEventSha = EventSha ?? WorkflowSha;
         if (RunId <= 0 || RunAttempt <= 0 || BoundAt == default ||
             !string.Equals(Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase) ||
             WorkflowPath != mapping.WorkflowPath || WorkflowRef != mapping.TrustedWorkflowRef ||
             !string.Equals(WorkflowSha, mapping.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(observedEventSha, expectedEventSha, StringComparison.OrdinalIgnoreCase) ||
             CandidateRef != mapping.CandidateRef ||
             !string.Equals(CandidateSha, mapping.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
             Event != "workflow_dispatch" || BoundAt < mapping.CreatedAt || BoundAt > mapping.ExpiresAt)

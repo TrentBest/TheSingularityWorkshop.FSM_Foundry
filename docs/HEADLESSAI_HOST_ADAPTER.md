@@ -7,7 +7,7 @@
 
 `Foundry.HeadlessAiHost` is the first concrete in-process adapter between Foundry's lease-governed turn port and HeadlessAi's provider executor. It deliberately does not become a GitHub client, task scheduler, authorization service, or credential store.
 
-The adapter maps a single Foundry request into a versioned `HeadlessAiAgentTurnEnvelope`, creates one immutable `HeadlessAiAgentTurnRequest` snapshot, executes that exact snapshot once, and maps only the normalized result back to Foundry. The raw provider response is not copied into Foundry state.
+The adapter maps a single Foundry request into a versioned `HeadlessAiAgentTurnEnvelope`, maps any host-accepted CiAi report and nested source-artifact provenance into `HeadlessAiAcceptedCiReportContext`, creates one immutable `HeadlessAiAgentTurnRequest` snapshot, executes that exact snapshot once, and maps only the normalized result and accepted-report lineage back to Foundry. The authenticated outer notice/receipt fingerprint, inner report-byte digest, and nested source-artifact fingerprint remain distinct. The raw provider response is not copied into Foundry state.
 
 ## Build the source integration
 

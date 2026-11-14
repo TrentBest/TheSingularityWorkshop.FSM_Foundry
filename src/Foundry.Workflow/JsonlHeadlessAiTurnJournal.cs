@@ -99,6 +99,28 @@ public sealed class JsonlHeadlessAiTurnJournal
         }
     }
 
+    /// <summary>Returns a completed turn only when it belongs to the exact task and turn ID.</summary>
+    public FoundryHeadlessAiTurnResult? GetCompletedTurn(string taskId, string turnId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId) || taskId.Length > 128 ||
+            string.IsNullOrWhiteSpace(turnId) || turnId.Length > 128)
+            throw new ArgumentException("Task and turn identities must be non-empty and bounded.");
+        lock (_gate)
+        {
+            EnsureHealthy();
+            using var fileLock = AcquireFileLock();
+            Replay();
+            var matches = _entries.Values
+                .Select(entry => entry.Result)
+                .Where(result => result is not null && result.TaskId == taskId && result.TurnId == turnId)
+                .Cast<FoundryHeadlessAiTurnResult>()
+                .ToArray();
+            if (matches.Length > 1)
+                throw new InvalidDataException("A HeadlessAi turn ID is duplicated within the task journal.");
+            return matches.Length == 0 ? null : Clone(matches[0]);
+        }
+    }
+
     private FileStream AcquireFileLock()
     {
         var timer = Stopwatch.StartNew();

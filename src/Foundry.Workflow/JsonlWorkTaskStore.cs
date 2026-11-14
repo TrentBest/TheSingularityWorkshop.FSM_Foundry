@@ -200,6 +200,9 @@ public sealed class JsonlWorkTaskStore
                 (item.EvidencePayloadSha256 is not null &&
                     (item.EvidencePayloadSha256.Length != 64 ||
                      !item.EvidencePayloadSha256.All(Uri.IsHexDigit))) ||
+                (item.SourceArtifactIdentitySha256 is not null &&
+                    (item.SourceArtifactIdentitySha256.Length != 64 ||
+                     !item.SourceArtifactIdentitySha256.All(Uri.IsHexDigit))) ||
                 (item.Current is WorkTaskStatus.ReviewReady or WorkTaskStatus.RepairRequired &&
                     (!item.CiRunId.HasValue || !item.Reason.StartsWith(
                         item.Current == WorkTaskStatus.ReviewReady

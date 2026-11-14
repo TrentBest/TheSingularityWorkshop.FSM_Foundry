@@ -62,7 +62,57 @@ public sealed class HeadlessAiAgentTurnClient : IHeadlessAiAgentTurnClient
             ContextReferences = Array.Empty<string>()
         };
 
-        var snapshot = HeadlessAiAgentTurnRequest.Create(envelope, now);
+        HeadlessAiAcceptedCiReportContext? acceptedReport = null;
+        if (request.AcceptedCiAiReport is { } foundryReport)
+        {
+            HeadlessAiAcceptedCiSourceArtifactContext? sourceArtifact = null;
+            if (foundryReport.SourceArtifactBinding is { } foundrySource)
+            {
+                sourceArtifact = new HeadlessAiAcceptedCiSourceArtifactContext
+                {
+                    Repository = foundrySource.Repository,
+                    WorkflowPath = foundrySource.WorkflowPath,
+                    RunId = foundrySource.RunId,
+                    RunAttempt = foundrySource.RunAttempt,
+                    CandidateCommitSha = foundrySource.CandidateSha,
+                    JobId = foundrySource.JobId,
+                    JobName = foundrySource.JobName,
+                    JobKey = foundrySource.JobKey,
+                    ArtifactId = foundrySource.ArtifactId,
+                    ArtifactName = foundrySource.ArtifactName,
+                    ProviderArchiveDigest = foundrySource.ProviderArchiveDigest,
+                    ArchiveSizeBytes = foundrySource.ArchiveSizeBytes,
+                    JobStartedAt = foundrySource.JobStartedAt,
+                    JobCompletedAt = foundrySource.JobCompletedAt,
+                    ArtifactCreatedAt = foundrySource.ArtifactCreatedAt,
+                    ArtifactExpiresAt = foundrySource.ArtifactExpiresAt,
+                    PayloadSha256 = foundrySource.PayloadSha256,
+                    PayloadSizeBytes = foundrySource.PayloadSizeBytes,
+                    IdentitySha256 = foundrySource.IdentitySha256
+                };
+            }
+
+            acceptedReport = new HeadlessAiAcceptedCiReportContext
+            {
+                SchemaVersion = foundryReport.SchemaVersion,
+                Verdict = foundryReport.Verdict,
+                Repository = foundryReport.Repository,
+                WorkflowPath = foundryReport.WorkflowPath,
+                ReportObservedAt = foundryReport.ReportObservedAt,
+                ReportIdentity = foundryReport.ReportIdentity,
+                NoticeIdentitySha256 = foundryReport.NoticeIdentitySha256,
+                CanonicalReportJson = foundryReport.CanonicalReportJson,
+                ReportSha256 = foundryReport.ReportSha256,
+                WorkflowRunId = foundryReport.WorkflowRunId,
+                RunAttempt = foundryReport.RunAttempt,
+                CandidateCommitSha = foundryReport.CandidateCommitSha,
+                SourceArtifact = sourceArtifact
+            };
+        }
+
+        var snapshot = acceptedReport is null
+            ? HeadlessAiAgentTurnRequest.Create(envelope, now)
+            : HeadlessAiAgentTurnRequest.Create(envelope, acceptedReport, now);
         return new PreparedTurn(request, snapshot);
     }
 
@@ -104,6 +154,15 @@ public sealed class HeadlessAiAgentTurnClient : IHeadlessAiAgentTurnClient
             ModelId = result.ModelId,
             StartedAt = result.StartedAt,
             CompletedAt = result.CompletedAt,
+            AcceptedReportSchemaVersion = result.AcceptedReportSchemaVersion,
+            AcceptedReportVerdict = result.AcceptedReportVerdict,
+            AcceptedReportIdentity = result.AcceptedReportIdentity,
+            AcceptedReportNoticeIdentitySha256 = result.AcceptedReportNoticeIdentitySha256,
+            AcceptedReportSha256 = result.AcceptedReportSha256,
+            AcceptedReportWorkflowRunId = result.AcceptedReportWorkflowRunId,
+            AcceptedReportRunAttempt = result.AcceptedReportRunAttempt,
+            AcceptedReportCandidateCommitSha = result.AcceptedReportCandidateCommitSha,
+            AcceptedReportSourceArtifactIdentitySha256 = result.AcceptedReportSourceArtifactIdentitySha256,
             ErrorCode = result.ErrorCode,
             Diagnosis = proposal.Diagnosis,
             PatchIntent = proposal.PatchIntent,

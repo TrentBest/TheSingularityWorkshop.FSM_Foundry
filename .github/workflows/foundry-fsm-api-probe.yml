@@ -32,8 +32,15 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: TrentBest/TheSingularityWorkshop.HeadlessAi
-          ref: c87386f0deb5f2f9f8a34dadc6811f2d59727c9f
+          ref: 5e1349b7b66fa0e06bf2793474da59706e359c1b
           path: headlessai
+
+      - name: Check out pinned FSM_Serialization source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: TrentBest/TheSingularityWorkshop.FSM_Serialization
+          ref: 33e71045a8e756f31e9df3e06b38b132927aa107
+          path: dependencies/FSM_Serialization
 
       - name: Set up .NET 8
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1

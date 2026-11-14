@@ -29,6 +29,8 @@ public sealed record FoundryHeadlessAiTurnRequest
     public string? PriorCandidateCommitSha { get; init; }
     public IReadOnlyList<FoundryHeadlessAiEvidence> Evidence { get; init; } =
         Array.Empty<FoundryHeadlessAiEvidence>();
+    /// <summary>Exact host-accepted CiAi report bytes and lineage for a repair turn.</summary>
+    public FoundryAcceptedCiAiReportContext? AcceptedCiAiReport { get; init; }
 
     public void Validate(DateTimeOffset now)
     {
@@ -82,6 +84,18 @@ public sealed record FoundryHeadlessAiTurnRequest
             throw new ArgumentException("At most 64 CI evidence references may be supplied.", nameof(Evidence));
         foreach (var item in Evidence)
             item.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
+        if (AcceptedCiAiReport is not null)
+        {
+            AcceptedCiAiReport.Validate(Repository, CandidateCommitSha, PriorCandidateCommitSha);
+            if (Role == "repair" &&
+                (AcceptedCiAiReport.Verdict != "ActionableFailure" || AcceptedCiAiReport.SourceArtifactBinding is null))
+                throw new ArgumentException("HeadlessAi repair turns require an actionable report plus host-observed nested source-artifact provenance.", nameof(AcceptedCiAiReport));
+            if (!Evidence.Any(item =>
+                    item.WorkflowRunId == AcceptedCiAiReport.WorkflowRunId &&
+                    item.Attempt == AcceptedCiAiReport.RunAttempt &&
+                    string.Equals(item.CommitSha, AcceptedCiAiReport.CandidateCommitSha, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("Accepted CiAi report must have a matching exact-run evidence reference.", nameof(AcceptedCiAiReport));
+        }
     }
 
     private static void ValidateSha(string? value, string name)
@@ -93,7 +107,8 @@ public sealed record FoundryHeadlessAiTurnRequest
     internal static string CreateIdempotencyKey(WorkTaskSnapshot task, string branch,
         string candidateSha, string role, string instructions, string canonicalPrompt,
         string responseSchema, string? priorTurnId, string? priorCandidateCommitSha,
-        IReadOnlyList<FoundryHeadlessAiEvidence> evidence)
+        IReadOnlyList<FoundryHeadlessAiEvidence> evidence,
+        FoundryAcceptedCiAiReportContext? acceptedCiAiReport)
     {
         var material = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -110,7 +125,13 @@ public sealed record FoundryHeadlessAiTurnRequest
             responseSchema,
             priorTurnId,
             priorCandidateCommitSha,
-            evidence
+            evidence,
+            acceptedReportIdentity = acceptedCiAiReport?.ReportIdentity,
+            acceptedReportSha256 = acceptedCiAiReport?.ReportSha256,
+            acceptedReportRunId = acceptedCiAiReport?.WorkflowRunId,
+            acceptedReportRunAttempt = acceptedCiAiReport?.RunAttempt,
+            acceptedReportCandidateSha = acceptedCiAiReport?.CandidateCommitSha,
+            acceptedSourceArtifactIdentitySha256 = acceptedCiAiReport?.SourceArtifactIdentitySha256
         });
         return "foundry-" + Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant();
     }
@@ -171,6 +192,15 @@ public sealed record FoundryHeadlessAiTurnResult
     public string? PriorTurnId { get; init; }
     public string? PriorCandidateCommitSha { get; init; }
     public string? IdempotencyKey { get; init; }
+    public string? AcceptedReportSchemaVersion { get; init; }
+    public string? AcceptedReportVerdict { get; init; }
+    public string? AcceptedReportIdentity { get; init; }
+    public string? AcceptedReportNoticeIdentitySha256 { get; init; }
+    public string? AcceptedReportSha256 { get; init; }
+    public string? AcceptedReportWorkflowRunId { get; init; }
+    public int? AcceptedReportRunAttempt { get; init; }
+    public string? AcceptedReportCandidateCommitSha { get; init; }
+    public string? AcceptedReportSourceArtifactIdentitySha256 { get; init; }
     public string? ErrorCode { get; init; }
     public string? Diagnosis { get; init; }
     public string? PatchIntent { get; init; }
@@ -198,6 +228,25 @@ public sealed record FoundryHeadlessAiTurnResult
             !string.Equals(PriorCandidateCommitSha, request.PriorCandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
             IdempotencyKey != request.IdempotencyKey)
             throw new InvalidOperationException("HeadlessAi returned a result for different task or candidate provenance.");
+
+        var accepted = request.AcceptedCiAiReport;
+        if (accepted is null)
+        {
+            if (AcceptedReportSchemaVersion is not null || AcceptedReportVerdict is not null || AcceptedReportIdentity is not null ||
+                AcceptedReportSha256 is not null || AcceptedReportNoticeIdentitySha256 is not null || AcceptedReportWorkflowRunId is not null ||
+                AcceptedReportRunAttempt is not null || AcceptedReportCandidateCommitSha is not null ||
+                AcceptedReportSourceArtifactIdentitySha256 is not null)
+                throw new InvalidOperationException("HeadlessAi returned accepted-report lineage for a turn that supplied no accepted report.");
+        }
+        else if (AcceptedReportSchemaVersion != accepted.SchemaVersion ||
+            AcceptedReportIdentity != accepted.ReportIdentity ||
+            AcceptedReportNoticeIdentitySha256 != accepted.NoticeIdentitySha256 ||
+            AcceptedReportSha256 != accepted.ReportSha256 ||
+            AcceptedReportWorkflowRunId != accepted.WorkflowRunId ||
+            AcceptedReportRunAttempt != accepted.RunAttempt ||
+            !string.Equals(AcceptedReportCandidateCommitSha, accepted.CandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(AcceptedReportSourceArtifactIdentitySha256, accepted.SourceArtifactIdentitySha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("HeadlessAi result accepted-report lineage does not match the exact report supplied to the turn.");
         if (string.IsNullOrWhiteSpace(TurnId) || TurnId.Length > 128 ||
             string.IsNullOrWhiteSpace(ProviderId) || ProviderId.Length > 128 ||
             string.IsNullOrWhiteSpace(ModelId) || ModelId.Length > 256 ||
@@ -239,7 +288,7 @@ public interface IHeadlessAiAgentTurnClient
 }
 
 /// <summary>
-/// Builds and invokes one HeadlessAi turn for an already claimed and investigated Foundry task.
+/// Builds and invokes one HeadlessAi turn for an already claimed Foundry task in Investigating or RepairRequired.
 /// It deliberately performs no repository writes, CI dispatch, retries, or workflow transitions.
 /// </summary>
 public sealed class FoundryHeadlessAiTurnCoordinator
@@ -263,14 +312,34 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         string authorizedBranch, string candidateCommitSha, string role, string instructions,
         string canonicalPrompt, string responseSchema, IReadOnlyList<FoundryHeadlessAiEvidence>? evidence = null,
         string? priorTurnId = null, string? priorCandidateCommitSha = null,
-        TimeSpan? turnLifetime = null, CancellationToken cancellationToken = default)
+        TimeSpan? turnLifetime = null, CancellationToken cancellationToken = default,
+        FoundryAcceptedCiAiReportContext? acceptedCiAiReport = null)
     {
         var now = _timeProvider.GetUtcNow();
         var task = _tasks.GetSnapshot(taskId);
         if (task.Lease is not { } lease || lease.LeaseId != leaseId || lease.ExpiresAt <= now)
             throw new UnauthorizedAccessException("A current, unexpired Foundry task lease is required.");
-        if (task.Status != WorkTaskStatus.Investigating)
-            throw new InvalidOperationException("HeadlessAi may be invoked only after the task enters Investigating.");
+        var expectedStatus = task.Status;
+        if (expectedStatus is not (WorkTaskStatus.Investigating or WorkTaskStatus.RepairRequired))
+            throw new InvalidOperationException("HeadlessAi may be invoked only during investigation or for a CiAi-authorized repair-required turn.");
+        if (expectedStatus == WorkTaskStatus.RepairRequired)
+        {
+            if (string.IsNullOrWhiteSpace(priorTurnId) ||
+                string.IsNullOrWhiteSpace(priorCandidateCommitSha) ||
+                evidence is null || evidence.Count == 0 || acceptedCiAiReport is null)
+                throw new InvalidOperationException("A repair turn requires prior-turn provenance, accepted report bytes, and exact-run evidence.");
+            if (!string.Equals(acceptedCiAiReport.CandidateCommitSha, priorCandidateCommitSha, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("The accepted CiAi report must be bound to the prior candidate being repaired.");
+            var priorTurn = _journal.GetCompletedTurn(taskId, priorTurnId)
+                ?? throw new UnauthorizedAccessException("A repair turn must resume a completed prior turn from the same task journal.");
+            if (priorTurn.CorrelationId != task.Request.CorrelationId ||
+                !string.Equals(priorTurn.Repository, task.Request.Repository, StringComparison.OrdinalIgnoreCase) ||
+                priorTurn.AuthorizedBranch != authorizedBranch ||
+                !string.Equals(priorTurn.BaseCommitSha, task.Request.BaseSha, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(priorTurn.CandidateCommitSha, priorCandidateCommitSha, StringComparison.OrdinalIgnoreCase) ||
+                priorTurn.CompletedAt > now)
+                throw new UnauthorizedAccessException("The prior HeadlessAi turn does not match this task, branch, base, or prior candidate provenance.");
+        }
         var lifetime = turnLifetime ?? TimeSpan.FromMinutes(15);
         if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromHours(2))
             throw new ArgumentOutOfRangeException(nameof(turnLifetime));
@@ -292,13 +361,14 @@ public sealed class FoundryHeadlessAiTurnCoordinator
             IdempotencyKey = "pending",
             PriorTurnId = priorTurnId,
             PriorCandidateCommitSha = priorCandidateCommitSha,
-            Evidence = Array.AsReadOnly((evidence ?? Array.Empty<FoundryHeadlessAiEvidence>()).ToArray())
+            Evidence = Array.AsReadOnly((evidence ?? Array.Empty<FoundryHeadlessAiEvidence>()).ToArray()),
+            AcceptedCiAiReport = acceptedCiAiReport
         };
         request = request with
         {
             IdempotencyKey = FoundryHeadlessAiTurnRequest.CreateIdempotencyKey(
                 task, authorizedBranch, candidateCommitSha, role, instructions,
-                canonicalPrompt, responseSchema, priorTurnId, priorCandidateCommitSha, request.Evidence)
+                canonicalPrompt, responseSchema, priorTurnId, priorCandidateCommitSha, request.Evidence, request.AcceptedCiAiReport)
         };
         request.Validate(now);
         cancellationToken.ThrowIfCancellationRequested();
@@ -330,7 +400,7 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         // for host reconciliation, but this stale invocation must not hand it to its caller.
         var current = _tasks.GetSnapshot(taskId);
         var completedAt = _timeProvider.GetUtcNow();
-        if (current.Status != WorkTaskStatus.Investigating ||
+        if (current.Status != expectedStatus ||
             current.Lease is not { } currentLease || currentLease.LeaseId != leaseId ||
             currentLease.ExpiresAt <= completedAt)
             throw new UnauthorizedAccessException(
