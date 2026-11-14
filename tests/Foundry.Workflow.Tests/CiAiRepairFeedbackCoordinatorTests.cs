@@ -198,7 +198,7 @@ public sealed class CiAiRepairFeedbackCoordinatorTests
             CandidateRef = BranchRef,
             CandidateSha,
             WorkflowPath,
-            WorkflowDefinitionRef = "refs/heads/development",
+            WorkflowDefinitionRef = $"{Repository}/{WorkflowPath}@refs/heads/development",
             PullRequestNumber = (int?)null,
             PullRequestHeadRef = (string?)null,
             PullRequestHeadSha = (string?)null,
