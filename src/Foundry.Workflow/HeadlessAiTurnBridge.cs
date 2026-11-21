@@ -248,15 +248,18 @@ public sealed class FoundryHeadlessAiTurnCoordinator
     private readonly IHeadlessAiAgentTurnClient _client;
     private readonly JsonlHeadlessAiTurnJournal _journal;
     private readonly TimeProvider _timeProvider;
+    private readonly IAgentOnboardingAdmissionVerifier? _admissionVerifier;
 
     public FoundryHeadlessAiTurnCoordinator(PersistentWorkTaskCoordinator tasks,
         IHeadlessAiAgentTurnClient client, JsonlHeadlessAiTurnJournal journal,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAgentOnboardingAdmissionVerifier? admissionVerifier = null)
     {
         _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _admissionVerifier = admissionVerifier;
     }
 
     public async Task<FoundryHeadlessAiTurnResult> InvokeAsync(string taskId, Guid leaseId,
@@ -267,6 +270,7 @@ public sealed class FoundryHeadlessAiTurnCoordinator
     {
         var now = _timeProvider.GetUtcNow();
         var task = _tasks.GetSnapshot(taskId);
+        await VerifyAdmissionAsync(task, cancellationToken).ConfigureAwait(false);
         if (task.Lease is not { } lease || lease.LeaseId != leaseId || lease.ExpiresAt <= now)
             throw new UnauthorizedAccessException("A current, unexpired Foundry task lease is required.");
         if (task.Status != WorkTaskStatus.Investigating)
@@ -316,6 +320,10 @@ public sealed class FoundryHeadlessAiTurnCoordinator
         // A durable pending entry is written before this single provider call. If the call
         // fails or the process stops before completion is journaled, a later invocation is
         // blocked as indeterminate rather than risking an automatic duplicate provider call.
+        // Revalidate immediately before the provider call as well as before journal lookup.
+        // This protects retries/resumed turns from stale or revoked onboarding admission.
+        await VerifyAdmissionAsync(_tasks.GetSnapshot(taskId), cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         // The adapter executes the exact immutable snapshot returned by Prepare.
         var result = await _client.ExecuteAsync(request, prepared, cancellationToken).ConfigureAwait(false);
         result.ValidateAgainst(request);
@@ -336,6 +344,22 @@ public sealed class FoundryHeadlessAiTurnCoordinator
             throw new UnauthorizedAccessException(
                 "The HeadlessAi result was durably recorded, but the task lease or investigation state became stale during the provider call.");
         return result;
+    }
+
+    private async ValueTask VerifyAdmissionAsync(WorkTaskSnapshot task, CancellationToken cancellationToken)
+    {
+        if (!AgentOnboardingTargetPolicy.RequiresAdmission(task.Request.Repository))
+            return;
+        var verifier = _admissionVerifier ?? throw new UnauthorizedAccessException(
+            "A trusted exact-SHA AgentOnboarding verifier is required before every governed HeadlessAi model turn.");
+        var stored = task.Request.AdmissionEvidence ?? throw new UnauthorizedAccessException(
+            "The governed task has no persisted AgentOnboarding admission evidence.");
+        var current = await verifier.VerifyAsync(task.Request.Repository, task.Request.BaseSha,
+            cancellationToken).ConfigureAwait(false);
+        current.ValidateFor(task.Request.Repository, task.Request.BaseSha);
+        if (!current.IsEligible || current != stored)
+            throw new UnauthorizedAccessException(
+                "The current exact-SHA AgentOnboarding result no longer matches the task's immutable admission provenance.");
     }
 
     private static void ValidateRequestFingerprint(string fingerprint)

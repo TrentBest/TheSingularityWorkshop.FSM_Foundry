@@ -30,9 +30,12 @@ public sealed record CiAiRequestTaskMapping(
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt)
 {
+    /// <summary>Immutable CiAi admission evidence for owner-designated autonomous targets.</summary>
+    public AgentOnboardingAdmissionEvidence? AdmissionEvidence { get; init; }
+
     public const int CurrentSchemaVersion = 1;
 
-    public CiAiRequestTaskMapping Validate()
+    public CiAiRequestTaskMapping Validate(bool requireAdmissionEvidence = true)
     {
         static bool Clean(string? value, int max = 256) =>
             !string.IsNullOrWhiteSpace(value) && value.Length <= max && !value.Any(char.IsControl);
@@ -62,6 +65,18 @@ public sealed record CiAiRequestTaskMapping(
         ValidateHttpsOrigin(AcknowledgementDestination, nameof(AcknowledgementDestination), originOnly: false);
         if (CreatedAt == default || ExpiresAt <= CreatedAt || ExpiresAt - CreatedAt > TimeSpan.FromDays(7))
             throw new ArgumentException("Mapping expiry must be after creation and no more than seven days later.");
+        if (Repository is not null && AgentOnboardingTargetPolicy.RequiresAdmission(Repository) && requireAdmissionEvidence)
+        {
+            if (AdmissionEvidence is null)
+                throw new UnauthorizedAccessException("Owner-designated autonomous targets require exact-SHA AgentOnboarding admission before a dispatch intent can be persisted.");
+            AdmissionEvidence.ValidateFor(Repository, CandidateSha);
+            if (!AdmissionEvidence.IsEligible)
+                throw new UnauthorizedAccessException("AgentOnboarding admission rejected this repository target.");
+        }
+        else if (AdmissionEvidence is not null)
+        {
+            AdmissionEvidence.ValidateFor(Repository!, CandidateSha);
+        }
         return this;
     }
 
@@ -138,6 +153,26 @@ public sealed class JsonlCiAiRequestTaskMappingJournal
     public CiAiRequestMappingAppendOutcome CreateDispatchIntent(CiAiRequestTaskMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        if (AgentOnboardingTargetPolicy.RequiresAdmission(mapping.Repository))
+            throw new UnauthorizedAccessException(
+                "Owner-designated autonomous targets can create dispatch intents only through the trusted admission coordinator.");
+        return CreateDispatchIntentCore(mapping);
+    }
+
+    internal CiAiRequestMappingAppendOutcome CreateDispatchIntentAfterAdmission(
+        CiAiRequestTaskMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        mapping.Validate();
+        if (!AgentOnboardingTargetPolicy.RequiresAdmission(mapping.Repository) ||
+            mapping.AdmissionEvidence is not { IsEligible: true })
+            throw new UnauthorizedAccessException(
+                "The trusted admission path requires eligible exact-SHA evidence for an owner-designated target.");
+        return CreateDispatchIntentCore(mapping);
+    }
+
+    private CiAiRequestMappingAppendOutcome CreateDispatchIntentCore(CiAiRequestTaskMapping mapping)
+    {
         mapping.Validate();
         lock (_gate)
         {

@@ -3,23 +3,23 @@
 
 # Foundry UML and Source Documentation
 
-**Status:** source-grounded UML policy and manual views exist for the initial probe and the retained workflow lifecycle coordinator. Automated generation remains absent.
+**Status:** manual, source-grounded views exist for the FSM_API probe, Fox/Sheepdog scenario, workflow execution coordinator, governed task coordinator, CODE RED recovery authorization, bounded repair decision policy, HeadlessAi turn bridge, capability/dispatcher boundary, and GitHub host adapter. The architecture guide contains a component/authority-flow diagram for the expanded governed-work domain. Automated generation and stale-view detection are not implemented.
 
 ## Principles
 
 1. A diagram must represent source or runtime evidence, or be visibly labelled **Conceptual / Target**.
 2. Each new C# source file should have a companion Markdown document explaining its purpose, contract, and relevant UML view.
-3. Each significant type should have a separate `[TypeName]UML.md` neighborhood page in this directory: focus type centered, its users above, dependencies below, and relationships explicitly labelled.
+3. Each significant type should have a separate [TypeName]UML.md neighborhood page in this directory: focus type centered, its users above, dependencies below, and relationships explicitly labelled.
 4. Use cases describe user goals and are kept distinct from source structure.
 5. Generated evidence should preserve stable symbol identity, source spans, provenance, and generation inputs.
 6. Do not invent types, methods, dependencies, or runtime behavior to make a diagram look complete.
 
 ## Planned structure
 
-- `docs/UML/README.md` — policy, coverage, and navigation.
-- `docs/UML/INVENTORY.md` — source files, types, and view coverage once inventory is generated.
-- `docs/UML/Standard/` — reusable diagram and evidence conventions as they mature.
-- `docs/UML/[TypeName]UML.md` — type neighborhood diagrams grounded in actual declarations.
+- docs/UML/README.md — policy, coverage, and navigation.
+- docs/UML/INVENTORY.md — source areas and view coverage.
+- docs/UML/Standard/ — reusable diagram and evidence conventions as they mature.
+- docs/UML/[TypeName]UML.md — type neighborhood diagrams grounded in actual declarations.
 
 ## View types
 
@@ -33,19 +33,35 @@
 
 Only add a view when there is sufficient evidence. Mark unimplemented flows as target designs.
 
-## Current inventory
+## Current views
 
 - [WorkflowExecutionCoordinator neighborhood](WorkflowExecutionCoordinatorUML.md) — retained run lifecycle and its relationship to the existing runner.
+- [WorkTaskCoordinator neighborhood](WorkTaskCoordinatorUML.md) — governed task lifecycle and exact CI evidence decision.
+- [CODE RED recovery authorization neighborhood and sequence](CodeRedRecoveryApprovalReceiptUML.md) — signed receipt scope, host trust boundary, persistent recovery path, and fail-closed branches.
+- [Repository operation authorization neighborhood and sequence](RepositoryOperationAuthorizationUML.md) — host capability scope, double-demand dispatch boundary, audit intent, and adapter invocation.
+- [GitHub host adapter neighborhood and sequences](GitHubHostAdapterUML.md) — candidate branch/read/stage/commit path plus trusted-source CI dispatch and exact-attempt verification.
+- [HeadlessAi turn bridge neighborhood and sequences](HeadlessAiTurnBridgeUML.md) — lease gate, immutable request snapshot, durable at-most-once invocation, provenance validation, and stale-lease recovery.
+- [WorkTaskRepairDecisionPolicy flow](WorkTaskRepairDecisionPolicyUML.md) — exact evidence identity, attempt ordering, bounded repair decisions, and CODE RED stop conditions.
 - [Coordinator source companion](../../src/Foundry.Workflow/WorkflowExecutionCoordinator.md) — purpose, public commands, limits, and tests.
-- [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — the original state-execution proof.
+- [WorkTaskCoordinator source companion](../../src/Foundry.Workflow/WorkTaskCoordinator.md) — task envelope, leases, evidence-gated transitions, recovery, and persistence boundary.
+- [CODE RED recovery receipt source companion](../../src/Foundry.Workflow/CodeRedRecoveryApprovalReceipt.md) — canonical signing payload, receipt scope, verification, replay, and host responsibilities.
+- [WorkTaskCapabilityRegistry source companion](../../src/Foundry.Workflow/WorkTaskCapabilityRegistry.md) — lease-bound grants, exact operation scope, CODE RED invalidation, and limits.
+- [AuthorizedRepositoryOperationDispatcher source companion](../../src/Foundry.Workflow/AuthorizedRepositoryOperationDispatcher.md) — typed operations, pre-transport recheck, audit boundary, and workflow bridge.
+- [GitHubRepositoryOperationAdapter source companion](../../src/Foundry.GitHubHost/GitHubRepositoryOperationAdapter.md) — repository allowlist, token provider, candidate branch policy, staged writes, and commits.
+- [GitHubActionsWorkflowDispatcher source companion](../../src/Foundry.GitHubHost/GitHubActionsWorkflowDispatcher.md) — trusted workflow source, request-ID correlation, exact-attempt checks, and unresolved dispatch recovery.
+- [HeadlessAi turn bridge source companion](../HEADLESSAI_TURN_BRIDGE.md) — lease-gated turn contract, immutable request/result mapping, journal semantics, and authority limits.
+- [HeadlessAi host adapter source companion](../HEADLESSAI_HOST_ADAPTER.md) — concrete source adapter, provider credential boundary, and manual host composition.
+- [FSM_API probe companion](../../src/Foundry.FsmApiProbe/Program.md) and [probe neighborhood](FoundryFsmApiProbeUML.md) — state-execution proof.
+- [Fox/Sheepdog neighborhood](FoundryFoxSheepdogUML.md) — deterministic multi-state demonstration.
+- [Architecture diagram](../ARCHITECTURE.md#1-system-shape) — current component and authority flow; it is an authored architecture view grounded in the source ownership boundaries, not generated UML.
 
-The workflow runtime views are maintained manually and are not generated output. The broader type inventory, source-span provenance, and stale-view detection remain future work.
+The expanded source inventory is in [INVENTORY.md](INVENTORY.md). The workflow, task, CODE RED, repair-decision, HeadlessAi, repository-authorization, and GitHub host neighborhoods now have dedicated manual views. UML generation, stale-view detection, and automatic source synchronization remain unimplemented.
 
 ## Validation expectations
 
-The future CI check should detect missing required companion documents, stale generated views, broken internal links, and diagrams whose referenced source identity no longer exists. A generator or Roslyn integration is not present merely because this policy describes it.
+A future CI check should detect missing required companion documents, stale generated views, broken internal links, and diagrams whose referenced source identity no longer exists. A generator or Roslyn integration is not present merely because this policy describes it.
 
 ---
 
-<!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<!-- The Singularity Workshop footer -->
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>

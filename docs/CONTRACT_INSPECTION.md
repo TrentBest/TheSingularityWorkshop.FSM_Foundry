@@ -3,9 +3,9 @@
 
 # Foundry Contract Inspection Ledger
 
-**Inspection date:** 2026-10-23  
-**Branch:** `development`  
-**Purpose:** Record what has actually been read before choosing Foundry contracts. This is an evidence ledger, not a claim of integration.
+**Original inspection date:** 2026-10-23  
+**Original branch:** `development`  
+**Purpose:** Historical evidence ledger recording what had been read before the first Foundry contracts were selected. It is not a current implementation inventory. See the current [Domain](DOMAIN.md), [Architecture](ARCHITECTURE.md), [Documentation Index](../DOCUMENTATION_INDEX.md), and [Roadmap](ROADMAP.md) for the expanded implementation and branch-aware status.
 
 ## Findings from source and project files
 
@@ -34,9 +34,9 @@
 - The public package version and the default-branch source are separate evidence; validate the exact package API in the consuming prototype.
 - FSM_API documentation contains different descriptions of process-rate values in different places. The prototype should use an explicitly selected stepping path and tests, rather than rely on a comment alone.
 - GitHub Actions is a host/orchestrator boundary; Foundry's workflow outcome must be mapped deliberately to process exit status and artifacts.
-- No Foundry runtime, manifest contract, tests, or CI execution was implemented or verified during this inspection pass.
+- **Historical finding as of 2026-10-23 only:** no Foundry runtime, manifest contract, tests, or CI execution had been implemented or verified during that initial inspection. This statement was superseded by the workflow runtime, governed-work lifecycle, HeadlessAi bridge, CiAi dispatch/reconciliation contracts, and GitHub host-adapter work documented in the current domain and coverage ledger.
 
-## Decisions still open
+## Decisions still open from the original inspection
 
 1. What is the smallest useful workflow contract, and how is it represented without confusing it with the FSM_COS RuntimeManifest?
 2. Does the first proof need only an in-process typed contract, or a persisted manifest from day one?
@@ -47,9 +47,9 @@
 7. Which source-rendering strategy creates readable excerpt images without making an optional article feature a required dependency?
 8. Which external publishing destination, if any, should be supported? No provider is selected.
 
-## Next evidence-producing action
+## Historical next action — superseded
 
-Build a small isolated prototype against the actual FSM_API package and tests. Compare a typed in-process workflow definition with a persisted-manifest path before committing to a public schema. Verify state stepping, context invalidation, failure capture, registry cleanup, repeat runs, and terminal-result mapping. Keep FSM_COS out of the prototype unless a test demonstrates a real composition requirement.
+The initial prototype recommendation was completed in subsequent work: the repository now contains typed workflow contracts, a sequential runner/coordinator, FSM_API probes, governed task lifecycle, HeadlessAi bridge, CI dispatch/reconciliation cores, and a host repository-operation adapter on feature branches. The current next evidence-producing actions are listed in [Roadmap](ROADMAP.md); do not restart the original prototype as though the runtime were still absent.
 
 ---
 

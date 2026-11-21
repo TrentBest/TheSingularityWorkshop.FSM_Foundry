@@ -117,8 +117,10 @@ public sealed class WorkflowExecutionCoordinatorTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var registry = new WorkflowHandlerRegistry();
-        registry.Register("wait", async _ =>
+        var timeoutRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        registry.Register("wait", async token =>
         {
+            using var registration = token.Register(() => timeoutRequested.TrySetResult());
             entered.TrySetResult();
             await release.Task;
         });
@@ -127,7 +129,7 @@ public sealed class WorkflowExecutionCoordinatorTests
 
         var completion = coordinator.StartAsync(accepted.RunId, TimeSpan.FromMilliseconds(100));
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Delay(TimeSpan.FromMilliseconds(200)); // Allow the timeout request to fire.
+        await timeoutRequested.Task.WaitAsync(TimeSpan.FromSeconds(5)); // Observe the actual timeout cancellation signal.
 
         Assert.False(completion.IsCompleted);
         Assert.Equal(WorkflowRunStatus.Running,

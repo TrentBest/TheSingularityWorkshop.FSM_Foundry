@@ -6,7 +6,9 @@ public sealed record WorkTaskRequest(int SchemaVersion, string TaskId, string Co
 {
     public const int CurrentSchemaVersion = 1;
 
-    public WorkTaskRequest Validate()
+    public AgentOnboardingAdmissionEvidence? AdmissionEvidence { get; init; }
+
+    public WorkTaskRequest Validate(bool requireAdmissionEvidence = true)
     {
         if (SchemaVersion != CurrentSchemaVersion)
             throw new ArgumentException($"Unsupported task schema version '{SchemaVersion}'.");
@@ -37,6 +39,24 @@ public sealed record WorkTaskRequest(int SchemaVersion, string TaskId, string Co
             throw new ArgumentException("At least one safe, repository-relative path is required.");
         if (MaximumAttempts is < 1 or > 10)
             throw new ArgumentOutOfRangeException(nameof(MaximumAttempts));
+        if (AgentOnboardingTargetPolicy.RequiresAdmission(Repository))
+        {
+            if (AdmissionEvidence is null)
+            {
+                if (requireAdmissionEvidence)
+                    throw new UnauthorizedAccessException("The governed repository requires trusted exact-SHA AgentOnboarding admission before task creation.");
+            }
+            else
+            {
+                AdmissionEvidence.ValidateFor(Repository, BaseSha);
+                if (!AdmissionEvidence.IsEligible)
+                    throw new UnauthorizedAccessException("The repository's AgentOnboarding contract is not eligible for autonomous task creation.");
+            }
+        }
+        else if (AdmissionEvidence is not null)
+        {
+            throw new ArgumentException("AgentOnboarding admission evidence is only valid for owner-governed repositories.");
+        }
         return this with { AllowedPaths = Array.AsReadOnly(AllowedPaths.Distinct(StringComparer.Ordinal).ToArray()) };
     }
 }
@@ -73,7 +93,48 @@ public sealed class WorkTaskCoordinator
     public WorkTaskSnapshot Submit(WorkTaskRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var validated = request.Validate();
+        if (AgentOnboardingTargetPolicy.RequiresAdmission(request.Repository))
+            throw new UnauthorizedAccessException("Governed task creation requires SubmitAsync with a trusted host admission verifier.");
+        return SubmitValidated(request.Validate());
+    }
+
+    /// <summary>
+    /// Obtains fresh host-verified onboarding evidence before mutating in-memory task state.
+    /// Caller-supplied evidence is ignored and replaced with the verifier result.
+    /// </summary>
+    public async ValueTask<WorkTaskSnapshot> SubmitAsync(WorkTaskRequest request,
+        IAgentOnboardingAdmissionVerifier admissionVerifier,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(admissionVerifier);
+        var validated = request.Validate(requireAdmissionEvidence: false);
+        if (!AgentOnboardingTargetPolicy.RequiresAdmission(validated.Repository))
+            return SubmitValidated(validated with { AdmissionEvidence = null });
+
+        var evidence = await admissionVerifier.VerifyAsync(validated.Repository, validated.BaseSha,
+            cancellationToken).ConfigureAwait(false);
+        evidence.ValidateFor(validated.Repository, validated.BaseSha);
+        if (!evidence.IsEligible)
+            throw new UnauthorizedAccessException("The repository's AgentOnboarding contract is not eligible for autonomous task creation.");
+        return SubmitAdmitted(validated, evidence);
+    }
+
+    internal WorkTaskSnapshot SubmitAdmitted(WorkTaskRequest request,
+        AgentOnboardingAdmissionEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(evidence);
+        if (!AgentOnboardingTargetPolicy.RequiresAdmission(request.Repository))
+            throw new UnauthorizedAccessException("Admission evidence cannot be used outside the governed repository allowlist.");
+        evidence.ValidateFor(request.Repository, request.BaseSha);
+        if (!evidence.IsEligible)
+            throw new UnauthorizedAccessException("Ineligible AgentOnboarding evidence cannot create a task.");
+        return SubmitValidated((request with { AdmissionEvidence = evidence }).Validate());
+    }
+
+    private WorkTaskSnapshot SubmitValidated(WorkTaskRequest validated)
+    {
         lock (_gate)
         {
             if (_tasks.ContainsKey(validated.TaskId))

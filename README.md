@@ -53,6 +53,9 @@ The separate [FSM_API probe](src/Foundry.FsmApiProbe/Program.cs) and [fox/sheepd
 - [Contract inspection ledger](docs/CONTRACT_INSPECTION.md) — source-backed findings and unresolved questions.
 - [Roadmap and readiness](docs/ROADMAP.md) — milestones and verification gates.
 - [Documentation index](DOCUMENTATION_INDEX.md) — documentation entry points.
+- [Repository operation adapter](docs/REPOSITORY_OPERATION_ADAPTER.md) — capability-gated GitHub branch, immutable read, staged write, commit, and CI dispatch boundary.
+- [GitHub Actions artifact provenance](docs/GITHUB_ACTIONS_ARTIFACT_PROVENANCE.md) — exact-run and candidate-checkout evidence contract.
+- [AgentOnboarding host admission](docs/AGENT_ONBOARDING_HOST_ADMISSION.md) — exact-development-SHA source retrieval, CiAi validator reuse, and pre-side-effect revalidation.
 - [ADP Agent Onboarding](AgentOnboarding.md) — mandatory exact-commit admission and host-control boundaries.
 - [Agent onboarding and contribution policy](AGENTS.md) — ownership boundaries, branch/release guardrails, safety invariants, and documentation/evidence rules.
 - [UML documentation](docs/UML/README.md) — source-grounded diagram policy and inventory.

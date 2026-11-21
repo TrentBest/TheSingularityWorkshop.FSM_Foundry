@@ -172,6 +172,102 @@ public sealed class JsonlWorkTaskStoreTests
         }
     }
 
+    [Fact]
+    public async Task PersistentGovernedSubmissionRejectsBeforeMemoryOrJournalMutation()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var store = new JsonlWorkTaskStore(path);
+            var coordinator = new PersistentWorkTaskCoordinator(store);
+            var request = GovernedRequest();
+            Assert.Throws<UnauthorizedAccessException>(() => coordinator.Submit(request));
+
+            var rejecting = new TestAdmissionVerifier(EligibleEvidence() with
+            {
+                IsEligible = false,
+                Outcome = "NOT_ELIGIBLE",
+                FailureCode = "onboarding.missing",
+                ContentSha256 = null
+            });
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+                await coordinator.SubmitAsync(request, rejecting));
+            Assert.Equal(1, rejecting.Calls);
+            Assert.Empty(store.GetAll());
+            Assert.False(File.Exists(path));
+            Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(request.TaskId));
+
+            var accepting = new TestAdmissionVerifier(EligibleEvidence());
+            var created = await coordinator.SubmitAsync(request, accepting);
+            Assert.Equal(1, accepting.Calls);
+            Assert.Equal(EligibleEvidence(), created.Request.AdmissionEvidence);
+            Assert.Equal(EligibleEvidence(), new JsonlWorkTaskStore(path).Get(request.TaskId).Request.AdmissionEvidence);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task RestoredGovernedTasksRemainUnavailableUntilExactShaAdmissionIsRevalidated()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var request = GovernedRequest();
+            var evidence = EligibleEvidence();
+            var initial = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path));
+            await initial.SubmitAsync(request, new TestAdmissionVerifier(evidence));
+
+            var restored = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path));
+            Assert.Throws<InvalidOperationException>(() => restored.GetSnapshot(request.TaskId));
+
+            var rejected = evidence with
+            {
+                IsEligible = false,
+                Outcome = "NOT_ELIGIBLE",
+                FailureCode = "onboarding.revoked",
+                ContentSha256 = null
+            };
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+                await restored.InitializeAsync(new TestAdmissionVerifier(rejected)));
+            Assert.Throws<InvalidOperationException>(() => restored.GetSnapshot(request.TaskId));
+
+            var verifier = new TestAdmissionVerifier(evidence);
+            await restored.InitializeAsync(verifier);
+            Assert.Equal(1, verifier.Calls);
+            Assert.Equal(evidence, restored.GetSnapshot(request.TaskId).Request.AdmissionEvidence);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    private static WorkTaskRequest GovernedRequest() => new(1, "governed-task", "governed-correlation",
+        "TrentBest/TheSingularityWorkshop.ServerSC2", 39,
+        "https://github.com/TrentBest/TheSingularityWorkshop.ServerSC2/issues/39",
+        new string('a', 40), new[] { "src" }, 3);
+
+    private static AgentOnboardingAdmissionEvidence EligibleEvidence() => new(
+        "TrentBest/TheSingularityWorkshop.ServerSC2", new string('a', 40),
+        AgentOnboardingAdmissionEvidence.RequiredPath, AgentOnboardingAdmissionEvidence.RequiredContractVersion,
+        true, "ELIGIBLE", null, "Exact-SHA CiAi contract passed.", new string('f', 64));
+
+    private sealed class TestAdmissionVerifier(AgentOnboardingAdmissionEvidence evidence)
+        : IAgentOnboardingAdmissionVerifier
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<AgentOnboardingAdmissionEvidence> VerifyAsync(string repository, string targetSha,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(evidence);
+        }
+    }
+
     private static WorkTaskRequest Request() => new(1, "task-1", "correlation-1",
         "TrentBest/TheSingularityWorkshop.Foundry", 8,
         "https://github.com/TrentBest/TheSingularityWorkshop.Foundry/issues/8",
@@ -228,9 +324,14 @@ public sealed class JsonlWorkTaskStoreTests
 
             // Simulate a crash after the attempt journal is flushed but before the task
             // snapshot records its decision. Recovery must consume the durable orphan attempt.
-            coordinator = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path),
-                new JsonlWorkTaskRepairAttemptJournal(attemptsPath));
-            var ready = coordinator.ApplyRepairDecision("task-1", lease, attempt, expectation,
+            var reopenedAttempts = new JsonlWorkTaskRepairAttemptJournal(attemptsPath);
+            var retriedEvidence = attempt with { ObservedAt = attempt.ObservedAt.AddMinutes(5) };
+            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Replayed,
+                reopenedAttempts.AppendOrGetExactReplay(retriedEvidence, out var durableAttempt));
+            Assert.Equal(attempt, durableAttempt);
+
+            coordinator = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path), reopenedAttempts);
+            var ready = coordinator.ApplyRepairDecision("task-1", lease, durableAttempt, expectation,
                 TimeSpan.FromMinutes(30), Now.AddMinutes(3));
 
             Assert.Equal(WorkTaskStatus.ReviewReady, ready.Status);

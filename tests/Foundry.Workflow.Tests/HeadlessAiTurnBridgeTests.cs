@@ -376,6 +376,71 @@ public sealed class HeadlessAiTurnBridgeTests
     }
 
     [Fact]
+    public async Task InvokeAsync_RevalidatesGovernedAdmissionBeforeProviderAndRejectsWithoutModelCall()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-headlessai-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var tasks = new PersistentWorkTaskCoordinator(new JsonlWorkTaskStore(path));
+            var request = new WorkTaskRequest(1, "governed-model-task", "governed-model-correlation",
+                "TrentBest/TheSingularityWorkshop.SingularityBot", 39,
+                "https://github.com/TrentBest/TheSingularityWorkshop.SingularityBot/issues/39",
+                Sha, new[] { "src" }, 3);
+            var acceptedEvidence = GovernedEvidence();
+            await tasks.SubmitAsync(request, new TestAdmissionVerifier(acceptedEvidence));
+            var claimed = tasks.Claim(request.TaskId, "agent-1", TimeSpan.FromMinutes(30), Now);
+            var investigating = tasks.Transition(request.TaskId, claimed.Lease!.LeaseId,
+                WorkTaskStatus.Investigating, Now.AddSeconds(1), "Begin investigation.");
+
+            var rejectedEvidence = acceptedEvidence with
+            {
+                IsEligible = false,
+                Outcome = "NOT_ELIGIBLE",
+                FailureCode = "onboarding.missing",
+                ContentSha256 = null
+            };
+            var verifier = new TestAdmissionVerifier(rejectedEvidence);
+            var client = new RecordingClient();
+            var turnJournalPath = path + ".turns.jsonl";
+            var coordinator = new FoundryHeadlessAiTurnCoordinator(tasks, client,
+                new JsonlHeadlessAiTurnJournal(turnJournalPath),
+                new FixedTimeProvider(Now.AddMinutes(1)), verifier);
+
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => coordinator.InvokeAsync(
+                request.TaskId, investigating.Lease!.LeaseId, "feature/governed-agent-work", Sha,
+                "software-engineer", "instructions", "prompt", "schema"));
+
+            Assert.Equal(1, verifier.Calls);
+            Assert.Equal(0, client.CallCount);
+            Assert.Null(client.Request);
+            Assert.False(File.Exists(turnJournalPath));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path + ".turns.jsonl")) File.Delete(path + ".turns.jsonl");
+        }
+    }
+
+    private static AgentOnboardingAdmissionEvidence GovernedEvidence() => new(
+        "TrentBest/TheSingularityWorkshop.SingularityBot", Sha,
+        AgentOnboardingAdmissionEvidence.RequiredPath, AgentOnboardingAdmissionEvidence.RequiredContractVersion,
+        true, "ELIGIBLE", null, "Exact-SHA CiAi contract passed.", new string('f', 64));
+
+    private sealed class TestAdmissionVerifier(AgentOnboardingAdmissionEvidence evidence)
+        : IAgentOnboardingAdmissionVerifier
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<AgentOnboardingAdmissionEvidence> VerifyAsync(string repository, string targetSha,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(evidence);
+        }
+    }
+
+    [Fact]
     public void RequestValidation_RejectsCanonicalBranchesAndEvidenceForAnotherCandidate()
     {
         var request = new FoundryHeadlessAiTurnRequest

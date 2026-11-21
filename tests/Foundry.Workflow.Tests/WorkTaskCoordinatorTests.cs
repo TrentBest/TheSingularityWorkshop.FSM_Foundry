@@ -205,6 +205,55 @@ public sealed class WorkTaskCoordinatorTests
         Assert.Equal(6, handedOff.Events.Count);
     }
 
+    [Fact]
+    public async Task GovernedTaskRequiresTrustedAdmissionBeforeInMemoryCreation()
+    {
+        var coordinator = new WorkTaskCoordinator();
+        var request = GovernedRequest();
+        Assert.Throws<UnauthorizedAccessException>(() => coordinator.Submit(request));
+
+        var rejecting = new TestAdmissionVerifier(EligibleEvidence() with
+        {
+            IsEligible = false,
+            Outcome = "NOT_ELIGIBLE",
+            FailureCode = "onboarding.missing",
+            ContentSha256 = null
+        });
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+            await coordinator.SubmitAsync(request, rejecting));
+        Assert.Equal(1, rejecting.Calls);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(request.TaskId));
+
+        var accepting = new TestAdmissionVerifier(EligibleEvidence());
+        var created = await coordinator.SubmitAsync(request, accepting);
+        Assert.Equal(1, accepting.Calls);
+        Assert.Equal(EligibleEvidence(), created.Request.AdmissionEvidence);
+        Assert.Equal(WorkTaskStatus.Queued, created.Status);
+    }
+
+    private static WorkTaskRequest GovernedRequest() => new(1, "governed-task", "governed-correlation",
+        "TrentBest/TheSingularityWorkshop.SingularityBot", 39,
+        "https://github.com/TrentBest/TheSingularityWorkshop.SingularityBot/issues/39",
+        new string('a', 40), new[] { "src" }, 3);
+
+    private static AgentOnboardingAdmissionEvidence EligibleEvidence() => new(
+        "TrentBest/TheSingularityWorkshop.SingularityBot", new string('a', 40),
+        AgentOnboardingAdmissionEvidence.RequiredPath, AgentOnboardingAdmissionEvidence.RequiredContractVersion,
+        true, "ELIGIBLE", null, "Exact-SHA CiAi contract passed.", new string('f', 64));
+
+    private sealed class TestAdmissionVerifier(AgentOnboardingAdmissionEvidence evidence)
+        : IAgentOnboardingAdmissionVerifier
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<AgentOnboardingAdmissionEvidence> VerifyAsync(string repository, string targetSha,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(evidence);
+        }
+    }
+
     private static CodeRedIncident TestIncident() => new(1, "incident-8",
         "TrentBest/TheSingularityWorkshop.Foundry", "foundry-8", 8, "correlation-8",
         "agent-a", "implementation", "Investigating CI failure", "work/code-red-task-lifecycle",

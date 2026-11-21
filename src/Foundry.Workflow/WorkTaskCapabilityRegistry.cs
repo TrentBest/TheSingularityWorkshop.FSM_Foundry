@@ -102,6 +102,8 @@ public sealed class WorkTaskCapabilityRegistry
             if (currentTask.Events.Any(item => item.Sequence > capability.TaskEventSequence &&
                 item.Current == WorkTaskStatus.CodeRed))
                 throw new UnauthorizedAccessException("Capability was invalidated by a CODE RED transition; host-approved recovery requires a fresh grant.");
+            if (currentTask.Events.Any(item => item.Sequence > capability.TaskEventSequence))
+                throw new UnauthorizedAccessException("Capability was invalidated by a task lifecycle transition; a fresh grant is required for the new phase.");
             if (currentTask.Status == WorkTaskStatus.CodeRed && action != WorkTaskAction.ReadRepository)
                 throw new UnauthorizedAccessException("CODE RED permits read-only repository access; mutating operations are suspended.");
             if (!string.Equals(currentTask.Request.TaskId, capability.TaskId, StringComparison.Ordinal) ||

@@ -83,7 +83,8 @@ public enum WorkTaskRepairAttemptAppendOutcome
     Appended,
     Duplicate,
     Conflict,
-    OutOfOrder
+    OutOfOrder,
+    Replayed
 }
 
 /// <summary>Durable append-only history of exact CI attempts for each task.</summary>
@@ -103,45 +104,83 @@ public sealed class JsonlWorkTaskRepairAttemptJournal
             Replay();
     }
 
-    public WorkTaskRepairAttemptAppendOutcome Append(WorkTaskRepairAttempt attempt)
+    /// <summary>
+    /// Atomically appends a new attempt or returns the exact durable record for a retry
+    /// whose only difference is the newly observed timestamp. All task, run, candidate,
+    /// workflow, and evidence identity fields must match; changed evidence is a conflict.
+    /// </summary>
+    public WorkTaskRepairAttemptAppendOutcome AppendOrGetExactReplay(
+        WorkTaskRepairAttempt attempt, out WorkTaskRepairAttempt durableAttempt)
     {
         ArgumentNullException.ThrowIfNull(attempt);
         attempt.Validate();
         lock (_gate)
         {
-            if (!_attempts.TryGetValue(attempt.TaskId, out var history))
-                history = new List<WorkTaskRepairAttempt>();
-
-            var existing = history.FirstOrDefault(item => item.AttemptNumber == attempt.AttemptNumber);
-            if (existing is not null)
-                return existing == attempt
-                    ? WorkTaskRepairAttemptAppendOutcome.Duplicate
-                    : WorkTaskRepairAttemptAppendOutcome.Conflict;
-
-            if (attempt.AttemptNumber != history.Count + 1)
-                return WorkTaskRepairAttemptAppendOutcome.OutOfOrder;
-            if (history.Any(item => item.CiRunId == attempt.CiRunId &&
-                item.CiRunAttempt == attempt.CiRunAttempt))
-                return WorkTaskRepairAttemptAppendOutcome.Conflict;
-            if (_attempts.Values.SelectMany(items => items).Any(item =>
-                string.Equals(item.Repository, attempt.Repository, StringComparison.OrdinalIgnoreCase) &&
-                item.CiRunId == attempt.CiRunId && item.CiRunAttempt == attempt.CiRunAttempt))
-                return WorkTaskRepairAttemptAppendOutcome.Conflict;
-            if (history.Count > 0)
+            if (_attempts.TryGetValue(attempt.TaskId, out var history))
             {
-                var previous = history[^1];
-                if (!SameTask(previous, attempt) || previous.IsSuccessful ||
-                    attempt.StartedAt < previous.ObservedAt)
-                    return WorkTaskRepairAttemptAppendOutcome.Conflict;
+                var existing = history.FirstOrDefault(item => item.AttemptNumber == attempt.AttemptNumber);
+                if (existing is not null)
+                {
+                    durableAttempt = existing;
+                    return SameReplayIdentity(existing, attempt)
+                        ? WorkTaskRepairAttemptAppendOutcome.Replayed
+                        : WorkTaskRepairAttemptAppendOutcome.Conflict;
+                }
             }
 
-            WriteLine(attempt);
-            if (!_attempts.TryGetValue(attempt.TaskId, out history))
-                _attempts.Add(attempt.TaskId, history = new List<WorkTaskRepairAttempt>());
-            history.Add(attempt);
-            return WorkTaskRepairAttemptAppendOutcome.Appended;
+            var outcome = AppendUnderLock(attempt);
+            durableAttempt = outcome == WorkTaskRepairAttemptAppendOutcome.Appended
+                ? _attempts[attempt.TaskId][^1]
+                : attempt;
+            return outcome;
         }
     }
+
+    public WorkTaskRepairAttemptAppendOutcome Append(WorkTaskRepairAttempt attempt)
+    {
+        ArgumentNullException.ThrowIfNull(attempt);
+        attempt.Validate();
+        lock (_gate)
+            return AppendUnderLock(attempt);
+    }
+
+    private WorkTaskRepairAttemptAppendOutcome AppendUnderLock(WorkTaskRepairAttempt attempt)
+    {
+        if (!_attempts.TryGetValue(attempt.TaskId, out var history))
+            history = new List<WorkTaskRepairAttempt>();
+
+        var existing = history.FirstOrDefault(item => item.AttemptNumber == attempt.AttemptNumber);
+        if (existing is not null)
+            return existing == attempt
+                ? WorkTaskRepairAttemptAppendOutcome.Duplicate
+                : WorkTaskRepairAttemptAppendOutcome.Conflict;
+
+        if (attempt.AttemptNumber != history.Count + 1)
+            return WorkTaskRepairAttemptAppendOutcome.OutOfOrder;
+        if (history.Any(item => item.CiRunId == attempt.CiRunId &&
+            item.CiRunAttempt == attempt.CiRunAttempt))
+            return WorkTaskRepairAttemptAppendOutcome.Conflict;
+        if (_attempts.Values.SelectMany(items => items).Any(item =>
+            string.Equals(item.Repository, attempt.Repository, StringComparison.OrdinalIgnoreCase) &&
+            item.CiRunId == attempt.CiRunId && item.CiRunAttempt == attempt.CiRunAttempt))
+            return WorkTaskRepairAttemptAppendOutcome.Conflict;
+        if (history.Count > 0)
+        {
+            var previous = history[^1];
+            if (!SameTask(previous, attempt) || previous.IsSuccessful ||
+                attempt.StartedAt < previous.ObservedAt)
+                return WorkTaskRepairAttemptAppendOutcome.Conflict;
+        }
+
+        WriteLine(attempt);
+        if (!_attempts.TryGetValue(attempt.TaskId, out history))
+            _attempts.Add(attempt.TaskId, history = new List<WorkTaskRepairAttempt>());
+        history.Add(attempt);
+        return WorkTaskRepairAttemptAppendOutcome.Appended;
+    }
+
+    private static bool SameReplayIdentity(WorkTaskRepairAttempt existing, WorkTaskRepairAttempt retry) =>
+        (existing with { ObservedAt = retry.ObservedAt }) == retry;
 
     /// <summary>
     /// Executes a decision callback while holding the journal lock, preventing an append

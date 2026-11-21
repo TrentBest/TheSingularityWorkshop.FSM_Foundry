@@ -68,6 +68,69 @@ public sealed class JsonlWorkTaskRepairAttemptJournalTests
     }
 
     [Fact]
+    public void AppendOrGetExactReplayReusesOriginalTimestampAndRejectsChangedEvidence()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-repair-replay-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var journal = new JsonlWorkTaskRepairAttemptJournal(path);
+            var original = Attempt(successful: true, actionable: false);
+            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Appended, journal.AppendOrGetExactReplay(original, out var appended));
+            Assert.Equal(original, appended);
+
+            // Simulate process restart after the durable append but before task application.
+            var reopened = new JsonlWorkTaskRepairAttemptJournal(path);
+            var retried = original with { ObservedAt = original.ObservedAt.AddMinutes(5) };
+            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Replayed, reopened.AppendOrGetExactReplay(retried, out var durable));
+            Assert.Equal(original, durable);
+            Assert.Single(reopened.GetAttempts("task-8"));
+            Assert.Single(File.ReadAllLines(path));
+
+            var changedEvidence = retried with { EvidencePayloadSha256 = new string('a', 64) };
+            Assert.Equal(WorkTaskRepairAttemptAppendOutcome.Conflict,
+                reopened.AppendOrGetExactReplay(changedEvidence, out var conflict));
+            Assert.Equal(original, conflict);
+            Assert.Single(journal.GetAttempts("task-8"));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentExactReplayAppendsAtomicallyReuseOneDurableRecord()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"foundry-repair-concurrent-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var journal = new JsonlWorkTaskRepairAttemptJournal(path);
+            var first = Attempt(successful: true, actionable: false);
+            var retry = first with { ObservedAt = first.ObservedAt.AddMinutes(1) };
+            var outcomes = await Task.WhenAll(
+                Task.Run(() =>
+                {
+                    var outcome = journal.AppendOrGetExactReplay(first, out var durable);
+                    return (Outcome: outcome, Durable: durable);
+                }),
+                Task.Run(() =>
+                {
+                    var outcome = journal.AppendOrGetExactReplay(retry, out var durable);
+                    return (Outcome: outcome, Durable: durable);
+                }));
+            Assert.Contains(outcomes[0].Outcome, new[] { WorkTaskRepairAttemptAppendOutcome.Appended, WorkTaskRepairAttemptAppendOutcome.Replayed });
+            Assert.Contains(outcomes[1].Outcome, new[] { WorkTaskRepairAttemptAppendOutcome.Appended, WorkTaskRepairAttemptAppendOutcome.Replayed });
+            Assert.Equal(outcomes[0].Durable, outcomes[1].Durable);
+            Assert.Single(journal.GetAttempts("task-8"));
+            Assert.Single(File.ReadAllLines(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void JournalRejectsAttemptsAfterSuccessAndTornFinalRecords()
     {
         var path = Path.Combine(Path.GetTempPath(), $"foundry-repair-{Guid.NewGuid():N}.jsonl");
